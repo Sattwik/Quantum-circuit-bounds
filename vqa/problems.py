@@ -24,11 +24,10 @@ class Problem(metaclass=abc.ABCMeta):
 
 class MaxCut(Problem):
 
-    def __init__(self, graph, lattice, pnoise = 0):
+    def __init__(self, graph, lattice):
 
         self.graph = graph
         self.lattice = lattice
-        self.pnoise = pnoise
 
         # preparing the Z operators
         self.site_z_ops = {}
@@ -104,7 +103,7 @@ class MaxCut(Problem):
 
         return Um
 
-    def Unoise(self):
+    def Unoise(self, mc_probs, p_noise):
 
         """
         Returns the unitary corresponding to a Monte Carlo sampling of the
@@ -120,37 +119,18 @@ class MaxCut(Problem):
 
             site_num = self.site_nums[site]
 
-            r = np.random.uniform(low = 0, high = 1, size = 1)
+            r = mc_probs[site_num]
 
-            if r < self.p_noise/3:
+            if r < p_noise/3:
                 Un *= qutip.tensor([self.I] * site_num + [sx] + \
                                    [self.I] * (self.num_sites_in_lattice - site_num - 1))
 
-            elif self.p_noise/3 <= r < 2 * self.p_noise/3:
+            elif p_noise/3 <= r < 2 * p_noise/3:
                 Un *= qutip.tensor([self.I] * site_num + [sy] + \
                                    [self.I] * (self.num_sites_in_lattice - site_num - 1))
 
-            elif 2 * self.p_noise/3 <= r < self.p_noise:
+            elif 2 * p_noise/3 <= r < p_noise:
                 Un *= qutip.tensor([self.I] * site_num + [sz] + \
                                    [self.I] * (self.num_sites_in_lattice - site_num - 1))
 
         return Un
-
-    def Ufull(self, gamma: np.array, beta: np.array, state: qutip.Qobj):
-
-        """
-        Returns the action of a single layer on an input state.
-        """
-
-        state_after_step = state
-
-        if self.p_noise == 0:
-            state_after_step = self.Up(gamma) * state_after_step
-            state_after_step = self.Um(beta) * state_after_step
-
-        else:
-            state_after_step = self.Up(gamma) * state_after_step
-            state_after_step = self.Um(beta) * state_after_step
-            state_after_step = self.Un() * state_after_step
-
-        return state_after_step

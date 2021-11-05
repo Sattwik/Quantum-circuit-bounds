@@ -8,7 +8,7 @@ from vqa import problems
 
 class QAOA():
 
-    def __init__(self, problem_obj: problems.Problem, p):
+    def __init__(self, problem_obj: problems.Problem, p, p_noise, mc_probs, noisy = False):
 
         """
         problem_obj: problem to be solved. Supplies the circuit unitaries.
@@ -18,6 +18,9 @@ class QAOA():
         self.p = p
         self.psi_init = problem_obj.init_state()
         self.problem_obj = problem_obj
+        self.noisy = noisy
+        self.mc_probs = mc_probs
+        self.p_noise = p_noise
 
     def objective(self, gamma: np.array, beta: np.array):
 
@@ -30,7 +33,16 @@ class QAOA():
 
         for step_num in range(self.p):
 
-            psi_after_step = self.problem_obj.Ufull(gamma[step_num], beta[step_num], psi_after_step)
+            if not self.noisy:
+                psi_after_step = self.problem_obj.Up(gamma[step_num]) * psi_after_step
+                psi_after_step = self.problem_obj.Um(beta[step_num]) * psi_after_step
+
+            else:
+                psi_after_step = self.problem_obj.Up(gamma[step_num]) * psi_after_step
+                psi_after_step = self.problem_obj.Um(beta[step_num]) * psi_after_step
+                psi_after_step = self.problem_obj.Unoise(
+                                      self.mc_probs[step_num, :],
+                                      self.p_noise) * psi_after_step
 
         return qutip.expect(self.problem_obj.H, psi_after_step)
 
