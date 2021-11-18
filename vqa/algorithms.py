@@ -81,7 +81,7 @@ class QAOA():
 
         return gradient
 
-def objective_external_QAOA(gamma_beta: np.array, QAOA_obj: QAOA,):
+def objective_external_QAOA(gamma_beta: np.array, QAOA_obj: QAOA):
 
     gamma = gamma_beta[:QAOA_obj.p]
     beta = gamma_beta[QAOA_obj.p:]
