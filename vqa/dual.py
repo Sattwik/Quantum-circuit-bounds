@@ -3,8 +3,13 @@ from typing import List, Tuple, Callable, Dict
 import tensornetwork as tn
 import numpy as np
 import scipy
+import qutip
 
-class Dual():
+from vqa import graphs
+from vqa import problems
+from vqa import algorithms
+
+class MaxCutDual():
 
     """
     A class to calculate the dual function and its gradient for the MaxCut QAOA
@@ -41,8 +46,8 @@ class Dual():
         5. JAX gradient
     """
 
-    def __init__(self, prob_obj: Problem,
-                 p: int, gamma: np.array, beta: np.array):
+    def __init__(self, prob_obj: problems.Problem,
+                 p: int, gamma: np.array, beta: np.array, p_noise: float):
 
         self.prob_obj = prob_obj
         self.num_sites_in_lattice = self.prob_obj.num_sites_in_lattice
@@ -51,7 +56,7 @@ class Dual():
         self.gamma = gamma
         self.beta = beta
         self.p_noise = p_noise
-        self.psi_init = problem_obj.init_state()
+        self.psi_init = prob_obj.init_state()
 
         self.dim_list = tuple([self.local_dim ** 2] * self.num_sites_in_lattice)
         self.dim = self.local_dim ** self.num_sites_in_lattice
@@ -80,17 +85,13 @@ class Dual():
 
     def init_entropy_bounds(self):
 
-        raise NotImplementedError()
+        q = 1 - self.p_noise
+        q_powers = [q**i for i in range(self.p)]
+
+        self.entropy_bounds = self.num_sites_in_lattice * self.p_noise * \
+                              [np.sum(q_powers[:i+1]) for i in range(self.p)]
 
     def objective(self, vars_vec: np.array):
-
-        """
-        Program flow:
-
-        objective(vars_vec) -> assemble_vars_into_tensors() -> unvectorize_vars()
-        -> assemble_vars_into_tensors() -> cost() ->
-        (construct_H() -> noisy_circuit_layer() -> cost() -> ) * p ->
-        """
 
         # Unvectorize the vars_vec and construct Sigmas and Lambdas
         self.assemble_vars_into_tensors(vars_vec)
@@ -159,11 +160,12 @@ class Dual():
 
             # construct the effective Hamiltonian for the ith step/layer
             Hi = self.construct_H(i)
-            expHi = scipy.linalg.expm(-Hi/self.Lambdas[i])
+            Ei = np.linalg.eigvals(Hi)
 
-            cost += -self.Lambdas[i] * np.log(np.trace(expHi))
+            cost += -self.Lambdas[i] * np.log(np.sum(np.exp(-Ei/self.Lambdas[i])), base = 2)
 
-        # the initial state term # TODO: check sign
+        # the initial state term
+        # TODO: this is probably wrong. Redo in terms of contractions
         sigma1 = np.reshape(self.Sigmas[0].tensor, newshape = (self.dim, self.dim))
         epsilon_1_rho = np.reshape(self.noisy_circuit_layer(i = 0).tensor, newshape = (self.dim, self.dim))
         cost += -np.trace(sigma1 @ epsilon_1_rho)
@@ -182,42 +184,80 @@ class Dual():
             Hi: np.array of shape (self.dim, self.dim)
         """
 
-        Hi = self.Sigmas[i].tensor - self.noisy_circuit_layer(i + 1)).tensor
+        if i == self.p - 1:
+            # TODO: check that the tensor product/site num ordering is
+            # consistent
+            Hi = np.reshape(self.Sigmas[i].tensor, newshape = (self.dim, self.dim)) + self.prob_obj.H
 
-        return np.reshape(Hi, newshape = (self.dim, self.dim))
+            return Hi
+
+        else:
+            Hi = self.Sigmas[i].tensor - self.noisy_circuit_layer(i + 1).tensor
+
+            return np.reshape(Hi, newshape = (self.dim, self.dim))
 
     def noise_layer(self, var_tensor: tn.Node):
 
         """
-        Applies the noise channel on the var_tensor at all sites.
+        Applies depolarizing noise on the var_tensor at all sites.
         """
 
         res_tensor = var_tensor
 
         for site_num in range(self.num_sites_in_lattice):
 
-            noise_node = tn.Node(self.noise_superop) # shape = 4x4
+            noise_node = tn.Node(self.noise_superop,
+                                 axis_names = ["up", "down"]) # shape = 4x4
 
-            # TODO: check and name edges to improve readability
-            edge_connection = noise_node[1] ^ res_tensor[site_num]
+            # TODO: check
+            edge_connection = noise_node["down"] ^ res_tensor[site_num]
 
-            # TODO: check if re-assignment works
             # perform the contraction
             res_tensor = noise_node @ res_tensor
 
         return res_tensor
 
+    def reshapeU_2site(self, U: np.array):
+
+        """
+        Reshapes U \otimes U^* into the appropriate 4x4x4x4 tensor to apply to
+        a vectorized density matrix/dual variable.
+
+        Dev notes: doing this manually because I couldn't find a library that
+        can handle this.
+        """
+
+        U_superop = np.kron(U, np.conj(U))
+
+        U_superop_tensored = np.zeros((4,4,4,4), dtype = complex)
+
+        for alpha in range(16):
+
+            for beta in range(16):
+
+                j1, j3, k1p, k3p = [int(a) for a in list("{0:04b}".format(alpha))]
+                i1, i3, i1p, i3p = [int(b) for b in list("{0:04b}".format(beta))]
+
+                index_0 = int((str(j1) + str(k1p)), 2)
+                index_1 = int((str(j3) + str(k3p)), 2)
+                index_2 = int((str(i1) + str(i1p)), 2)
+                index_3 = int((str(i3) + str(i3p)), 2)
+
+                U_superop_tensored[index_0, index_1, index_2, index_3] = U_superop[alpha, beta]
+
+        return U_superop_tensored
+
     def circuit_layer(self, layer_num: int, var_tensor: tn.Node):
 
         res_tensor = var_tensor
 
-        # applying the problem Hamiltonian
+        # applying the problem unitary
         gamma = self.gamma[layer_num]
 
         # U = exp(-i gamma/2 w * (I - Z_j Z_k))
         U = np.diag([1, np.exp(1j * gamma), np.exp(1j * gamma), 1])
 
-        U_superop = np.reshape(np.kron(U, np.conj(U)), newshape = (4, 4, 4, 4))
+        U_superop = self.reshapeU_2site(U)
 
         for edge in self.prob_obj.graph.edges:
 
@@ -227,14 +267,15 @@ class Dual():
             # TODO: does this work? check with a trial unitary/state.
             U_node = tn.Node(U_superop)
 
-            # TODO: does this work? name edges for clarity
+            # TODO: does this work? name edges for clarity?
+            # assumption that tn.Node() orders the axes in the same order as
+            # the input np.array
             new_edge_j = U_node[2] ^ res_tensor[site_num_j]
             new_edge_k = U_node[3] ^ res_tensor[site_num_k]
 
-            # TODO: check if re-assignment works
             res_tensor = U_node @ res_tensor
 
-        # applying the mixing Hamiltonian
+        # applying the mixing unitary
         beta = self.beta[layer_num]
 
         sx = qutip.sigmax()
@@ -244,7 +285,7 @@ class Dual():
 
         for site_num in range(self.num_sites_in_lattice):
 
-            Ux_node = tn.Node(self.Ux_superop) # shape = 4x4
+            Ux_node = tn.Node(Ux_superop) # shape = 4x4
 
             # TODO: check and name edges to improve readability
             edge_connection = Ux_node[1] ^ res_tensor[site_num]
@@ -258,9 +299,9 @@ class Dual():
     def noisy_circuit_layer(self, i: int):
 
         """
-        Applies the unitary corresponding to a circuit layer to the dual
-        variable Sigma. Also applies the noise layer after. The noise model is
-        depolarizing noise on each qubit.
+        Applies the unitary corresponding to a circuit layer followed by noise
+        to the dual variable Sigma. The noise model is depolarizing noise on
+        each qubit.
 
         Params:
             i: layer number. Used to specify the tensor to act on and the gate
