@@ -37,13 +37,7 @@ class MaxCutDual():
         p_noise: depolarizing noise probability on each qubit
 
     Currently not implemented:
-        1. Construction of the effective Hamiltonians (by applying gates)
-            a. Add circuit params and local gates
-            b. Add noise channels
-        2. Initial state term in the cost function
-        3. Entropy bounds
-        4. Finite-difference gradient
-        5. JAX gradient
+        1. JAX gradient
     """
 
     def __init__(self, prob_obj: problems.Problem,
@@ -62,7 +56,8 @@ class MaxCutDual():
         self.dim = self.local_dim ** self.num_sites_in_lattice
 
         self.utri_indices = np.triu_indices(self.dim, 1)
-        self.ltri_indices = np.tril_indices(self.dim, -1)
+        self.ltri_indices = (self.utri_indices[1], self.utri_indices[0])
+        # self.ltri_indices = np.tril_indices(self.dim, -1)
         self.num_tri_elements = self.utri_indices[0].shape[0]
         self.num_diag_elements = self.dim
 
@@ -70,19 +65,13 @@ class MaxCutDual():
         self.rho_init = (self.psi_init * self.psi_init.dag()).full()
         self.rho_init_tensor = tn.Node(self.mat_2_tensor(self.rho_init), name = "rho_init")
 
-        # initialising the noise channel superoperator
-        # NB - the basis is |0X0|,|0X1|, |1X0|, |1X1|
-
         self.X = qutip.sigmax().full()
         self.Y = qutip.sigmay().full()
         self.Z = qutip.sigmaz().full()
 
-        self.noise_superop = np.array([[1 - self.p_noise/2, self.p_noise/2, self.p_noise/2, self.p_noise/2],
-                                       [0                 , 1 - self.p_noise, 0           , 0             ],
-                                       [0                 , 0               , 1 - self.p_noise, 0         ],
-                                       [self.p_noise/2, self.p_noise/2, self.p_noise/2, 1 - self.p_noise/2]])
-
         self.init_entropy_bounds()
+
+        self.len_vars = (1 + self.num_diag_elements + 2 * self.num_tri_elements) * p
 
         # self.tot_num_vars_per_step = 1 + self.num_diag_elements + 2 * self.num_tri_elements
         # lambda + number of elements in sigma
@@ -155,7 +144,7 @@ class MaxCutDual():
 
         return obj
 
-    def assemble_vars_into_tensors(self, vars_vec):
+    def assemble_vars_into_tensors(self, vars_vec: np.array):
 
         vars_diag_list, vars_real_list, vars_imag_list = self.unvectorize_vars(vars_vec)
         self.Sigmas = []
@@ -192,7 +181,7 @@ class MaxCutDual():
 
             vars_diag = vars_vec_split[i][:self.num_diag_elements]
             vars_real = vars_vec_split[i][self.num_diag_elements:self.num_diag_elements + self.num_tri_elements]
-            vars_imag = vars_vec_split[i][self.num_diag_elements + self.num_tri_elements:-1]
+            vars_imag = vars_vec_split[i][self.num_diag_elements + self.num_tri_elements:]
 
             vars_diag_list.append(vars_diag)
             vars_real_list.append(vars_real)
@@ -215,7 +204,7 @@ class MaxCutDual():
             Hi = self.construct_H(i)
             Ei = np.linalg.eigvals(Hi)
 
-            cost += -self.Lambdas[i] * np.log(np.sum(np.exp(-Ei/self.Lambdas[i])), base = 2)
+            cost += -self.Lambdas[i] * np.log2(np.sum(np.exp(-Ei/self.Lambdas[i])))
 
         # the initial state term
         # TODO: will this be faster if expressed in terms of contractions?
@@ -479,10 +468,10 @@ class MaxCutDual():
         """
 
         if i == 0:
-            res_tensor = circuit_layer(layer_num = i, var_tensor = self.rho_init_tensor)
+            res_tensor = self.circuit_layer(layer_num = i, var_tensor = self.rho_init_tensor)
         else:
-            res_tensor = circuit_layer(layer_num = i, var_tensor = self.Sigmas[i])
+            res_tensor = self.circuit_layer(layer_num = i, var_tensor = self.Sigmas[i])
 
-        res_tensor = noise_layer(res_tensor)
+        res_tensor = self.noise_layer(res_tensor)
 
         return res_tensor
