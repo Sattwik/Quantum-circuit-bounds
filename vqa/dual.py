@@ -73,6 +73,10 @@ class MaxCutDual():
         # initialising the noise channel superoperator
         # NB - the basis is |0X0|,|0X1|, |1X0|, |1X1|
 
+        self.X = qutip.sigmax().full()
+        self.Y = qutip.sigmay().full()
+        self.Z = qutip.sigmaz().full()
+
         self.noise_superop = np.array([[1 - self.p_noise/2, self.p_noise/2, self.p_noise/2, self.p_noise/2],
                                        [0                 , 1 - self.p_noise, 0           , 0             ],
                                        [0                 , 0               , 1 - self.p_noise, 0         ],
@@ -139,7 +143,7 @@ class MaxCutDual():
         q_powers = [q**i for i in range(self.p)]
 
         self.entropy_bounds = self.num_sites_in_lattice * self.p_noise * \
-                              [np.sum(q_powers[:i+1]) for i in range(self.p)]
+                              np.array([np.sum(q_powers[:i+1]) for i in range(self.p)])
 
     def objective(self, vars_vec: np.array):
 
@@ -251,25 +255,107 @@ class MaxCutDual():
         Applies depolarizing noise on the var_tensor at all sites.
         """
 
-        # (i1) (i1p) (i2) (i2p) ... (iN) (iNp) -> (i1 i1p) (i2 i2p) ... (iN iNp)
-        res = np.reshape(var_tensor.tensor, tuple([self.local_dim ** 2] * self.num_sites_in_lattice))
-        res_tensor = tn.Node(res)
+        # # (i1) (i1p) (i2) (i2p) ... (iN) (iNp) -> (i1 i1p) (i2 i2p) ... (iN iNp)
+        # res = np.reshape(var_tensor.tensor, tuple([self.local_dim ** 2] * self.num_sites_in_lattice))
+        # res_tensor = tn.Node(res)
+        #
+        # for site_num in range(self.num_sites_in_lattice):
+        #
+        #     noise_node = tn.Node(self.noise_superop,
+        #                          axis_names = ["up", "down"], name = "noise_node") # shape = 4x4
+        #
+        #     # TODO: check
+        #     edge_connection = noise_node["down"] ^ res_tensor[site_num]
+        #
+        #     # perform the contraction
+        #     new_edge_order = res_tensor.edges[:site_num] + [noise_node["up"]] +\
+        #                      res_tensor.edges[site_num + 1:]
+        #     res_tensor = tn.contract_between(noise_node, res_tensor,
+        #                                     output_edge_order = new_edge_order)
+        #
+        # final_res = np.reshape(res_tensor.tensor, self.dim_list)
+        # res_tensor = tn.Node(final_res)
+        #
+        # return res_tensor
+
+        res_tensor = var_tensor
 
         for site_num in range(self.num_sites_in_lattice):
 
-            noise_node = tn.Node(self.noise_superop,
-                                 axis_names = ["up", "down"], name = "noise_node") # shape = 4x4
+            # --- applying I --- #
+            res_array = (1 - 3 * self.p_noise/4) * res_tensor.tensor
 
-            # TODO: check
-            edge_connection = noise_node["down"] ^ res_tensor[site_num]
+            # --- applying X --- #
+            tmp_tensor = res_tensor
+
+            X_node = tn.Node(np.sqrt(self.p_noise/4) * self.X, axis_names = ["ja","ia"])
+            X_prime_node = tn.Node(np.sqrt(self.p_noise/4) * self.X, axis_names = ["iap","kap"])
+
+            ia  = 2 * site_num
+            iap = 2 * site_num + 1
+
+            edge_a      = X_node["ia"] ^ tmp_tensor[ia]
+            edge_a_p    = X_prime_node["iap"] ^ tmp_tensor[iap]
 
             # perform the contraction
-            new_edge_order = res_tensor.edges[:site_num] + [noise_node["up"]] +\
-                             res_tensor.edges[site_num + 1:]
-            res_tensor = tn.contract_between(noise_node, res_tensor, output_edge_order = new_edge_order)
+            new_edge_order = tmp_tensor.edges[:ia] + [X_node["ja"]] +\
+                             tmp_tensor.edges[ia + 1:]
+            tmp_tensor = tn.contract_between(X_node, tmp_tensor, output_edge_order = new_edge_order)
 
-        final_res = np.reshape(res_tensor.tensor, self.dim_list)
-        res_tensor = tn.Node(final_res)
+            new_edge_order = tmp_tensor.edges[:iap] + [X_prime_node["kap"]] +\
+                             tmp_tensor.edges[iap + 1:]
+            tmp_tensor = tn.contract_between(X_prime_node, tmp_tensor, output_edge_order = new_edge_order)
+
+            res_array += tmp_tensor.tensor
+
+            # --- applying Y --- #
+            tmp_tensor = res_tensor
+
+            Y_node = tn.Node(np.sqrt(self.p_noise/4) * self.Y, axis_names = ["ja","ia"])
+            Y_prime_node = tn.Node(np.sqrt(self.p_noise/4) * self.Y, axis_names = ["iap","kap"])
+
+            ia  = 2 * site_num
+            iap = 2 * site_num + 1
+
+            edge_a      = Y_node["ia"] ^ tmp_tensor[ia]
+            edge_a_p    = Y_prime_node["iap"] ^ tmp_tensor[iap]
+
+            # perform the contraction
+            new_edge_order = tmp_tensor.edges[:ia] + [Y_node["ja"]] +\
+                             tmp_tensor.edges[ia + 1:]
+            tmp_tensor = tn.contract_between(Y_node, tmp_tensor, output_edge_order = new_edge_order)
+
+            new_edge_order = tmp_tensor.edges[:iap] + [Y_prime_node["kap"]] +\
+                             tmp_tensor.edges[iap + 1:]
+            tmp_tensor = tn.contract_between(Y_prime_node, tmp_tensor, output_edge_order = new_edge_order)
+
+            res_array += tmp_tensor.tensor
+
+            # --- applying Z --- #
+            tmp_tensor = res_tensor
+
+            Z_node = tn.Node(np.sqrt(self.p_noise/4) * self.Z, axis_names = ["ja","ia"])
+            Z_prime_node = tn.Node(np.sqrt(self.p_noise/4) * self.Z, axis_names = ["iap","kap"])
+
+            ia  = 2 * site_num
+            iap = 2 * site_num + 1
+
+            edge_a      = Z_node["ia"] ^ tmp_tensor[ia]
+            edge_a_p    = Z_prime_node["iap"] ^ tmp_tensor[iap]
+
+            # perform the contraction
+            new_edge_order = tmp_tensor.edges[:ia] + [Z_node["ja"]] +\
+                             tmp_tensor.edges[ia + 1:]
+            tmp_tensor = tn.contract_between(Z_node, tmp_tensor, output_edge_order = new_edge_order)
+
+            new_edge_order = tmp_tensor.edges[:iap] + [Z_prime_node["kap"]] +\
+                             tmp_tensor.edges[iap + 1:]
+            tmp_tensor = tn.contract_between(Z_prime_node, tmp_tensor, output_edge_order = new_edge_order)
+
+            res_array += tmp_tensor.tensor
+
+            # update tensor
+            res_tensor = tn.Node(res_array)
 
         return res_tensor
 
