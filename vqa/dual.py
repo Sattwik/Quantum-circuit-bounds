@@ -192,9 +192,14 @@ class MaxCutDual():
     def cost(self):
 
         # the entropy term
-        cost = np.dot(self.Lambdas, self.entropy_bounds)
+        entropy_term = np.dot(self.Lambdas, self.entropy_bounds)
+        cost = entropy_term
+
+        print('Entropy term = ', entropy_term)
 
         # the effective Hamiltonian term
+        effH_term = 0
+
         for i in range(self.p):
 
             # i corresponds to the layer of the circuit, 0 being the earliest
@@ -204,13 +209,25 @@ class MaxCutDual():
             Hi = self.construct_H(i)
             Ei = np.linalg.eigvals(Hi)
 
-            cost += -self.Lambdas[i] * np.log2(np.sum(np.exp(-Ei/self.Lambdas[i])))
+            exp_term = -self.Lambdas[i] * np.log2(np.sum(np.exp(-Ei/self.Lambdas[i])))
+
+            if np.isnan(exp_term):
+
+                print("nan @ i = ",i)
+
+            effH_term += exp_term
+
+        print('Eff H term = ', effH_term)
+        cost += effH_term
 
         # the initial state term
         # TODO: will this be faster if expressed in terms of contractions?
         sigma1 = self.tensor_2_mat(self.Sigmas[0].tensor)
         epsilon_1_rho = self.tensor_2_mat(self.noisy_circuit_layer(i = 0).tensor)
-        cost += -np.trace(sigma1 @ epsilon_1_rho)
+        initial_state_term = -np.trace(sigma1 @ epsilon_1_rho)
+        cost += initial_state_term
+
+        print('Initial state term = ', initial_state_term)
 
         return cost
 
@@ -384,12 +401,6 @@ class MaxCutDual():
             iap = 2 * site_num_a + 1
             ibp = 2 * site_num_b + 1
 
-            print("On edge: ", edge)
-            print("ia: ", ia)
-            print("ib: ", ib)
-            print("iap: ", iap)
-            print("ibp: ", ibp)
-
             # TODO: does this work? check with a trial unitary/state.
             U_node      = tn.Node(U_tensor, axis_names = ["ja", "ia", "jb", "ib"], name = "U_node")
             U_dag_node  = tn.Node(U_dag_tensor, axis_names = ["iap", "kap", "ibp", "kbp"], name = "U_dag_node")
@@ -475,3 +486,24 @@ class MaxCutDual():
         res_tensor = self.noise_layer(res_tensor)
 
         return res_tensor
+
+# def fd_gradient(vars_vec: np.array, positions: List, dual_obj: MaxCutDual):
+#
+#     objective_0 = dual_obj.objective(vars_vec)
+#     delta = 1e-7
+#
+#     gradient_list = []
+#
+#     for i in positions:
+#
+#         vars_tmp = np.copy(vars_vec)
+#         vars_tmp[i] += delta
+#         objective_plus = objective_external(angles_to_test, opt_obj)
+#
+#         vars_tmp = np.copy(vars_vec)
+#         vars_tmp[i] -= delta
+#         objective_minus = objective_external(angles_to_test, opt_obj)
+#
+#         gradient_list.append((objective_plus - objective_minus)/(2 * delta_angles))
+#
+#     return np.array(gradient_list)

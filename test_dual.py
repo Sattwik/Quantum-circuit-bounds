@@ -10,11 +10,12 @@ import qutip
 from matplotlib import rc
 import matplotlib
 import tensornetwork as tn
+import jax.numpy as jnp
+from jax import jit, grad, vmap
+from jax.test_util import check_grads
 
-from vqa import graphs
-from vqa import problems
-from vqa import algorithms
-from vqa import dual
+from vqa import graphs, problems, algorithms, dual, dual_jax
+
 
 m = 2
 n = 3
@@ -219,10 +220,10 @@ p = 1
 
 # TEST5: check that the objective is real and smaller than the actual solution
 
-lattice = graphs.define_lattice(m = 3, n = 3)
+lattice = graphs.define_lattice(m = 2, n = 2)
 graph = graphs.create_random_connectivity(lattice)
 maxcut_obj = problems.MaxCut(graph, lattice)
-p = 2
+p = 1
 
 # gamma0 = np.pi/13
 # beta0 = np.pi/19
@@ -246,9 +247,10 @@ gamma_beta_clean = opt_result.x
 gamma_clean = np.split(gamma_beta_clean, 2)[0]
 beta_clean = np.split(gamma_beta_clean, 2)[1]
 
-prob_noise = 0.9
+prob_noise = 1.0
 
-num_monte_carlo = int(1/prob_noise)
+# num_monte_carlo = int(1/prob_noise)
+num_monte_carlo = 20
 p_noisy = 0
 
 for n_mc in range(num_monte_carlo):
@@ -260,27 +262,88 @@ for n_mc in range(num_monte_carlo):
                     gamma_beta_clean, qaoa_obj_noisy)/num_monte_carlo
 
 dual_obj = dual.MaxCutDual(prob_obj = maxcut_obj, p = p, gamma = gamma_clean, beta = beta_clean, p_noise = prob_noise)
-vars_init = np.random.random(dual_obj.len_vars)
+dual_obj_jax = dual_jax.MaxCutDualJAX(prob_obj = maxcut_obj, p = p, gamma = jnp.array(gamma_clean), beta = jnp.array(beta_clean), p_noise = prob_noise)
 
-if vars_init[0] <= 0:
-    vars_init[0] = 1
-if vars_init[1] <= 0:
-    vars_init[1] = 1
+# num_var_rand = 100
+#
+# for i in range(num_var_rand):
+#
+#     print(i)
+#
+#     lambdas_init = np.random.uniform(low = 1e-9, high = 1e3, size = p)
+#     sigma_vars_init = np.random.uniform(low = -1e3, high = 1e3, size = dual_obj.len_vars - p)
+#     vars_init = np.concatenate((lambdas_init, sigma_vars_init))
+#
+#     p_lb = dual_obj.objective(vars_init)
+#     p_lb_jax = dual_jax.objective_external_dual_JAX(jnp.array(vars_init), dual_obj_jax)
+#
+#     if np.isnan(p_lb):
+#
+#         break
+#
+#     if -float(p_lb_jax) > p_noisy:
+#
+#         print("Error in dual function")
+#
+#     print("JAX val = ", -float(p_lb_jax))
+#     print("np val = ", p_lb)
 
-p_lb = dual_obj.objective(vars_init)
+
+# vars_init = np.random.random(dual_obj.len_vars)
+# if vars_init[0] <= 0:
+#     vars_init[0] = 1
+#
+# if vars_init[1] <= 0:
+#     vars_init[1] = 1
 
 
 
+# dual_obj_jax = dual_jax.MaxCutDualJAX(prob_obj = maxcut_obj, p = p, gamma = jnp.array(gamma_clean), beta = jnp.array(beta_clean), p_noise = prob_noise)
 
+# p_lb_jax = dual_obj_jax.objective(jnp.array(vars_init))
+# p_lb_jax = dual_jax.objective_external_dual_JAX(jnp.array(vars_init), dual_obj_jax)
 
+# deriv = grad(dual_obj_jax.objective)(jnp.array(vars_init))
+# deriv = dual_jax.gradient_external_dual_JAX(jnp.array(vars_init), dual_obj_jax)
 
+# positions = tuple(np.arange(dual_obj_jax.len_vars, dtype = int))
+# positions = tuple(np.arange(100, dtype = int))
 
+# fd_deriv = dual_jax.fd_gradient_dual_JAX(jnp.array(vars_init), positions, dual_obj_jax)
 
+# vars_init = np.random.random(dual_obj.len_vars)
 
+# deriv2 = grad(dual_obj_jax.objective)(jnp.array(vars_init))
 
+epsilon = 1e-9
+sigma_bound = 1e1
 
+lambdas_init = np.random.uniform(low = epsilon, high = 1e3, size = p)
+sigma_vars_init = np.random.uniform(low = -sigma_bound, high = sigma_bound, size = dual_obj.len_vars - p)
+vars_init = np.concatenate((lambdas_init, sigma_vars_init))
 
+obj_over_opti, opt_result = dual_jax.optimize_external_dual_JAX(vars_init, dual_obj_jax)
 
+p_lb_jax_opti = -float(obj_over_opti[-1])
+
+dual_obj_opt = dual.MaxCutDual(prob_obj = maxcut_obj, p = p, gamma = gamma_clean, beta = beta_clean, p_noise = prob_noise)
+dual_obj_opt.assemble_vars_into_tensors(opt_result.x)
+sigma0 = dual_obj_opt.tensor_2_mat(dual_obj_opt.Sigmas[0].tensor)
+# sigma1 = dual_obj_opt.tensor_2_mat(dual_obj_opt.Sigmas[1].tensor)
+
+obj_opt = dual_obj_opt.cost()
+
+g = lambda lmbda, x, S: -lmbda * np.log(np.sum(np.exp(-x/lmbda))) + lmbda * S
+E = np.diag(maxcut_obj.H.full())
+lmbda_range = np.linspace(0.01, 20, 1000)
+g_array = []
+
+for l in lmbda_range:
+    g_array.append(g(l, E, 4 * np.log(2) * 0.1))
+
+g_array = np.array(g_array)
+plt.plot(lmbda_range, g_array)
+plt.show()
 
 # vars = np.arange((1 + dual_obj.num_diag_elements + 2 * dual_obj.num_tri_elements) * p)
 
