@@ -174,7 +174,8 @@ class MaxCutDualJAX():
 
     def unvectorize_vars(self, vars_vec: jnp.array):
 
-        self.Lambdas = vars_vec.at[:self.p].get()
+        a_vars = vars_vec.at[:self.p].get()
+        self.Lambdas = jnp.log(1 + jnp.exp(a_vars))
 
         vars_vec_split = jnp.split(vars_vec.at[self.p:].get(), self.p)
         # split the variables into p equal arrays
@@ -452,107 +453,6 @@ class MaxCutDualJAX():
 
         return res_tensor
 
-@partial(jit, static_argnums = (1,))
-def objective_external_dual_JAX(vars_vec: jnp.array, dual_obj: MaxCutDualJAX):
-
-    return dual_obj.objective(vars_vec)
-
-@partial(jit, static_argnums = (1,))
-def gradient_external_dual_JAX(vars_vec: jnp.array, dual_obj: MaxCutDualJAX):
-
-    return grad(dual_obj.objective)(vars_vec)
-
-# @partial(jit, static_argnums = (1,2))
-def fd_gradient_dual_JAX(vars_vec: jnp.array, positions: Tuple, dual_obj: MaxCutDualJAX):
-
-    objective_0 = objective_external_dual_JAX(vars_vec, dual_obj)
-    delta = 1e-7
-
-    gradient_list = jnp.zeros(len(positions), dtype = complex)
-
-    for i in positions:
-
-        print(i)
-
-        vars_tmp = vars_vec
-        vars_tmp = vars_tmp.at[i].add(delta)
-        objective_plus = objective_external_dual_JAX(vars_tmp, dual_obj)
-
-        vars_tmp = vars_vec
-        vars_tmp = vars_tmp.at[i].add(-delta)
-        objective_minus = objective_external_dual_JAX(vars_tmp, dual_obj)
-
-        gradient_list = gradient_list.at[i].set((objective_plus - objective_minus)/(2 * delta))
-
-    return gradient_list
-
-def unjaxify_obj(func):
-
-    def wrap(*args):
-        return float(func(jnp.array(args[0]), args[1]))
-
-    return wrap
-
-def unjaxify_grad(func):
-
-    def wrap(*args):
-        return np.array(func(jnp.array(args[0]), args[1]), order = 'F')
-
-    return wrap
-
-def optimize_external_dual_JAX(vars_init: np.array, dual_obj: MaxCutDualJAX):
-
-    opt_args = (dual_obj,)
-
-    obj_over_opti = []
-
-    def callback_func(x):
-
-        obj_eval = unjaxify_obj(objective_external_dual_JAX)(x, opt_args[0])
-
-        obj_over_opti.append(obj_eval)
-
-        print('Dir. Iteration ', str(len(obj_over_opti)), '. Objective = ', str(obj_eval), '. x = ', x)
-
-    sigma_bound = 1e1
-    p = dual_obj.p
-    # len_vars = dual_obj.len_vars
-    len_vars = vars_init.shape[0]
-
-    bnds = scipy.optimize.Bounds(lb = [1e-2] * p + [-sigma_bound] * (len_vars - p), ub = [np.inf] * p + [-sigma_bound] * (len_vars - p))
-
-    opt_result = scipy.optimize.minimize(unjaxify_obj(objective_external_dual_JAX), vars_init, args = opt_args,
-                                         method = 'L-BFGS-B', jac = unjaxify_grad(gradient_external_dual_JAX), bounds = bnds,
-                                         options={'disp': None, 'maxcor': 10, 'ftol': 2.220446049250313e-09,
-                                         'gtol': 1e-05, 'eps': 1e-08, 'maxfun': 15000, 'maxiter': 3, 'iprint': 1, 'maxls': 20},
-                                         callback = callback_func)
-
-    return np.array(obj_over_opti), opt_result
-
-@partial(jit, static_argnums = (1,2,3))
-def adam_external_dual_JAX(vars_init: jnp.array, dual_obj: MaxCutDualJAX,
-                           alpha: float, num_steps: int):
-
-    init, update, get_params = optimizers.adam(alpha)
-    params = vars_init
-
-    @partial(jit, static_argnums = (0,))
-    def step(t, opt_state):
-        value, grads = value_and_grad(dual_obj.objective)(get_params(opt_state))
-        opt_state = update(t, grads, opt_state)
-        return value, opt_state
-
-    opt_state = init(params)
-
-    value_array = jnp.zeros(num_steps)
-
-    for t in range(num_steps):
-        print("Step :", t)
-        value, opt_state = step(t, opt_state)
-        value_array = value_array.at[t].set(value)
-
-    return value_array, get_params(opt_state)
-
 class MaxCutDualJAXGlobal():
 
     """
@@ -707,7 +607,8 @@ class MaxCutDualJAXGlobal():
 
     def unvectorize_vars(self, vars_vec: jnp.array):
 
-        self.Lambdas = vars_vec.at[:self.p].get()
+        a_vars = vars_vec.at[:self.p].get()
+        self.Lambdas = jnp.log(1 + jnp.exp(a_vars))
 
         vars_vec_split = jnp.split(vars_vec.at[self.p:].get(), self.p)
         # split the variables into p equal arrays
@@ -891,7 +792,8 @@ class MaxCutDualJAXNoChannel():
 
     def cost(self, vars_vec: jnp.array):
 
-        lmbda = vars_vec.at[0].get()
+        a = vars_vec.at[0].get()
+        lmbda = jnp.log(1 + jnp.exp(a))
 
         # the entropy term
         cost = lmbda * self.entropy_bounds[-1]
@@ -903,6 +805,106 @@ class MaxCutDualJAXNoChannel():
         cost += -lmbda * jnp.log(jnp.sum(jnp.exp(-Ei/lmbda)))
 
         return cost
+
+def adam_external_dual_JAX(vars_init: jnp.array, dual_obj: MaxCutDualJAX,
+                           alpha: float, num_steps: int):
+
+    init, update, get_params = optimizers.adam(alpha)
+    params = vars_init
+
+    # @partial(jit, static_argnums = (0,))
+    def step(t, opt_state):
+        value, grads = value_and_grad(dual_obj.objective)(get_params(opt_state))
+        opt_state = update(t, grads, opt_state)
+        return value, opt_state
+
+    opt_state = init(params)
+
+    value_array = jnp.zeros(num_steps)
+
+    for t in range(num_steps):
+        print("Step :", t)
+        value, opt_state = step(t, opt_state)
+        value_array = value_array.at[t].set(value)
+
+    return value_array, get_params(opt_state)
+
+# @partial(jit, static_argnums = (1,))
+# def objective_external_dual_JAX(vars_vec: jnp.array, dual_obj: MaxCutDualJAX):
+#
+#     return dual_obj.objective(vars_vec)
+#
+# @partial(jit, static_argnums = (1,))
+# def gradient_external_dual_JAX(vars_vec: jnp.array, dual_obj: MaxCutDualJAX):
+#
+#     return grad(dual_obj.objective)(vars_vec)
+#
+# # @partial(jit, static_argnums = (1,2))
+# def fd_gradient_dual_JAX(vars_vec: jnp.array, positions: Tuple, dual_obj: MaxCutDualJAX):
+#
+#     objective_0 = objective_external_dual_JAX(vars_vec, dual_obj)
+#     delta = 1e-7
+#
+#     gradient_list = jnp.zeros(len(positions), dtype = complex)
+#
+#     for i in positions:
+#
+#         print(i)
+#
+#         vars_tmp = vars_vec
+#         vars_tmp = vars_tmp.at[i].add(delta)
+#         objective_plus = objective_external_dual_JAX(vars_tmp, dual_obj)
+#
+#         vars_tmp = vars_vec
+#         vars_tmp = vars_tmp.at[i].add(-delta)
+#         objective_minus = objective_external_dual_JAX(vars_tmp, dual_obj)
+#
+#         gradient_list = gradient_list.at[i].set((objective_plus - objective_minus)/(2 * delta))
+#
+#     return gradient_list
+#
+# def unjaxify_obj(func):
+#
+#     def wrap(*args):
+#         return float(func(jnp.array(args[0]), args[1]))
+#
+#     return wrap
+#
+# def unjaxify_grad(func):
+#
+#     def wrap(*args):
+#         return np.array(func(jnp.array(args[0]), args[1]), order = 'F')
+#
+#     return wrap
+#
+# def optimize_external_dual_JAX(vars_init: np.array, dual_obj: MaxCutDualJAX):
+#
+#     opt_args = (dual_obj,)
+#
+#     obj_over_opti = []
+#
+#     def callback_func(x):
+#
+#         obj_eval = unjaxify_obj(objective_external_dual_JAX)(x, opt_args[0])
+#
+#         obj_over_opti.append(obj_eval)
+#
+#         print('Dir. Iteration ', str(len(obj_over_opti)), '. Objective = ', str(obj_eval), '. x = ', x)
+#
+#     sigma_bound = 1e1
+#     p = dual_obj.p
+#     # len_vars = dual_obj.len_vars
+#     len_vars = vars_init.shape[0]
+#
+#     bnds = scipy.optimize.Bounds(lb = [1e-2] * p + [-sigma_bound] * (len_vars - p), ub = [np.inf] * p + [-sigma_bound] * (len_vars - p))
+#
+#     opt_result = scipy.optimize.minimize(unjaxify_obj(objective_external_dual_JAX), vars_init, args = opt_args,
+#                                          method = 'L-BFGS-B', jac = unjaxify_grad(gradient_external_dual_JAX), bounds = bnds,
+#                                          options={'disp': None, 'maxcor': 10, 'ftol': 2.220446049250313e-09,
+#                                          'gtol': 1e-05, 'eps': 1e-08, 'maxfun': 15000, 'maxiter': 3, 'iprint': 1, 'maxls': 20},
+#                                          callback = callback_func)
+#
+#     return np.array(obj_over_opti), opt_result
 
 # """
 # Moving the action of the class MaxCutDual() to pure functions in order to be
