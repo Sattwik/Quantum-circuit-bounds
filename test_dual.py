@@ -222,7 +222,7 @@ p = 1
 
 lattice = graphs.define_lattice(m = 2, n = 2)
 graph = graphs.create_random_connectivity(lattice)
-maxcut_obj = problems.MaxCut(graph, lattice)
+maxcut_obj = problems.MaxCut(lattice, lattice)
 p = 1
 
 # gamma0 = np.pi/13
@@ -247,7 +247,7 @@ gamma_beta_clean = opt_result.x
 gamma_clean = np.split(gamma_beta_clean, 2)[0]
 beta_clean = np.split(gamma_beta_clean, 2)[1]
 
-prob_noise = 1.0
+prob_noise = 0.5
 
 # num_monte_carlo = int(1/prob_noise)
 num_monte_carlo = 20
@@ -262,7 +262,7 @@ for n_mc in range(num_monte_carlo):
                     gamma_beta_clean, qaoa_obj_noisy)/num_monte_carlo
 
 dual_obj = dual.MaxCutDual(prob_obj = maxcut_obj, p = p, gamma = gamma_clean, beta = beta_clean, p_noise = prob_noise)
-dual_obj_jax = dual_jax.MaxCutDualJAX(prob_obj = maxcut_obj, p = p, gamma = jnp.array(gamma_clean), beta = jnp.array(beta_clean), p_noise = prob_noise)
+# dual_obj_jax = dual_jax.MaxCutDualJAX(prob_obj = maxcut_obj, p = p, gamma = jnp.array(gamma_clean), beta = jnp.array(beta_clean), p_noise = prob_noise)
 
 # num_var_rand = 100
 #
@@ -315,35 +315,71 @@ dual_obj_jax = dual_jax.MaxCutDualJAX(prob_obj = maxcut_obj, p = p, gamma = jnp.
 
 # deriv2 = grad(dual_obj_jax.objective)(jnp.array(vars_init))
 
-epsilon = 1e-9
-sigma_bound = 1e1
+sigma_bound = 3e1
 
-lambdas_init = np.random.uniform(low = epsilon, high = 1e3, size = p)
-sigma_vars_init = np.random.uniform(low = -sigma_bound, high = sigma_bound, size = dual_obj.len_vars - p)
+lambdas_init = np.ones(p)
+# sigma_vars_init = np.random.uniform(low = -sigma_bound, high = sigma_bound, size = dual_obj.len_vars - p)
+sigma_vars_init = np.ones(dual_obj.len_vars - p) * (-1e1)
 vars_init = np.concatenate((lambdas_init, sigma_vars_init))
 
-obj_over_opti, opt_result = dual_jax.optimize_external_dual_JAX(vars_init, dual_obj_jax)
+# obj_over_opti, opt_result = dual_jax.optimize_external_dual_JAX(vars_init, dual_obj_jax)
 
-p_lb_jax_opti = -float(obj_over_opti[-1])
+# p_lb_jax_opti = -float(obj_over_opti[-1])
 
-dual_obj_opt = dual.MaxCutDual(prob_obj = maxcut_obj, p = p, gamma = gamma_clean, beta = beta_clean, p_noise = prob_noise)
-dual_obj_opt.assemble_vars_into_tensors(opt_result.x)
-sigma0 = dual_obj_opt.tensor_2_mat(dual_obj_opt.Sigmas[0].tensor)
+# dual_obj_opt = dual.MaxCutDual(prob_obj = maxcut_obj, p = p, gamma = gamma_clean, beta = beta_clean, p_noise = prob_noise)
+# dual_obj_opt.assemble_vars_into_tensors(opt_result.x)
+# sigma0 = dual_obj_opt.tensor_2_mat(dual_obj_opt.Sigmas[0].tensor)
 # sigma1 = dual_obj_opt.tensor_2_mat(dual_obj_opt.Sigmas[1].tensor)
 
-obj_opt = dual_obj_opt.cost()
+# obj_opt = dual_obj_opt.cost()
 
-g = lambda lmbda, x, S: -lmbda * np.log(np.sum(np.exp(-x/lmbda))) + lmbda * S
-E = np.diag(maxcut_obj.H.full())
-lmbda_range = np.linspace(0.01, 20, 1000)
+dual_obj_jax_global = dual_jax.MaxCutDualJAXGlobal(prob_obj = maxcut_obj, p = p, p_noise = prob_noise)
+# obj_over_opti_global, opt_result_global = dual_jax.optimize_external_dual_JAX(vars_init, dual_obj_jax_global)
+
+init_obj = dual_jax.unjaxify_obj(dual_jax.objective_external_dual_JAX)(vars_init, dual_obj_jax_global)
+init_gradient = dual_jax.unjaxify_grad(dual_jax.gradient_external_dual_JAX)(vars_init, dual_obj_jax_global)
+
+value, state = dual_jax.adam_external_dual_JAX(jnp.array(vars_init), dual_obj_jax_global, alpha = 0.1, num_steps = 100)
+
+# p_lb_jax_opti_global = -float(obj_over_opti_global[-1])
+
+# dual_obj_opt_global = dual.MaxCutDual(prob_obj = maxcut_obj, p = p, gamma = gamma_clean, beta = beta_clean, p_noise = prob_noise)
+# dual_obj_opt_global.assemble_vars_into_tensors(opt_result_global.x)
+# sigma0_global = dual_obj_opt_global.tensor_2_mat(dual_obj_opt_global.Sigmas[0].tensor)
+# obj_opt_global = dual_obj_opt_global.cost()
+
+dual_obj_jax_nochannel = dual_jax.MaxCutDualJAXNoChannel(prob_obj = maxcut_obj, p = p, p_noise = prob_noise)
+
+lambdas_init = np.ones(p)
+obj_over_opti_nochannel, opt_result_nochannel = dual_jax.optimize_external_dual_JAX(lambdas_init, dual_obj_jax_nochannel)
+
+init_obj = dual_jax.unjaxify_obj(dual_jax.objective_external_dual_JAX)(lambdas_init, dual_obj_jax_nochannel)
+init_gradient = dual_jax.unjaxify_grad(dual_jax.gradient_external_dual_JAX)(lambdas_init, dual_obj_jax_nochannel)
+
+p_lb_jax_opti_nochannel = -float(obj_over_opti_nochannel[-1])
+
+lmbda_range = np.linspace(0.01, 10000, 1000)
 g_array = []
-
+vars_vec = vars_init.copy()
 for l in lmbda_range:
-    g_array.append(g(l, E, 4 * np.log(2) * 0.1))
+    vars_vec[0] = l
+    g_array.append(float(dual_jax.objective_external_dual_JAX(vars_vec, dual_obj_jax_nochannel)))
 
-g_array = np.array(g_array)
-plt.plot(lmbda_range, g_array)
-plt.show()
+# dual_obj_opt_nochannel = dual.MaxCutDual(prob_obj = maxcut_obj, p = p, gamma = gamma_clean, beta = beta_clean, p_noise = prob_noise)
+# dual_obj_opt_nochannel.assemble_vars_into_tensors(opt_result_nochannel.x)
+# sigma0_nochannel = dual_obj_opt_nochannel.tensor_2_mat(dual_obj_opt_nochannel.Sigmas[0].tensor)
+
+# g = lambda lmbda, x, S: -lmbda * np.log(np.sum(np.exp(-x/lmbda))) + lmbda * S
+# E = np.diag(maxcut_obj.H.full())
+# lmbda_range = np.linspace(0.01, 20, 1000)
+# g_array = []
+#
+# for l in lmbda_range:
+#     g_array.append(g(l, E, 4 * np.log(2) * 0.1))
+#
+# g_array = np.array(g_array)
+# plt.plot(lmbda_range, g_array)
+# plt.show()
 
 # vars = np.arange((1 + dual_obj.num_diag_elements + 2 * dual_obj.num_tri_elements) * p)
 
