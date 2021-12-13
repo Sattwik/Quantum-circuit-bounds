@@ -219,9 +219,14 @@ class MaxCutDual():
 
         # the initial state term
         # TODO: will this be faster if expressed in terms of contractions?
-        sigma1 = self.tensor_2_mat(self.Sigmas[0].tensor)
-        epsilon_1_rho = self.tensor_2_mat(self.noisy_circuit_layer(i = 0).tensor)
-        initial_state_term = -np.trace(sigma1 @ epsilon_1_rho)
+        # sigma1 = self.tensor_2_mat(self.Sigmas[0].tensor)
+        # epsilon_1_rho = self.tensor_2_mat(self.noisy_circuit_layer(i = 0).tensor)
+        # initial_state_term = -np.trace(sigma1 @ epsilon_1_rho)
+
+        rho_init_mat = self.tensor_2_mat(self.rho_init_tensor.tensor)
+        epsilon_1_dag_sigma1 = self.tensor_2_mat(self.noisy_circuit_layer(i = 0).tensor)
+        initial_state_term = -np.trace(np.matmul(rho_init_mat, epsilon_1_dag_sigma1))
+
         cost += initial_state_term
 
         print('Initial state term = ', initial_state_term)
@@ -339,7 +344,7 @@ class MaxCutDual():
 
         return res_tensor
 
-    def circuit_layer(self, layer_num: int, var_tensor: tn.Node):
+    def problem_layer(self, layer_num: int, var_tensor: tn.Node, mode: str = "dual"):
 
         res_tensor = var_tensor
 
@@ -349,6 +354,12 @@ class MaxCutDual():
         # U = exp(-i gamma/2 w * (I - Z_j Z_k))
         U = np.diag([1, np.exp(1j * gamma), np.exp(1j * gamma), 1])
         U_dag = U.conj().T
+
+        # taking the adjoint of U and U_dag to impose dual channel on Sigmas
+        if mode == 'dual':
+            print('dual mode')
+            U = np.conj(np.transpose(U))
+            U_dag = np.conj(np.transpose(U_dag))
 
         # (ja jb) (ia ib) -> (ja jb ia ib)
         U_tensor = U.flatten()
@@ -404,12 +415,24 @@ class MaxCutDual():
 
             res_tensor = tn.contract_between(U_dag_node, res_tensor, output_edge_order = new_edge_order)
 
+        return res_tensor
+
+    def mixing_layer(self, layer_num: int, var_tensor: tn.Node, mode: str = "dual"):
+
+        res_tensor = var_tensor
+
         #----- Applying the mixing unitary -----#
         beta = self.beta[layer_num]
 
         sx = qutip.sigmax()
         Ux = (-1j * beta * sx).expm().full()
         Ux_dag = Ux.conj().T
+
+        # taking the adjoint of U and U_dag to impose dual channel on Sigmas
+        if mode == 'dual':
+            print('dual mode')
+            Ux = np.conj(np.transpose(Ux))
+            Ux_dag = np.conj(np.transpose(Ux_dag))
 
         for site_num in range(self.num_sites_in_lattice):
 
@@ -436,6 +459,20 @@ class MaxCutDual():
 
         return res_tensor
 
+    def circuit_layer(self, layer_num: int, var_tensor: tn.Node, mode: str = "dual"):
+
+        res_tensor = var_tensor
+
+        if mode == "dual":
+            res_tensor = self.mixing_layer(layer_num, res_tensor, "dual")
+            res_tensor = self.problem_layer(layer_num, res_tensor, "dual")
+
+        else:
+            res_tensor = self.problem_layer(layer_num, res_tensor, "primal")
+            res_tensor = self.mixing_layer(layer_num, res_tensor, "primal")
+
+        return res_tensor
+        
     def noisy_circuit_layer(self, i: int):
 
         """
@@ -452,23 +489,27 @@ class MaxCutDual():
             after the action of the layer.
         """
 
-        if i == 0:
-            res_tensor = self.circuit_layer(layer_num = i, var_tensor = self.rho_init_tensor)
-        else:
-            res_tensor = self.circuit_layer(layer_num = i, var_tensor = self.Sigmas[i])
+        # if i == 0:
+        #     res_tensor = self.circuit_layer(layer_num = i, var_tensor = self.rho_init_tensor)
+        # else:
+        #     res_tensor = self.circuit_layer(layer_num = i, var_tensor = self.Sigmas[i])
 
+        res_tensor = self.Sigmas[i]
         res_tensor = self.noise_layer(res_tensor)
+        res_tensor = self.circuit_layer(layer_num = i,
+                                        var_tensor = res_tensor,
+                                        mode = 'dual')
 
         return res_tensor
 
-    def primary_noisy(self):
+    def primal_noisy(self):
 
         var_tensor = self.rho_init_tensor
 
         for i in range(self.d):
 
             var_tensor = self.circuit_layer(layer_num = i,
-                                            var_tensor = var_tensor)
+                                            var_tensor = var_tensor, mode = 'primal')
             var_tensor = self.noise_layer(var_tensor)
 
         var_mat = self.tensor_2_mat(var_tensor.tensor)
