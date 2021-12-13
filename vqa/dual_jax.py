@@ -1,5 +1,6 @@
 from typing import List, Tuple, Callable, Dict
 from functools import partial
+import abc
 
 import tensornetwork as tn
 tn.set_default_backend("jax")
@@ -8,7 +9,7 @@ import scipy
 import qutip
 import jax.numpy as jnp
 from jax import jit, grad, vmap, value_and_grad
-from jax.experimental import optimizers
+from jax.example_libraries import optimizers
 
 from vqa import graphs
 from vqa import problems
@@ -23,9 +24,9 @@ class MaxCutDualJAX():
 
     Members:
 
-        self.Sigmas: list of tensors each with 2N legs of dimension d (d = 2
-                by default). If each sigma is self-adjoint, the dual objective
-                function is real.
+        self.Sigmas: list of tensors each with 2N legs of dimension local_dim
+                (local_dim = 2 by default). If each sigma is self-adjoint, the
+                dual objective function is real.
 
         self.Lambdas: list of positive real numbers.
 
@@ -34,28 +35,25 @@ class MaxCutDualJAX():
         from this object are utilised here; the unitary/noise operations are
         implemented from scratch for this class.)
 
-        p = number of layers
+        d = number of layers
 
         gamma = params of problem layer
 
         beta = params of mixing layer
 
-        p_noise: depolarizing noise probability on each qubit
-
-    Currently not implemented:
-        1. JAX gradient
+        p: depolarizing noise probability on each qubit
     """
 
     def __init__(self, prob_obj: problems.Problem,
-                 p: int, gamma: jnp.array, beta: jnp.array, p_noise: float):
+                 d: int, gamma: jnp.array, beta: jnp.array, p: float):
 
         self.prob_obj = prob_obj
         self.num_sites_in_lattice = self.prob_obj.num_sites_in_lattice
         self.local_dim = 2
-        self.p = p
+        self.d = d
         self.gamma = gamma
         self.beta = beta
-        self.p_noise = p_noise
+        self.p = p
         self.psi_init = prob_obj.init_state()
         self.H_problem = jnp.array(self.prob_obj.H.full())
 
@@ -78,7 +76,7 @@ class MaxCutDualJAX():
 
         self.init_entropy_bounds()
 
-        self.len_vars = (1 + self.num_diag_elements + 2 * self.num_tri_elements) * p
+        self.len_vars = (1 + self.num_diag_elements + 2 * self.num_tri_elements) * self.d
 
     def mat_2_tensor(self, A: jnp.array):
 
@@ -118,9 +116,6 @@ class MaxCutDualJAX():
 
         # (i1) (i1p) (i2) (i2p) ... (iN) (iNp) -> (i1) (i2) ... (iN) (i1p) (i2p) ... (iNp)
         # [0, 2, 4, ..., 2N - 2, 1, 3, ..., 2N - 1]
-        # i1 = jnp.arange(0, 2 * self.num_sites_in_lattice - 1, 2)
-        # i2 = jnp.arange(1, 2 * self.num_sites_in_lattice, 2)
-        # i = jnp.concatenate((i1, i2))
         i1 = np.arange(0, 2 * self.num_sites_in_lattice - 1, 2)
         i2 = np.arange(1, 2 * self.num_sites_in_lattice, 2)
         i = np.concatenate((i1, i2))
@@ -137,11 +132,11 @@ class MaxCutDualJAX():
 
     def init_entropy_bounds(self):
 
-        q = 1 - self.p_noise
-        q_powers = jnp.array([q**i for i in range(self.p)])
+        q = 1 - self.p
+        q_powers = jnp.array([q**i for i in range(self.d)])
 
-        self.entropy_bounds = self.num_sites_in_lattice * self.p_noise * jnp.log(2) * \
-                              jnp.array([jnp.sum(q_powers.at[:i+1].get()) for i in range(self.p)])
+        self.entropy_bounds = self.num_sites_in_lattice * self.p * jnp.log(2) * \
+                              jnp.array([jnp.sum(q_powers.at[:i+1].get()) for i in range(self.d)])
 
     def objective(self, vars_vec: jnp.array):
 
@@ -158,7 +153,7 @@ class MaxCutDualJAX():
         vars_diag_list, vars_real_list, vars_imag_list = self.unvectorize_vars(vars_vec)
         self.Sigmas = []
 
-        for i in range(self.p):
+        for i in range(self.d):
 
             tri_real = jnp.zeros((self.dim, self.dim), dtype = complex)
             tri_imag = jnp.zeros((self.dim, self.dim), dtype = complex)
@@ -174,17 +169,17 @@ class MaxCutDualJAX():
 
     def unvectorize_vars(self, vars_vec: jnp.array):
 
-        a_vars = vars_vec.at[:self.p].get()
+        a_vars = vars_vec.at[:self.d].get()
         self.Lambdas = jnp.log(1 + jnp.exp(a_vars))
 
-        vars_vec_split = jnp.split(vars_vec.at[self.p:].get(), self.p)
+        vars_vec_split = jnp.split(vars_vec.at[self.d:].get(), self.d)
         # split the variables into p equal arrays
 
         vars_diag_list = []
         vars_real_list = []
         vars_imag_list = []
 
-        for i in range(self.p):
+        for i in range(self.d):
 
             # for each circuit step the variables are arranged as:
             # [vars_diag, vars_real, vars_imag]
@@ -205,7 +200,7 @@ class MaxCutDualJAX():
         cost = jnp.dot(self.Lambdas, self.entropy_bounds)
 
         # the effective Hamiltonian term
-        for i in range(self.p):
+        for i in range(self.d):
 
             # i corresponds to the layer of the circuit, 0 being the earliest
             # i.e. i = 0 corresponds to t = 1 in notes
@@ -236,7 +231,7 @@ class MaxCutDualJAX():
             Hi: np.array of shape (self.dim, self.dim)
         """
 
-        if i == self.p - 1:
+        if i == self.d - 1:
             # TODO: check that the tensor product/site num ordering is
             # consistent
             Hi = self.tensor_2_mat(self.Sigmas[i].tensor) + self.H_problem
@@ -259,13 +254,13 @@ class MaxCutDualJAX():
         for site_num in range(self.num_sites_in_lattice):
 
             # --- applying I --- #
-            res_array = (1 - 3 * self.p_noise/4) * res_tensor.tensor
+            res_array = (1 - 3 * self.p/4) * res_tensor.tensor
 
             # --- applying X --- #
             tmp_tensor = res_tensor
 
-            X_node = tn.Node(np.sqrt(self.p_noise/4) * self.X, axis_names = ["ja","ia"])
-            X_prime_node = tn.Node(np.sqrt(self.p_noise/4) * self.X, axis_names = ["iap","kap"])
+            X_node = tn.Node(np.sqrt(self.p/4) * self.X, axis_names = ["ja","ia"])
+            X_prime_node = tn.Node(np.sqrt(self.p/4) * self.X, axis_names = ["iap","kap"])
 
             ia  = 2 * site_num
             iap = 2 * site_num + 1
@@ -287,8 +282,8 @@ class MaxCutDualJAX():
             # --- applying Y --- #
             tmp_tensor = res_tensor
 
-            Y_node = tn.Node(np.sqrt(self.p_noise/4) * self.Y, axis_names = ["ja","ia"])
-            Y_prime_node = tn.Node(np.sqrt(self.p_noise/4) * self.Y, axis_names = ["iap","kap"])
+            Y_node = tn.Node(np.sqrt(self.p/4) * self.Y, axis_names = ["ja","ia"])
+            Y_prime_node = tn.Node(np.sqrt(self.p/4) * self.Y, axis_names = ["iap","kap"])
 
             ia  = 2 * site_num
             iap = 2 * site_num + 1
@@ -310,8 +305,8 @@ class MaxCutDualJAX():
             # --- applying Z --- #
             tmp_tensor = res_tensor
 
-            Z_node = tn.Node(np.sqrt(self.p_noise/4) * self.Z, axis_names = ["ja","ia"])
-            Z_prime_node = tn.Node(np.sqrt(self.p_noise/4) * self.Z, axis_names = ["iap","kap"])
+            Z_node = tn.Node(np.sqrt(self.p/4) * self.Z, axis_names = ["ja","ia"])
+            Z_prime_node = tn.Node(np.sqrt(self.p/4) * self.Z, axis_names = ["iap","kap"])
 
             ia  = 2 * site_num
             iap = 2 * site_num + 1
@@ -362,9 +357,6 @@ class MaxCutDualJAX():
 
         for edge in self.prob_obj.graph.edges:
 
-            # site_num_a = int(jnp.min(jnp.array([self.prob_obj.site_nums[edge[0]], self.prob_obj.site_nums[edge[1]]])))
-            # site_num_b = int(jnp.max(jnp.array([self.prob_obj.site_nums[edge[0]], self.prob_obj.site_nums[edge[1]]])))
-
             site_num_a = min([self.prob_obj.site_nums[edge[0]], self.prob_obj.site_nums[edge[1]]])
             site_num_b = max([self.prob_obj.site_nums[edge[0]], self.prob_obj.site_nums[edge[1]]])
 
@@ -387,7 +379,8 @@ class MaxCutDualJAX():
                              res_tensor.edges[ia + 1: ib] + [U_node["jb"]] +\
                              res_tensor.edges[ib + 1:]
 
-            res_tensor = tn.contract_between(U_node, res_tensor, output_edge_order = new_edge_order)
+            res_tensor = tn.contract_between(U_node, res_tensor,
+                                        output_edge_order = new_edge_order)
 
             edge_a_p = U_dag_node["iap"] ^ res_tensor[iap]
             edge_b_p = U_dag_node["ibp"] ^ res_tensor[ibp]
@@ -396,7 +389,8 @@ class MaxCutDualJAX():
                              res_tensor.edges[iap + 1: ibp] + [U_dag_node["kbp"]] +\
                              res_tensor.edges[ibp + 1:]
 
-            res_tensor = tn.contract_between(U_dag_node, res_tensor, output_edge_order = new_edge_order)
+            res_tensor = tn.contract_between(U_dag_node, res_tensor,
+                                        output_edge_order = new_edge_order)
 
         #----- Applying the mixing unitary -----#
         beta = self.beta[layer_num]
@@ -445,25 +439,41 @@ class MaxCutDualJAX():
         """
 
         if i == 0:
-            res_tensor = self.circuit_layer(layer_num = i, var_tensor = self.rho_init_tensor)
+            res_tensor = self.circuit_layer(layer_num = i,
+                                            var_tensor = self.rho_init_tensor)
         else:
-            res_tensor = self.circuit_layer(layer_num = i, var_tensor = self.Sigmas[i])
+            res_tensor = self.circuit_layer(layer_num = i,
+                                            var_tensor = self.Sigmas[i])
 
         res_tensor = self.noise_layer(res_tensor)
 
         return res_tensor
 
+    def primary_noisy(self):
+
+        var_tensor = self.rho_init_tensor
+
+        for i in range(self.d):
+
+            var_tensor = self.circuit_layer(layer_num = i,
+                                            var_tensor = var_tensor)
+            var_tensor = self.noise_layer(var_tensor)
+
+        var_mat = self.tensor_2_mat(var_tensor.tensor)
+
+        return var_mat, jnp.trace(jnp.matmul(var_mat, self.H_problem))
+
 class MaxCutDualJAXGlobal():
 
     """
-    A class to calculate the dual function and its gradient for the MaxCut QAOA
-    problem.
+    A class to calculate the dual function and its gradient for a modified
+    version of the MaxCut QAOA problem. The channel is assumed to be just a
+    global depol. channel (no unitaries).
 
     Members:
-
-        self.Sigmas: list of tensors each with 2N legs of dimension d (d = 2
-                by default). If each sigma is self-adjoint, the dual objective
-                function is real.
+        self.Sigmas: list of tensors each with 2N legs of dimension local_dim
+                (local_dim = 2 by default). If each sigma is self-adjoint, the
+                dual objective function is real.
 
         self.Lambdas: list of positive real numbers.
 
@@ -472,19 +482,19 @@ class MaxCutDualJAXGlobal():
         from this object are utilised here; the unitary/noise operations are
         implemented from scratch for this class.)
 
-        p = number of layers
+        d = number of layers
 
-        p_noise: global depolarizing noise probability
+        p = global depolarizing noise probability
     """
 
-    def __init__(self, prob_obj: problems.Problem, p: int, p_noise: float):
+    def __init__(self, prob_obj: problems.Problem, d: int, p: float):
 
         self.prob_obj = prob_obj
         self.num_sites_in_lattice = self.prob_obj.num_sites_in_lattice
         self.local_dim = 2
-        self.p = p
+        self.d = d
 
-        self.p_noise = p_noise
+        self.p = p
         self.psi_init = prob_obj.init_state()
         self.H_problem = jnp.array(self.prob_obj.H.full())
 
@@ -507,7 +517,7 @@ class MaxCutDualJAXGlobal():
 
         self.init_entropy_bounds()
 
-        self.len_vars = (1 + self.num_diag_elements + 2 * self.num_tri_elements) * p
+        self.len_vars = (1 + self.num_diag_elements + 2 * self.num_tri_elements) * self.d
 
     def mat_2_tensor(self, A: jnp.array):
 
@@ -530,8 +540,6 @@ class MaxCutDualJAXGlobal():
         i  = np.zeros(2 * self.num_sites_in_lattice, dtype = int)
         i[::2] = i1
         i[1::2] = i2
-        # i = i.at[::2].set(i1)
-        # i = i.at[1::2].set(i2)
 
         T = jnp.transpose(T, tuple(i))
 
@@ -547,9 +555,6 @@ class MaxCutDualJAXGlobal():
 
         # (i1) (i1p) (i2) (i2p) ... (iN) (iNp) -> (i1) (i2) ... (iN) (i1p) (i2p) ... (iNp)
         # [0, 2, 4, ..., 2N - 2, 1, 3, ..., 2N - 1]
-        # i1 = jnp.arange(0, 2 * self.num_sites_in_lattice - 1, 2)
-        # i2 = jnp.arange(1, 2 * self.num_sites_in_lattice, 2)
-        # i = jnp.concatenate((i1, i2))
         i1 = np.arange(0, 2 * self.num_sites_in_lattice - 1, 2)
         i2 = np.arange(1, 2 * self.num_sites_in_lattice, 2)
         i = np.concatenate((i1, i2))
@@ -570,11 +575,11 @@ class MaxCutDualJAXGlobal():
         These bounds are in base e.
         """
 
-        q = 1 - self.p_noise
-        q_powers = jnp.array([q**i for i in range(self.p)])
+        q = 1 - self.p
+        q_powers = jnp.array([q**i for i in range(self.d)])
 
-        self.entropy_bounds = self.num_sites_in_lattice * self.p_noise * jnp.log(2) * \
-                              jnp.array([jnp.sum(q_powers.at[:i+1].get()) for i in range(self.p)])
+        self.entropy_bounds = self.num_sites_in_lattice * self.p * jnp.log(2) * \
+                              jnp.array([jnp.sum(q_powers.at[:i+1].get()) for i in range(self.d)])
 
     def objective(self, vars_vec: jnp.array):
 
@@ -591,7 +596,7 @@ class MaxCutDualJAXGlobal():
         vars_diag_list, vars_real_list, vars_imag_list = self.unvectorize_vars(vars_vec)
         self.Sigmas = []
 
-        for i in range(self.p):
+        for i in range(self.d):
 
             tri_real = jnp.zeros((self.dim, self.dim), dtype = complex)
             tri_imag = jnp.zeros((self.dim, self.dim), dtype = complex)
@@ -607,17 +612,17 @@ class MaxCutDualJAXGlobal():
 
     def unvectorize_vars(self, vars_vec: jnp.array):
 
-        a_vars = vars_vec.at[:self.p].get()
+        a_vars = vars_vec.at[:self.d].get()
         self.Lambdas = jnp.log(1 + jnp.exp(a_vars))
 
-        vars_vec_split = jnp.split(vars_vec.at[self.p:].get(), self.p)
+        vars_vec_split = jnp.split(vars_vec.at[self.d:].get(), self.d)
         # split the variables into p equal arrays
 
         vars_diag_list = []
         vars_real_list = []
         vars_imag_list = []
 
-        for i in range(self.p):
+        for i in range(self.d):
 
             # for each circuit step the variables are arranged as:
             # [vars_diag, vars_real, vars_imag]
@@ -638,7 +643,7 @@ class MaxCutDualJAXGlobal():
         cost = jnp.dot(self.Lambdas, self.entropy_bounds)
 
         # the effective Hamiltonian term
-        for i in range(self.p):
+        for i in range(self.d):
 
             # i corresponds to the layer of the circuit, 0 being the earliest
             # i.e. i = 0 corresponds to t = 1 in notes
@@ -669,7 +674,7 @@ class MaxCutDualJAXGlobal():
             Hi: np.array of shape (self.dim, self.dim)
         """
 
-        if i == self.p - 1:
+        if i == self.d - 1:
             # TODO: check that the tensor product/site num ordering is
             # consistent
             Hi = self.tensor_2_mat(self.Sigmas[i].tensor) + self.H_problem
@@ -684,15 +689,15 @@ class MaxCutDualJAXGlobal():
     def noise_layer(self, var_tensor: tn.Node):
 
         """
-        Applies depolarizing noise on the var_tensor at all sites.
+        Applies global depolarizing noise on the var_tensor.
         """
 
         res_tensor = var_tensor
         res_mat = self.tensor_2_mat(res_tensor.tensor)
         identity = self.mat_2_tensor(jnp.identity(self.dim, dtype = complex))
 
-        res_array = (1 - self.p_noise) * res_tensor.tensor +\
-                 (self.p_noise) * jnp.trace(res_mat) * identity/self.dim
+        res_array = (1 - self.p) * res_tensor.tensor +\
+                 (self.p) * jnp.trace(res_mat) * identity/self.dim
 
         res_tensor = tn.Node(res_array)
 
@@ -701,16 +706,15 @@ class MaxCutDualJAXGlobal():
     def noisy_circuit_layer(self, i: int):
 
         """
-        Applies the unitary corresponding to a circuit layer followed by noise
-        to the dual variable Sigma. The noise model is depolarizing noise on
-        each qubit.
+        Applies the noise layer on the proper tensor for a given layer.
+        The noise model is global depolarizing noise.
 
         Params:
-            i: layer number. Used to specify the tensor to act on and the gate
-            params to use. Note the action when i = 0 is on the init state not
+            i: layer number. Used to specify the tensor to act on.
+            Note the action when i = 0 is on the init state not
             the Sigma variable.
         Returns:
-            res = tn.Node of shape self.dim_list that contains the tensor
+            res_tensor = tn.Node of shape self.dim_list that contains the tensor
             after the action of the layer.
         """
 
@@ -723,6 +727,17 @@ class MaxCutDualJAXGlobal():
 
         return res_tensor
 
+    def primary_noisy(self):
+
+        var_tensor = self.rho_init_tensor
+
+        for i in range(self.d):
+            var_tensor = self.noise_layer(var_tensor)
+
+        var_mat = self.tensor_2_mat(var_tensor.tensor)
+
+        return jnp.trace(jnp.matmul(var_mat, self.H_problem))
+
 class MaxCutDualJAXNoChannel():
 
     """
@@ -730,46 +745,31 @@ class MaxCutDualJAXNoChannel():
     relaxation of the MaxCut QAOA problem.
 
     Members:
-
         lmbda
 
     Params:
-        prob_obj = Problem object (NB, none of the unitary methods
-        from this object are utilised here; the unitary/noise operations are
-        implemented from scratch for this class.)
+        prob_obj = Problem object
 
-        p = number of layers
+        d = number of layers
 
-        p_noise: global depolarizing noise probability
+        p = global depolarizing noise probability
     """
 
-    def __init__(self, prob_obj: problems.Problem, p: int, p_noise: float):
+    def __init__(self, prob_obj: problems.Problem, d: int, p: float):
 
         self.prob_obj = prob_obj
         self.num_sites_in_lattice = self.prob_obj.num_sites_in_lattice
         self.local_dim = 2
-        self.p = p
+        self.d = d
 
-        self.p_noise = p_noise
+        self.p = p
         self.psi_init = prob_obj.init_state()
         self.H_problem = jnp.array(self.prob_obj.H.full())
 
         self.dim_list = tuple([self.local_dim] * 2 * self.num_sites_in_lattice)
         self.dim = self.local_dim ** self.num_sites_in_lattice
 
-        self.utri_indices = jnp.triu_indices(self.dim, 1)
-        self.ltri_indices = (self.utri_indices[1], self.utri_indices[0])
-        self.num_tri_elements = self.utri_indices[0].shape[0]
-        self.num_diag_elements = self.dim
-
-        self.X = jnp.array(qutip.sigmax().full())
-        self.Y = jnp.array(qutip.sigmay().full())
-        self.Z = jnp.array(qutip.sigmaz().full())
-        self.I = jnp.array(qutip.qeye(2).full())
-
         self.init_entropy_bounds()
-
-        self.len_vars = (1 + self.num_diag_elements + 2 * self.num_tri_elements) * p
 
     def init_entropy_bounds(self):
 
@@ -777,11 +777,11 @@ class MaxCutDualJAXNoChannel():
         These bounds are in base e.
         """
 
-        q = 1 - self.p_noise
-        q_powers = jnp.array([q**i for i in range(self.p)])
+        q = 1 - self.p
+        q_powers = jnp.array([q**i for i in range(self.d)])
 
-        self.entropy_bounds = self.num_sites_in_lattice * self.p_noise * jnp.log(2) * \
-                              jnp.array([jnp.sum(q_powers.at[:i+1].get()) for i in range(self.p)])
+        self.entropy_bounds = self.num_sites_in_lattice * self.p * jnp.log(2) * \
+                              jnp.array([jnp.sum(q_powers.at[:i+1].get()) for i in range(self.d)])
 
     def objective(self, vars_vec: jnp.array):
 
@@ -812,7 +812,6 @@ def adam_external_dual_JAX(vars_init: jnp.array, dual_obj: MaxCutDualJAX,
     init, update, get_params = optimizers.adam(alpha)
     params = vars_init
 
-    # @partial(jit, static_argnums = (0,))
     def step(t, opt_state):
         value, grads = value_and_grad(dual_obj.objective)(get_params(opt_state))
         opt_state = update(t, grads, opt_state)
@@ -823,7 +822,7 @@ def adam_external_dual_JAX(vars_init: jnp.array, dual_obj: MaxCutDualJAX,
     value_array = jnp.zeros(num_steps)
 
     for t in range(num_steps):
-        print("Step :", t)
+        # print("Step :", t)
         value, opt_state = step(t, opt_state)
         value_array = value_array.at[t].set(value)
 

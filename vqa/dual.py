@@ -17,9 +17,9 @@ class MaxCutDual():
 
     Members:
 
-        self.Sigmas: list of tensors each with 2N legs of dimension d (d = 2
-                by default). If each sigma is self-adjoint, the dual objective
-                function is real.
+        self.Sigmas: list of tensors each with 2N legs of dimension local_dim
+                (local_dim = 2 by default). If each sigma is self-adjoint, the
+                dual objective function is real.
 
         self.Lambdas: list of positive real numbers.
 
@@ -28,28 +28,28 @@ class MaxCutDual():
         from this object are utilised here; the unitary/noise operations are
         implemented from scratch for this class.)
 
-        p = number of layers
+        d = number of layers
 
         gamma = params of problem layer
 
         beta = params of mixing layer
 
-        p_noise: depolarizing noise probability on each qubit
+        p: depolarizing noise probability on each qubit
 
-    Currently not implemented:
+    Currently not implemented in this class:
         1. JAX gradient
     """
 
     def __init__(self, prob_obj: problems.Problem,
-                 p: int, gamma: np.array, beta: np.array, p_noise: float):
+                 d: int, gamma: np.array, beta: np.array, p: float):
 
         self.prob_obj = prob_obj
         self.num_sites_in_lattice = self.prob_obj.num_sites_in_lattice
         self.local_dim = 2
-        self.p = p
+        self.d = d
         self.gamma = gamma
         self.beta = beta
-        self.p_noise = p_noise
+        self.p = p
         self.psi_init = prob_obj.init_state()
 
         self.dim_list = tuple([self.local_dim] * 2 * self.num_sites_in_lattice)
@@ -57,7 +57,6 @@ class MaxCutDual():
 
         self.utri_indices = np.triu_indices(self.dim, 1)
         self.ltri_indices = (self.utri_indices[1], self.utri_indices[0])
-        # self.ltri_indices = np.tril_indices(self.dim, -1)
         self.num_tri_elements = self.utri_indices[0].shape[0]
         self.num_diag_elements = self.dim
 
@@ -71,10 +70,7 @@ class MaxCutDual():
 
         self.init_entropy_bounds()
 
-        self.len_vars = (1 + self.num_diag_elements + 2 * self.num_tri_elements) * p
-
-        # self.tot_num_vars_per_step = 1 + self.num_diag_elements + 2 * self.num_tri_elements
-        # lambda + number of elements in sigma
+        self.len_vars = (1 + self.num_diag_elements + 2 * self.num_tri_elements) * self.d
 
     def mat_2_tensor(self, A: np.array):
 
@@ -128,11 +124,11 @@ class MaxCutDual():
 
     def init_entropy_bounds(self):
 
-        q = 1 - self.p_noise
-        q_powers = [q**i for i in range(self.p)]
+        q = 1 - self.p
+        q_powers = [q**i for i in range(self.d)]
 
-        self.entropy_bounds = self.num_sites_in_lattice * self.p_noise * \
-                              np.array([np.sum(q_powers[:i+1]) for i in range(self.p)])
+        self.entropy_bounds = self.num_sites_in_lattice * self.p * np.log(2) * \
+                              np.array([np.sum(q_powers[:i+1]) for i in range(self.d)])
 
     def objective(self, vars_vec: np.array):
 
@@ -149,7 +145,7 @@ class MaxCutDual():
         vars_diag_list, vars_real_list, vars_imag_list = self.unvectorize_vars(vars_vec)
         self.Sigmas = []
 
-        for i in range(self.p):
+        for i in range(self.d):
 
             tri_real = np.zeros((self.dim, self.dim), dtype = complex)
             tri_imag = np.zeros((self.dim, self.dim), dtype = complex)
@@ -165,16 +161,17 @@ class MaxCutDual():
 
     def unvectorize_vars(self, vars_vec):
 
-        self.Lambdas = vars_vec[:self.p]
+        a_vars = vars_vec[:self.d]
+        self.Lambdas = np.log(1 + np.exp(a_vars))
 
-        vars_vec_split = np.split(vars_vec[self.p:], self.p)
+        vars_vec_split = np.split(vars_vec[self.d:], self.d)
         # split the variables into p equal arrays
 
         vars_diag_list = []
         vars_real_list = []
         vars_imag_list = []
 
-        for i in range(self.p):
+        for i in range(self.d):
 
             # for each circuit step the variables are arranged as:
             # [vars_diag, vars_real, vars_imag]
@@ -200,7 +197,7 @@ class MaxCutDual():
         # the effective Hamiltonian term
         effH_term = 0
 
-        for i in range(self.p):
+        for i in range(self.d):
 
             # i corresponds to the layer of the circuit, 0 being the earliest
             # i.e. i = 0 corresponds to t = 1 in notes
@@ -209,7 +206,7 @@ class MaxCutDual():
             Hi = self.construct_H(i)
             Ei = np.linalg.eigvals(Hi)
 
-            exp_term = -self.Lambdas[i] * np.log2(np.sum(np.exp(-Ei/self.Lambdas[i])))
+            exp_term = -self.Lambdas[i] * np.log(np.sum(np.exp(-Ei/self.Lambdas[i])))
 
             if np.isnan(exp_term):
 
@@ -243,7 +240,7 @@ class MaxCutDual():
             Hi: np.array of shape (self.dim, self.dim)
         """
 
-        if i == self.p - 1:
+        if i == self.d - 1:
             # TODO: check that the tensor product/site num ordering is
             # consistent
             Hi = self.tensor_2_mat(self.Sigmas[i].tensor) + self.prob_obj.H.full()
@@ -261,41 +258,18 @@ class MaxCutDual():
         Applies depolarizing noise on the var_tensor at all sites.
         """
 
-        # # (i1) (i1p) (i2) (i2p) ... (iN) (iNp) -> (i1 i1p) (i2 i2p) ... (iN iNp)
-        # res = np.reshape(var_tensor.tensor, tuple([self.local_dim ** 2] * self.num_sites_in_lattice))
-        # res_tensor = tn.Node(res)
-        #
-        # for site_num in range(self.num_sites_in_lattice):
-        #
-        #     noise_node = tn.Node(self.noise_superop,
-        #                          axis_names = ["up", "down"], name = "noise_node") # shape = 4x4
-        #
-        #     # TODO: check
-        #     edge_connection = noise_node["down"] ^ res_tensor[site_num]
-        #
-        #     # perform the contraction
-        #     new_edge_order = res_tensor.edges[:site_num] + [noise_node["up"]] +\
-        #                      res_tensor.edges[site_num + 1:]
-        #     res_tensor = tn.contract_between(noise_node, res_tensor,
-        #                                     output_edge_order = new_edge_order)
-        #
-        # final_res = np.reshape(res_tensor.tensor, self.dim_list)
-        # res_tensor = tn.Node(final_res)
-        #
-        # return res_tensor
-
         res_tensor = var_tensor
 
         for site_num in range(self.num_sites_in_lattice):
 
             # --- applying I --- #
-            res_array = (1 - 3 * self.p_noise/4) * res_tensor.tensor
+            res_array = (1 - 3 * self.p/4) * res_tensor.tensor
 
             # --- applying X --- #
             tmp_tensor = res_tensor
 
-            X_node = tn.Node(np.sqrt(self.p_noise/4) * self.X, axis_names = ["ja","ia"])
-            X_prime_node = tn.Node(np.sqrt(self.p_noise/4) * self.X, axis_names = ["iap","kap"])
+            X_node = tn.Node(np.sqrt(self.p/4) * self.X, axis_names = ["ja","ia"])
+            X_prime_node = tn.Node(np.sqrt(self.p/4) * self.X, axis_names = ["iap","kap"])
 
             ia  = 2 * site_num
             iap = 2 * site_num + 1
@@ -317,8 +291,8 @@ class MaxCutDual():
             # --- applying Y --- #
             tmp_tensor = res_tensor
 
-            Y_node = tn.Node(np.sqrt(self.p_noise/4) * self.Y, axis_names = ["ja","ia"])
-            Y_prime_node = tn.Node(np.sqrt(self.p_noise/4) * self.Y, axis_names = ["iap","kap"])
+            Y_node = tn.Node(np.sqrt(self.p/4) * self.Y, axis_names = ["ja","ia"])
+            Y_prime_node = tn.Node(np.sqrt(self.p/4) * self.Y, axis_names = ["iap","kap"])
 
             ia  = 2 * site_num
             iap = 2 * site_num + 1
@@ -340,8 +314,8 @@ class MaxCutDual():
             # --- applying Z --- #
             tmp_tensor = res_tensor
 
-            Z_node = tn.Node(np.sqrt(self.p_noise/4) * self.Z, axis_names = ["ja","ia"])
-            Z_prime_node = tn.Node(np.sqrt(self.p_noise/4) * self.Z, axis_names = ["iap","kap"])
+            Z_node = tn.Node(np.sqrt(self.p/4) * self.Z, axis_names = ["ja","ia"])
+            Z_prime_node = tn.Node(np.sqrt(self.p/4) * self.Z, axis_names = ["iap","kap"])
 
             ia  = 2 * site_num
             iap = 2 * site_num + 1
@@ -487,23 +461,16 @@ class MaxCutDual():
 
         return res_tensor
 
-# def fd_gradient(vars_vec: np.array, positions: List, dual_obj: MaxCutDual):
-#
-#     objective_0 = dual_obj.objective(vars_vec)
-#     delta = 1e-7
-#
-#     gradient_list = []
-#
-#     for i in positions:
-#
-#         vars_tmp = np.copy(vars_vec)
-#         vars_tmp[i] += delta
-#         objective_plus = objective_external(angles_to_test, opt_obj)
-#
-#         vars_tmp = np.copy(vars_vec)
-#         vars_tmp[i] -= delta
-#         objective_minus = objective_external(angles_to_test, opt_obj)
-#
-#         gradient_list.append((objective_plus - objective_minus)/(2 * delta_angles))
-#
-#     return np.array(gradient_list)
+    def primary_noisy(self):
+
+        var_tensor = self.rho_init_tensor
+
+        for i in range(self.d):
+
+            var_tensor = self.circuit_layer(layer_num = i,
+                                            var_tensor = var_tensor)
+            var_tensor = self.noise_layer(var_tensor)
+
+        var_mat = self.tensor_2_mat(var_tensor.tensor)
+
+        return var_mat, np.trace(np.matmul(var_mat, self.prob_obj.H.full()))
