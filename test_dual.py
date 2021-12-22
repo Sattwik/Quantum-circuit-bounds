@@ -234,84 +234,93 @@ from vqa import graphs, problems, algorithms, dual, dual_jax
 # analytical dual solution? as they are relaxations of each other, check that
 # they are ordered as expected.
 
-# ---- define the lattice/graph/problem ----- #
-lattice = graphs.define_lattice(m = 3, n = 2)
-graph = graphs.create_random_connectivity(lattice)
-maxcut_obj = problems.MaxCut(graph, lattice)
-d = 2
-
-# ---- calculate the actual maxcut solution ----- #
-primal_actual = np.min(maxcut_obj.H.full())
-
-# ---- calculate the clean maxcut solution ----- #
-gamma_init = np.random.uniform(low = 0, high = 2 * np.pi, size = d)
-beta_init = np.random.uniform(low = 0, high = np.pi, size = d)
-gamma_beta_init = np.concatenate((gamma_init, beta_init))
-mc_probs = np.zeros(graph.number_of_nodes())
-p = 0
-qaoa_obj = algorithms.QAOA(maxcut_obj, d, p, mc_probs)
-obj_over_opti, opt_result = algorithms.optimize_QAOA(gamma_beta_init, qaoa_obj)
-primal_clean = obj_over_opti[-1]
-gamma_beta_clean = opt_result.x
-gamma_clean = np.split(gamma_beta_clean, 2)[0]
-beta_clean = np.split(gamma_beta_clean, 2)[1]
-
-# ---- calculate the max dual value of full primal ----- #
-# noise probability
-p = 0.11
-dual_obj = dual.MaxCutDual(prob_obj = maxcut_obj, d = d, gamma = gamma_clean, beta = beta_clean, p = p)
-_, primal_noisy = dual_obj.primal_noisy()
-primal_noisy = np.real(primal_noisy)
-
-dual_obj_jax = dual_jax.MaxCutDualJAX(prob_obj = maxcut_obj, d = d,
-            gamma = jnp.array(gamma_clean), beta = jnp.array(beta_clean), p = p)
-
-_, primal_noisy_jax = dual_obj_jax.primal_noisy()
-primal_noisy_jax = float(jnp.real(primal_noisy_jax))
-
-a_vars_init = np.zeros(d)
-sigma_vars_init = np.zeros(dual_obj.len_vars - d)
-vars_init = np.concatenate((a_vars_init, sigma_vars_init))
-
-dual_value, vars_opt = dual_jax.adam_external_dual_JAX(jnp.array(vars_init),
-                                    dual_obj_jax, alpha = 0.1, num_steps = 100)
-
-dual_obj.assemble_vars_into_tensors(np.array(vars_opt))
-
-print("primal = ", primal_noisy_jax)
-print("Dual = ", -dual_value[-1])
-
-
-# ---- calculate the max dual value of global version of primal ----- #
-
-dual_obj_jax_global = dual_jax.MaxCutDualJAXGlobal(prob_obj = maxcut_obj, d = d, p = p)
-
-primal_noisy_global = float(jnp.real(dual_obj_jax_global.primal_noisy()))
-
-dual_value_global, vars_opt_global = dual_jax.adam_external_dual_JAX(jnp.array(vars_init),
-                                    dual_obj_jax_global, alpha = 0.1, num_steps = 100)
-
-print("Primal (global) = ", primal_noisy_global)
-print("Dual (global) = ", -dual_value_global[-1])
-
-# ---- calculate the max dual value of no channel version of primal ----- #
-
-dual_obj_jax_nochannel = dual_jax.MaxCutDualJAXNoChannel(prob_obj = maxcut_obj, d = d, p = p)
-
-a_init = np.ones(d)
-dual_value_nochannel, vars_opt_nochannel = dual_jax.adam_external_dual_JAX(jnp.array(a_init),
-                                    dual_obj_jax_nochannel, alpha = 0.1, num_steps = 100)
-
-print("Primal = ", primal_noisy_jax)
-print("Dual (no channel) = ", -dual_value_nochannel[-1])
-# ---- calculate the max dual value of no channel version of primal ----- #
-
-lmbda_range = np.linspace(0.01, 10000, 1000)
-g_array = []
-a_vec = a_init.copy()
-for l in lmbda_range:
-    a_vec[0] = l
-    g_array.append(float(dual_obj_jax_nochannel.objective(jnp.array(a_vec))))
+# # ---- define the lattice/graph/problem ----- #
+# lattice = graphs.define_lattice(m = 2, n = 3)
+# graph = graphs.create_random_connectivity(lattice)
+# maxcut_obj = problems.MaxCut(graph, lattice)
+# d = 2
+#
+# # ---- calculate the actual maxcut solution ----- #
+# primal_actual = np.min(maxcut_obj.H.full())
+#
+# # ---- calculate the clean maxcut solution ----- #
+# gamma_init = np.random.uniform(low = 0, high = 2 * np.pi, size = d)
+# beta_init = np.random.uniform(low = 0, high = np.pi, size = d)
+# gamma_beta_init = np.concatenate((gamma_init, beta_init))
+# mc_probs = np.zeros(graph.number_of_nodes())
+# p = 0
+# qaoa_obj = algorithms.QAOA(maxcut_obj, d, p, mc_probs)
+# obj_over_opti, opt_result = algorithms.optimize_QAOA(gamma_beta_init, qaoa_obj)
+# primal_clean = obj_over_opti[-1]
+# gamma_beta_clean = opt_result.x
+# gamma_clean = np.split(gamma_beta_clean, 2)[0]
+# beta_clean = np.split(gamma_beta_clean, 2)[1]
+#
+# # ---- calculate the max dual value of full primal ----- #
+# # noise probability
+# p = 0.7
+# dual_obj = dual.MaxCutDual(prob_obj = maxcut_obj, d = d, gamma = gamma_clean, beta = beta_clean, p = p)
+# _, primal_noisy = dual_obj.primal_noisy()
+# primal_noisy = np.real(primal_noisy)
+#
+# dual_obj_jax = dual_jax.MaxCutDualJAX(prob_obj = maxcut_obj, d = d,
+#             gamma = jnp.array(gamma_clean), beta = jnp.array(beta_clean), p = p)
+#
+# _, primal_noisy_jax = dual_obj_jax.primal_noisy()
+# primal_noisy_jax = float(jnp.real(primal_noisy_jax))
+#
+# a_vars_init = np.zeros(d)
+# sigma_vars_init = np.zeros(dual_obj.len_vars - d)
+# vars_init = np.concatenate((a_vars_init, sigma_vars_init))
+#
+# # dual_value, vars_opt = dual_jax.adam_external_dual_JAX(jnp.array(vars_init),
+#                                     # dual_obj_jax, alpha = 0.1, num_steps = 100)
+#
+# # dual_obj.assemble_vars_into_tensors(np.array(vars_opt))
+#
+# obj_over_opti, opt_result = dual_jax.optimize_external_dual_JAX(vars_init, dual_obj_jax)
+#
+# print("primal = ", primal_noisy_jax)
+# print("Dual = ", -obj_over_opti[-1])
+# print("Trace = ", jnp.trace(dual_obj_jax.H_problem)/dual_obj_jax.dim)
+#
+# # ---- calculate the max dual value of global version of primal ----- #
+#
+# dual_obj_jax_global = dual_jax.MaxCutDualJAXGlobal(prob_obj = maxcut_obj, d = d, p = p)
+#
+# primal_noisy_global = float(jnp.real(dual_obj_jax_global.primal_noisy()))
+#
+# # dual_value_global, vars_opt_global = dual_jax.adam_external_dual_JAX(jnp.array(vars_init),
+# #                                     dual_obj_jax_global, alpha = 0.08, num_steps = 200)
+#
+# obj_over_opti_global, opt_result_global = \
+#             dual_jax.optimize_external_dual_JAX(vars_init, dual_obj_jax_global)
+#
+# print("Primal (global) = ", primal_noisy_global)
+# print("Dual (global) = ", -obj_over_opti_global[-1])
+#
+# # ---- calculate the max dual value of no channel version of primal ----- #
+#
+# dual_obj_jax_nochannel = dual_jax.MaxCutDualJAXNoChannel(prob_obj = maxcut_obj, d = d, p = p)
+#
+# a_init = np.ones(d)
+# # dual_value_nochannel, vars_opt_nochannel = dual_jax.adam_external_dual_JAX(jnp.array(a_init),
+# #                                     dual_obj_jax_nochannel, alpha = 0.08, num_steps = 200)
+#
+# obj_over_opti_nc, opt_result_nc = \
+#         dual_jax.optimize_external_dual_JAX(a_init, dual_obj_jax_nochannel)
+#
+# print("Primal = ", primal_noisy_jax)
+# print("Dual (no channel) = ", -obj_over_opti_nc[-1])
+#
+# # ---- calculate the max dual value of no channel version of primal ----- #
+#
+# lmbda_range = np.linspace(0.01, 10000, 1000)
+# g_array = []
+# a_vec = a_init.copy()
+# for l in lmbda_range:
+#     a_vec[0] = l
+#     g_array.append(float(dual_obj_jax_nochannel.objective(jnp.array(a_vec))))
 
 #------------------------------------------------------------------------------#
 #----------------------------------- TEST 8 -----------------------------------#

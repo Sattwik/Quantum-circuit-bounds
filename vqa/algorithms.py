@@ -129,7 +129,7 @@ def optimize_QAOA(gamma_beta_init: np.array, QAOA_obj: QAOA):
     opt_result = scipy.optimize.minimize(objective_external_QAOA, gamma_beta_init, args = opt_args,
                                          method = 'L-BFGS-B', jac = gradient_external_QAOA, bounds = bnds,
                                          options={'disp': None, 'maxcor': 10, 'ftol': 2.220446049250313e-09,
-                                         'gtol': 1e-05, 'eps': 1e-08, 'maxfun': 15000, 'maxiter': 20, 'iprint': 5, 'maxls': 20},
+                                         'gtol': 1e-05, 'eps': 1e-08, 'maxfun': 15000, 'maxiter': 50, 'iprint': 10, 'maxls': 20},
                                          callback = callback_func)
 
     return np.array(obj_over_opti), opt_result

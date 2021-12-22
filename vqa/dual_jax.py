@@ -872,82 +872,81 @@ def adam_external_dual_JAX(vars_init: jnp.array, dual_obj: MaxCutDualJAX,
 
     return value_array, get_params(opt_state)
 
-# @partial(jit, static_argnums = (1,))
-# def objective_external_dual_JAX(vars_vec: jnp.array, dual_obj: MaxCutDualJAX):
-#
-#     return dual_obj.objective(vars_vec)
-#
-# @partial(jit, static_argnums = (1,))
-# def gradient_external_dual_JAX(vars_vec: jnp.array, dual_obj: MaxCutDualJAX):
-#
-#     return grad(dual_obj.objective)(vars_vec)
-#
-# # @partial(jit, static_argnums = (1,2))
-# def fd_gradient_dual_JAX(vars_vec: jnp.array, positions: Tuple, dual_obj: MaxCutDualJAX):
-#
-#     objective_0 = objective_external_dual_JAX(vars_vec, dual_obj)
-#     delta = 1e-7
-#
-#     gradient_list = jnp.zeros(len(positions), dtype = complex)
-#
-#     for i in positions:
-#
-#         print(i)
-#
-#         vars_tmp = vars_vec
-#         vars_tmp = vars_tmp.at[i].add(delta)
-#         objective_plus = objective_external_dual_JAX(vars_tmp, dual_obj)
-#
-#         vars_tmp = vars_vec
-#         vars_tmp = vars_tmp.at[i].add(-delta)
-#         objective_minus = objective_external_dual_JAX(vars_tmp, dual_obj)
-#
-#         gradient_list = gradient_list.at[i].set((objective_plus - objective_minus)/(2 * delta))
-#
-#     return gradient_list
-#
-# def unjaxify_obj(func):
-#
-#     def wrap(*args):
-#         return float(func(jnp.array(args[0]), args[1]))
-#
-#     return wrap
-#
-# def unjaxify_grad(func):
-#
-#     def wrap(*args):
-#         return np.array(func(jnp.array(args[0]), args[1]), order = 'F')
-#
-#     return wrap
-#
-# def optimize_external_dual_JAX(vars_init: np.array, dual_obj: MaxCutDualJAX):
-#
-#     opt_args = (dual_obj,)
-#
-#     obj_over_opti = []
-#
-#     def callback_func(x):
-#
-#         obj_eval = unjaxify_obj(objective_external_dual_JAX)(x, opt_args[0])
-#
-#         obj_over_opti.append(obj_eval)
-#
-#         print('Dir. Iteration ', str(len(obj_over_opti)), '. Objective = ', str(obj_eval), '. x = ', x)
-#
-#     sigma_bound = 1e1
-#     p = dual_obj.p
-#     # len_vars = dual_obj.len_vars
-#     len_vars = vars_init.shape[0]
-#
-#     bnds = scipy.optimize.Bounds(lb = [1e-2] * p + [-sigma_bound] * (len_vars - p), ub = [np.inf] * p + [-sigma_bound] * (len_vars - p))
-#
-#     opt_result = scipy.optimize.minimize(unjaxify_obj(objective_external_dual_JAX), vars_init, args = opt_args,
-#                                          method = 'L-BFGS-B', jac = unjaxify_grad(gradient_external_dual_JAX), bounds = bnds,
-#                                          options={'disp': None, 'maxcor': 10, 'ftol': 2.220446049250313e-09,
-#                                          'gtol': 1e-05, 'eps': 1e-08, 'maxfun': 15000, 'maxiter': 3, 'iprint': 1, 'maxls': 20},
-#                                          callback = callback_func)
-#
-#     return np.array(obj_over_opti), opt_result
+@partial(jit, static_argnums = (1,))
+def objective_external_dual_JAX(vars_vec: jnp.array, dual_obj: MaxCutDualJAX):
+
+    return dual_obj.objective(vars_vec)
+
+@partial(jit, static_argnums = (1,))
+def gradient_external_dual_JAX(vars_vec: jnp.array, dual_obj: MaxCutDualJAX):
+
+    return grad(dual_obj.objective)(vars_vec)
+
+# @partial(jit, static_argnums = (1,2))
+def fd_gradient_dual_JAX(vars_vec: jnp.array, positions: Tuple, dual_obj: MaxCutDualJAX):
+
+    objective_0 = objective_external_dual_JAX(vars_vec, dual_obj)
+    delta = 1e-7
+
+    gradient_list = jnp.zeros(len(positions), dtype = complex)
+
+    for i in positions:
+
+        print(i)
+
+        vars_tmp = vars_vec
+        vars_tmp = vars_tmp.at[i].add(delta)
+        objective_plus = objective_external_dual_JAX(vars_tmp, dual_obj)
+
+        vars_tmp = vars_vec
+        vars_tmp = vars_tmp.at[i].add(-delta)
+        objective_minus = objective_external_dual_JAX(vars_tmp, dual_obj)
+
+        gradient_list = gradient_list.at[i].set((objective_plus - objective_minus)/(2 * delta))
+
+    return gradient_list
+
+def unjaxify_obj(func):
+
+    def wrap(*args):
+        return float(func(jnp.array(args[0]), args[1]))
+
+    return wrap
+
+def unjaxify_grad(func):
+
+    def wrap(*args):
+        return np.array(func(jnp.array(args[0]), args[1]), order = 'F')
+
+    return wrap
+
+def optimize_external_dual_JAX(vars_init: np.array, dual_obj: MaxCutDualJAX):
+
+    opt_args = (dual_obj,)
+
+    obj_over_opti = []
+
+    def callback_func(x):
+
+        obj_eval = unjaxify_obj(objective_external_dual_JAX)(x, opt_args[0])
+
+        obj_over_opti.append(obj_eval)
+
+        # print('Dir. Iteration ', str(len(obj_over_opti)), '. Objective = ', str(obj_eval), '. x = ', x)
+
+    # sigma_bound = 1e1
+    # p = dual_obj.p
+    # len_vars = dual_obj.len_vars
+    # len_vars = vars_init.shape[0]
+
+    # bnds = scipy.optimize.Bounds(lb = [1e-2] * p + [-sigma_bound] * (len_vars - p), ub = [np.inf] * p + [-sigma_bound] * (len_vars - p))
+
+    opt_result = scipy.optimize.minimize(unjaxify_obj(objective_external_dual_JAX), vars_init, args = opt_args,
+                                         method = 'L-BFGS-B', jac = unjaxify_grad(gradient_external_dual_JAX),
+                                         options={'disp': None, 'maxcor': 10, 'ftol': 2.220446049250313e-09,
+                                         'gtol': 1e-05, 'eps': 1e-08, 'maxfun': 15000, 'maxiter': 300, 'iprint': 10, 'maxls': 20}, callback = callback_func)
+
+    return np.array(obj_over_opti), opt_result
 
 # """
 # Moving the action of the class MaxCutDual() to pure functions in order to be
