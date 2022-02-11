@@ -34,10 +34,12 @@ lattice = graphs.define_lattice(m = m, n = n)
 
 d = 2
 
-num_random_graphs = 5
-num_init_states = 5
-p_noise_list = [0.001, 0.01, 0.1, 0.2, 0.35, 0.5, 0.65, 0.8, 0.95, 1.00]
+num_random_graphs = 20
+num_init_states = 1
+p_noise_list = [0.001, 0.1, 0.2, 0.35, 0.5, 0.65, 0.8, 0.95, 1.00]
 num_noise_probs = len(p_noise_list)
+opt_method = 'L-BFGS-B'
+# in ['CG', 'Newton-CG', 'BFGS', 'L-BFGS-B']
 
 actual_sol = np.zeros((num_random_graphs, num_init_states))
 clean_sol = np.zeros((num_random_graphs, num_init_states))
@@ -65,8 +67,8 @@ for n_graph in range(num_random_graphs):
     for n_init in range(num_init_states):
 
         if n_init == 0:
-            gamma_init = np.zeros(d)
-            beta_init = np.zeros(d)
+            gamma_init = np.ones(d) * 1.1
+            beta_init = np.ones(d) * 1.1
             gamma_beta_init = np.concatenate((gamma_init, beta_init))
 
         else:
@@ -76,7 +78,8 @@ for n_graph in range(num_random_graphs):
 
         print(gamma_beta_init)
 
-        obj_over_opti, opt_result = algorithms.optimize_QAOA(gamma_beta_init, qaoa_obj)
+        obj_over_opti, opt_result = algorithms.optimize_QAOA(gamma_beta_init,
+                                                             qaoa_obj)
 
         actual_sol[n_graph, n_init] = np.min(maxcut_obj.H)
         clean_sol[n_graph, n_init] = obj_over_opti[-1]
@@ -87,9 +90,14 @@ for n_graph in range(num_random_graphs):
 
         for n_noise, p in enumerate(p_noise_list):
 
-            print("***************************************************************")
-            print("---------- Graph number ", n_graph, ", init. ", n_init, ", p = ", p, "------")
-            print("***************************************************************")
+            print("***********************************************************")
+            print("---------- Graph number ", n_graph,
+                                    ", init. ", n_init, ", p = ", p, "------")
+            print("***********************************************************")
+
+            dual_obj_jax = dual_jax.MaxCutDualJAX(prob_obj = maxcut_obj, d = d,
+                        gamma = jnp.array(gamma_clean),
+                        beta = jnp.array(beta_clean), p = p)
 
             a_vars_init = np.zeros(d)
             sigma_vars_init = np.zeros(dual_obj_jax.len_vars - d)
@@ -97,29 +105,33 @@ for n_graph in range(num_random_graphs):
 
             #-------- complete dual --------#
 
-            dual_obj_jax = dual_jax.MaxCutDualJAX(prob_obj = maxcut_obj, d = d,
-                        gamma = jnp.array(gamma_clean), beta = jnp.array(beta_clean), p = p)
-
             _, primal_noisy_jax = dual_obj_jax.primal_noisy()
             primal_noisy_jax = float(jnp.real(primal_noisy_jax))
             noisy_sol[n_noise, n_graph, n_init] = primal_noisy_jax
 
             obj_over_opti, opt_result = \
-                    dual_jax.optimize_external_dual_JAX(vars_init, dual_obj_jax)
+                    dual_jax.optimize_external_dual_JAX(vars_init,
+                                                        dual_obj_jax,
+                                                        opt_method)
 
             noisy_bound[n_noise, n_graph, n_init] = -obj_over_opti[-1]
 
             #-------- global dual --------#
 
-            dual_obj_jax_global = dual_jax.MaxCutDualJAXGlobal(prob_obj = maxcut_obj, d = d, p = p)
+            dual_obj_jax_global = dual_jax.MaxCutDualJAXGlobal(
+                                            prob_obj = maxcut_obj, d = d, p = p)
 
-            primal_noisy_global = float(jnp.real(dual_obj_jax_global.primal_noisy()))
+            _, primal_noisy_global = dual_obj_jax_global.primal_noisy()
+            primal_noisy_global = float(jnp.real(primal_noisy_global))
             noisy_sol_global[n_noise, n_graph, n_init] = primal_noisy_global
 
             obj_over_opti_global, opt_result_global = \
-            dual_jax.optimize_external_dual_JAX(vars_init, dual_obj_jax_global)
+            dual_jax.optimize_external_dual_JAX(vars_init,
+                                                dual_obj_jax_global,
+                                                opt_method)
 
-            noisy_bound_global[n_noise, n_graph, n_init] = -obj_over_opti_global[-1]
+            noisy_bound_global[n_noise, n_graph, n_init] =\
+                                                    -obj_over_opti_global[-1]
 
             #-------- no channel dual --------#
 
@@ -127,7 +139,9 @@ for n_graph in range(num_random_graphs):
             dual_jax.MaxCutDualJAXNoChannel(prob_obj = maxcut_obj, d = d, p = p)
 
             obj_over_opti_nc, opt_result_nc = \
-            dual_jax.optimize_external_dual_JAX(a_vars_init, dual_obj_jax_nochannel)
+            dual_jax.optimize_external_dual_JAX(a_vars_init,
+                                                dual_obj_jax_nochannel,
+                                                opt_method)
 
             noisy_bound_nc[n_noise, n_graph, n_init] = -obj_over_opti_nc[-1]
 

@@ -780,7 +780,7 @@ class MaxCutDualJAXGlobal():
 
         var_mat = self.tensor_2_mat(var_tensor.tensor)
 
-        return jnp.trace(jnp.matmul(var_mat, self.H_problem))
+        return var_mat, jnp.trace(jnp.matmul(var_mat, self.H_problem))
 
 class MaxCutDualJAXNoChannel():
 
@@ -920,7 +920,8 @@ def unjaxify_grad(func):
 
     return wrap
 
-def optimize_external_dual_JAX(vars_init: np.array, dual_obj: MaxCutDualJAX):
+def optimize_external_dual_JAX(vars_init: np.array, dual_obj: MaxCutDualJAX,
+                               opt_method: str = "L-BFGS-B"):
 
     opt_args = (dual_obj,)
 
@@ -941,10 +942,69 @@ def optimize_external_dual_JAX(vars_init: np.array, dual_obj: MaxCutDualJAX):
 
     # bnds = scipy.optimize.Bounds(lb = [1e-2] * p + [-sigma_bound] * (len_vars - p), ub = [np.inf] * p + [-sigma_bound] * (len_vars - p))
 
-    opt_result = scipy.optimize.minimize(unjaxify_obj(objective_external_dual_JAX), vars_init, args = opt_args,
-                                         method = 'L-BFGS-B', jac = unjaxify_grad(gradient_external_dual_JAX),
-                                         options={'disp': None, 'maxcor': 10, 'ftol': 2.220446049250313e-09,
-                                         'gtol': 1e-05, 'eps': 1e-08, 'maxfun': 15000, 'maxiter': 300, 'iprint': 10, 'maxls': 20}, callback = callback_func)
+    if opt_method == "L-BFGS-B":
+
+        opt_result = scipy.optimize.minimize(
+                                unjaxify_obj(objective_external_dual_JAX),
+                                vars_init, args = opt_args,
+                                method = opt_method,
+                                jac = unjaxify_grad(gradient_external_dual_JAX),
+                                options={'disp': None,
+                                'maxcor': 10,
+                                'ftol': 2.220446049250313e-09,
+                                'gtol': 1e-05,
+                                'eps': 1e-08,
+                                'maxfun': 15000,
+                                'maxiter': 300,
+                                'iprint': 10,
+                                'maxls': 20},
+                                callback = callback_func)
+
+    elif opt_method == "BFGS":
+
+        opt_result = scipy.optimize.minimize(
+                                unjaxify_obj(objective_external_dual_JAX),
+                                vars_init, args = opt_args,
+                                method = opt_method,
+                                jac = unjaxify_grad(gradient_external_dual_JAX),
+                                options={'gtol': 1e-05, 'eps': 1.4901161193847656e-08,
+                                'maxiter': 300,
+                                'disp': True,
+                                'return_all': False},
+                                callback = callback_func)
+
+    elif opt_method == "Newton-CG":
+
+        opt_result = scipy.optimize.minimize(
+                                unjaxify_obj(objective_external_dual_JAX),
+                                vars_init, args = opt_args,
+                                method = opt_method,
+                                jac = unjaxify_grad(gradient_external_dual_JAX),
+                                options={'xtol': 1e-05,
+                                'eps': 1.4901161193847656e-08,
+                                'maxiter': 300,
+                                'disp': True,
+                                'return_all': False},
+                                callback = callback_func)
+
+    elif opt_method == "CG":
+
+        opt_result = scipy.optimize.minimize(
+                                unjaxify_obj(objective_external_dual_JAX),
+                                vars_init, args = opt_args,
+                                method = opt_method,
+                                jac = unjaxify_grad(gradient_external_dual_JAX),
+                                options={'gtol': 1e-05,
+                                'eps': 1.4901161193847656e-08,
+                                'maxiter': 300,
+                                'disp': True,
+                                'return_all': False,
+                                'finite_diff_rel_step': None},
+                                callback = callback_func)
+
+    else:
+
+        raise ValueError("Method not yet implemented")
 
     return np.array(obj_over_opti), opt_result
 
