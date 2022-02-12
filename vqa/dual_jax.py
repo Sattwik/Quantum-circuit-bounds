@@ -11,10 +11,7 @@ import jax.numpy as jnp
 from jax import jit, grad, vmap, value_and_grad
 from jax.example_libraries import optimizers
 
-from vqa import graphs
-from vqa import problems
-from vqa import algorithms
-from vqa import dual
+from vqa import graphs, problems, algorithms, dual
 
 class MaxCutDualJAX():
 

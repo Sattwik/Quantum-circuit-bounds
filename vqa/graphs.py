@@ -1,10 +1,12 @@
+from typing import List, Tuple, Callable, Dict
+
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 
-def define_lattice(m = 3, n = 3):
+def define_lattice(dims: List):
 
-    return nx.grid_2d_graph(m, n)
+    return nx.grid_graph(dims)
 
 def create_random_connectivity(nx_lattice, p = 0.7):
 
