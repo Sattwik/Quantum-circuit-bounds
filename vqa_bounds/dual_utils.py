@@ -15,6 +15,7 @@ from jax.example_libraries import optimizers
 
 from vqa_bounds import meta_system
 
+@partial(jit, static_argnums = (1,))
 def dual_obj_ext(dual_vars: jnp.array, sys_obj: meta_system.System):
 
     """
@@ -24,6 +25,7 @@ def dual_obj_ext(dual_vars: jnp.array, sys_obj: meta_system.System):
 
     return sys_obj.dual_obj(dual_vars)
 
+@partial(jit, static_argnums = (1,))
 def dual_grad_ext(dual_vars: jnp.array, sys_obj: meta_system.System):
 
     """
