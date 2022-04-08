@@ -18,7 +18,7 @@ import scipy
 
 from vqa_bounds import maxcut1D, maxcut1Dlocal, graphs, circuit_utils, dual_utils
 
-m = 6
+m = 8
 lattice = graphs.define_lattice((m,))
 
 graph = graphs.create_random_connectivity(lattice)

@@ -325,7 +325,7 @@ class MaxCut1DLocal(meta_system.System):
 
             # construct the effective Hamiltonian for the ith step/layer
             Hi = self.construct_H(i)
-            Ei = jnp.linalg.eigvals(Hi)
+            Ei = jnp.linalg.eigvalsh(Hi)
 
             cost += -self.Lambdas[i] * jnp.log(jnp.sum(jnp.exp(-Ei/self.Lambdas[i])))
 
