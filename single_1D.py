@@ -19,6 +19,8 @@ import jax.numpy as jnp
 from jax import jit, grad, vmap
 from jax.test_util import check_grads
 import scipy
+from jax.config import config
+config.update("jax_enable_x64", True)
 
 from vqa_bounds import maxcut1D, maxcut1Dlocal, graphs, circuit_utils, dual_utils
 
