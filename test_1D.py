@@ -16,7 +16,7 @@ from jax import jit, grad, vmap
 from jax.test_util import check_grads
 import scipy
 
-from vqa_bounds import maxcut1D, graphs, circuit_utils, dual_utils
+from vqa_bounds import maxcut1D, maxcut1Dlocal, graphs, circuit_utils, dual_utils
 
 m = 6
 lattice = graphs.define_lattice((m,))
@@ -27,6 +27,7 @@ d = 4
 p = 0.1
 
 sys_obj = maxcut1D.MaxCut1D(graph, lattice, d, p)
+sys_obj_local = maxcut1Dlocal.MaxCut1DLocal(graph, lattice, d, p)
 
 gamma_init = np.ones(d)
 beta_init = np.ones(d//2)
@@ -40,14 +41,16 @@ bnds = scipy.optimize.Bounds(lb = 0, ub = ub_array)
 
 circ_obj_over_opti, circ_opt_result = circuit_utils.optimize_circuit(circuit_params_init, bnds, sys_obj)
 
-dual_vars_init = jnp.ones(sys_obj.total_num_vars)
+sys_obj_local.update_opt_circ_params(circ_opt_result.x)
+
+dual_vars_init = jnp.zeros(sys_obj.total_num_vars)
+dual_vars_init_local = jnp.ones(sys_obj_local.total_num_vars)
 
 a_bound = -5
 sigma_bound = 100
 
-dual_obj_over_opti_nb, dual_opt_result_nb = dual_utils.optimize_dual(dual_vars_init, sys_obj, a_bound, sigma_bound, use_bounds = False)
-
 dual_obj_over_opti, dual_opt_result = dual_utils.optimize_dual(dual_vars_init, sys_obj, a_bound, sigma_bound, use_bounds = True)
+dual_obj_over_opti_local, dual_opt_result_local = dual_utils.optimize_dual(dual_vars_init_local, sys_obj_local, a_bound, sigma_bound, use_bounds = True)
 
 end = time.time()
 
@@ -57,11 +60,13 @@ actual_sol = np.min(sys_obj.H.full())
 clean_sol = circ_obj_over_opti[-1]
 noisy_sol = sys_obj.primal_noisy()
 noisy_bound = -dual_obj_over_opti[-1]
+noisy_bound_local = -dual_obj_over_opti_local[-1]
 
 print("actual_sol = ", actual_sol)
 print("clean_sol = ", clean_sol)
 print("noisy_sol = ", noisy_sol)
 print("noisy_bound = ", noisy_bound)
+print("noisy_bound_local = ", noisy_bound_local)
 
 # file = "../vqa_data/maxcut1D_dual_debug.pkl"
 #

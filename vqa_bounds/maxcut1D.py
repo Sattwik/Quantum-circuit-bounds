@@ -77,30 +77,20 @@ class MaxCut1D(meta_system.System):
         self.psi_init_jax = jnp.array(self.psi_init)
         self.H_problem = jnp.array(self.H.full())
 
-        self.local_var_dim = self.local_dim ** 2
+        self.dim_list = tuple([self.local_dim] * 2 * self.num_sites_in_lattice)
+        self.dim = self.local_dim ** self.num_sites_in_lattice
 
-        self.num_vars_local = (self.local_dim ** 2) ** 2
-        # because local H are over two sites
-        self.num_vars_odd_layers = (self.d//2) * self.num_vars_local * ((self.num_sites_in_lattice - 2)//2)
-        self.num_vars_even_layers = (self.d//2) * self.num_vars_local * self.num_sites_in_lattice//2
+        self.utri_indices = jnp.triu_indices(self.dim, 1)
+        self.ltri_indices = (self.utri_indices[1], self.utri_indices[0])
+        self.num_tri_elements = self.utri_indices[0].shape[0]
+        self.num_diag_elements = self.dim
 
-        self.total_num_vars = self.d + self.num_vars_odd_layers + self.num_vars_even_layers
-
-        self.num_diag_elements_local = self.local_dim ** 2
-        self.utri_indices_local = jnp.triu_indices(self.local_dim ** 2, 1)
-        self.ltri_indices_local = (self.utri_indices_local[1], self.utri_indices_local[0])
-        self.num_tri_elements_local = self.utri_indices_local[0].shape[0]
-
-        self.X_left = jnp.array(qutip.tensor(self.X_qutip, self.I_qutip).full())
-        self.Y_left = jnp.array(qutip.tensor(self.Y_qutip, self.I_qutip).full())
-        self.Z_left = jnp.array(qutip.tensor(self.Z_qutip, self.I_qutip).full())
-
-        self.X_right = jnp.array(qutip.tensor(self.I_qutip, self.X_qutip).full())
-        self.Y_right = jnp.array(qutip.tensor(self.I_qutip, self.Y_qutip).full())
-        self.Z_right = jnp.array(qutip.tensor(self.I_qutip, self.Z_qutip).full())
+        self.total_num_vars = (1 + self.num_diag_elements + 2 * self.num_tri_elements) * self.d
 
         self.I_jax = jnp.array(self.I_qutip.full())
         self.X_jax = jnp.array(self.X_qutip.full())
+        self.Y_jax = jnp.array(self.Y_qutip.full())
+        self.Z_jax = jnp.array(self.Z_qutip.full())
 
         # # constructing initial density operator
         self.rho_init = jnp.array((self.psi_init * self.psi_init.dag()).full())
@@ -244,6 +234,58 @@ class MaxCut1D(meta_system.System):
         self.entropy_bounds = self.num_sites_in_lattice * self.p * jnp.log(2) * \
                               jnp.array([jnp.sum(q_powers.at[:i+1].get()) for i in range(self.d)])
 
+    def mat_2_tensor(self, A: jnp.array):
+
+        """
+        Converts an array A that is indexed as (i1 i2 ... iN)(i1p i2p ... iNp)
+        into a tensor indexed as (i1) (i1p) (i2) (i2p) ... (iN) (iNp). () denote
+        composite indices.
+        """
+
+        # (i1 i2 ... iN)(i1p i2p ... iNp) -> (i1 i2 ... iN i1p i2p ... iNp)
+        T = jnp.ravel(A)
+
+        # (i1 i2 ... iN i1p i2p ... iNp) -> (i1) (i2) ... (iN) (i1p) (i2p) ... (iNp)
+        T = jnp.reshape(T, tuple([self.local_dim] * self.num_sites_in_lattice * 2))
+
+        # (i1) (i2) ... (iN) (i1p) (i2p) ... (iNp) -> (i1) (i1p) ... (iN) (iNp)
+        # [0, N, 1, N + 1, ..., N - 1, 2N - 1]
+        i1 = np.arange(self.num_sites_in_lattice)
+        i2 = self.num_sites_in_lattice + i1
+        i  = np.zeros(2 * self.num_sites_in_lattice, dtype = int)
+        i[::2] = i1
+        i[1::2] = i2
+        # i = i.at[::2].set(i1)
+        # i = i.at[1::2].set(i2)
+
+        T = jnp.transpose(T, tuple(i))
+
+        return T
+
+    def tensor_2_mat(self, T: jnp.array):
+
+        """
+        Converts a tensor T that is indexed as  (i1) (i1p) (i2) (i2p) ... (iN) (iNp)
+        into a matrix indexed as (i1 i2 ... iN)(i1p i2p ... iNp). () denote
+        composite indices.
+        """
+
+        # (i1) (i1p) (i2) (i2p) ... (iN) (iNp) -> (i1) (i2) ... (iN) (i1p) (i2p) ... (iNp)
+        # [0, 2, 4, ..., 2N - 2, 1, 3, ..., 2N - 1]
+        i1 = np.arange(0, 2 * self.num_sites_in_lattice - 1, 2)
+        i2 = np.arange(1, 2 * self.num_sites_in_lattice, 2)
+        i = np.concatenate((i1, i2))
+
+        A = jnp.transpose(T, tuple(i))
+
+        # (i1) (i2) ... (iN) (i1p) (i2p) ... (iNp) -> (i1 i2 ... iN i1p i2p ... iNp)
+        A = jnp.ravel(A)
+
+        # (i1 i2 ... iN i1p i2p ... iNp) -> (i1 i2 ... iN)(i1p i2p ... iNp)
+        A = jnp.reshape(A, (self.dim, self.dim))
+
+        return A
+
     def dual_obj(self, dual_vars: jnp.array):
 
         # Unvectorize the vars_vec and construct Sigmas and Lambdas
@@ -260,57 +302,49 @@ class MaxCut1D(meta_system.System):
 
     def assemble_vars_into_tensors(self, vars_vec: jnp.array):
 
+        vars_diag_list, vars_real_list, vars_imag_list = self.unvectorize_vars(vars_vec)
+        self.Sigmas = []
+
+        for i in range(self.d):
+
+            tri_real = jnp.zeros((self.dim, self.dim), dtype = complex)
+            tri_imag = jnp.zeros((self.dim, self.dim), dtype = complex)
+
+            tri_real = tri_real.at[self.utri_indices].set(vars_real_list[i])
+            tri_real = tri_real.at[self.ltri_indices].set(vars_real_list[i])
+            tri_imag = tri_imag.at[self.utri_indices].set(1j * vars_imag_list[i])
+            tri_imag = tri_imag.at[self.ltri_indices].set(-1j * vars_imag_list[i])
+
+            vars_full = jnp.diag(vars_diag_list[i]) + tri_real + tri_imag
+
+            self.Sigmas.append(tn.Node(self.mat_2_tensor(vars_full)))
+
+    def unvectorize_vars(self, vars_vec: jnp.array):
+
         a_vars = vars_vec.at[:self.d].get()
         self.Lambdas = jnp.log(1 + jnp.exp(a_vars))
 
-        vars_vec_odd_layers = vars_vec.at[self.d: self.d + self.num_vars_odd_layers].get()
-        vars_vec_even_layers = vars_vec.at[self.d + self.num_vars_odd_layers:].get()
+        vars_vec_split = jnp.split(vars_vec.at[self.d:].get(), self.d)
+        # split the variables into p equal arrays
 
-        # split the variables into equal arrays corresponding to each layer
-        vars_vec_odd_layers_split = jnp.split(vars_vec_odd_layers, self.d//2)
-        vars_vec_even_layers_split = jnp.split(vars_vec_even_layers, self.d//2)
+        vars_diag_list = []
+        vars_real_list = []
+        vars_imag_list = []
 
-        # list where each element corresponds to the dual variable for a layer
-        # each element is a dictionary with site tuples as keys and the local
-        # Hamiltonians as values
-        self.Sigmas = []
-
-        for i in range(1, self.d + 1):
-
-            Sigma_layer = {}
+        for i in range(self.d):
 
             # for each circuit step the variables are arranged as:
             # [vars_diag, vars_real, vars_imag]
 
-            if i % 2 == 0:
-                vars_layer = vars_vec_even_layers_split[(i-2)//2]
-                vars_layer_split = jnp.split(vars_layer, len(self.site_tuple_list_even_layer))
-                site_index_list = self.site_tuple_list_even_layer
+            vars_diag = vars_vec_split[i].at[:self.num_diag_elements].get()
+            vars_real = vars_vec_split[i].at[self.num_diag_elements:self.num_diag_elements + self.num_tri_elements].get()
+            vars_imag = vars_vec_split[i].at[self.num_diag_elements + self.num_tri_elements:].get()
 
-            else:
-                vars_layer = vars_vec_odd_layers_split[(i-1)//2]
-                vars_layer_split = jnp.split(vars_layer, len(self.site_tuple_list_odd_layer))
-                site_index_list = self.site_tuple_list_odd_layer
+            vars_diag_list.append(vars_diag)
+            vars_real_list.append(vars_real)
+            vars_imag_list.append(vars_imag)
 
-            for n, site_tuple in enumerate(site_index_list):
-
-                vars_diag = vars_layer_split[n].at[:self.num_diag_elements_local].get()
-                vars_real = vars_layer_split[n].at[self.num_diag_elements_local:self.num_diag_elements_local + self.num_tri_elements_local].get()
-                vars_imag = vars_layer_split[n].at[self.num_diag_elements_local + self.num_tri_elements_local:].get()
-
-                tri_real = jnp.zeros((self.local_var_dim, self.local_var_dim), dtype = complex)
-                tri_imag = jnp.zeros((self.local_var_dim, self.local_var_dim), dtype = complex)
-
-                tri_real = tri_real.at[self.utri_indices_local].set(vars_real)
-                tri_real = tri_real.at[self.ltri_indices_local].set(vars_real)
-                tri_imag = tri_imag.at[self.utri_indices_local].set(1j * vars_imag)
-                tri_imag = tri_imag.at[self.ltri_indices_local].set(-1j * vars_imag)
-
-                vars_full = jnp.diag(vars_diag) + tri_real + tri_imag
-
-                Sigma_layer[site_tuple] = vars_full
-
-            self.Sigmas.append(Sigma_layer)
+        return vars_diag_list, vars_real_list, vars_imag_list
 
     def cost(self):
 
@@ -330,7 +364,7 @@ class MaxCut1D(meta_system.System):
             cost += -self.Lambdas[i] * jnp.log(jnp.sum(jnp.exp(-Ei/self.Lambdas[i])))
 
         # the initial state term
-        epsilon1_dag_sigma1 = self.make_full_dim(self.noisy_dual_layer(0))
+        epsilon1_dag_sigma1 = self.tensor_2_mat(self.noisy_dual_layer(0).tensor)
 
         cost += -jnp.trace(jnp.matmul(self.rho_init, epsilon1_dag_sigma1))
 
@@ -349,29 +383,14 @@ class MaxCut1D(meta_system.System):
         """
 
         if i == self.d - 1:
-            Hi = self.make_full_dim(self.Sigmas[i]) + self.H_problem
+            Hi = self.tensor_2_mat(self.Sigmas[i].tensor) + self.H_problem
+
+            return Hi
 
         else:
-            Hi = self.make_full_dim(self.Sigmas[i]) - \
-                 self.make_full_dim(self.noisy_dual_layer(i + 1))
+            Hi = self.Sigmas[i].tensor - self.noisy_dual_layer(i + 1).tensor
 
-        return Hi
-
-    def make_full_dim(self, var_tensors: Dict):
-
-        full_mat = 0
-
-        for site_tuple, local_var_tensor in var_tensors.items():
-
-            dim_left = self.local_dim ** site_tuple[0]
-            dim_right = self.local_dim ** (self.num_sites_in_lattice - site_tuple[1] - 1)
-
-            identity_left = jnp.identity(dim_left)
-            identity_right = jnp.identity(dim_right)
-
-            full_mat += jnp.kron(identity_left, jnp.kron(local_var_tensor, identity_right))
-
-        return full_mat
+            return self.tensor_2_mat(Hi)
 
     def noisy_dual_layer(self, i: int):
 
@@ -387,51 +406,114 @@ class MaxCut1D(meta_system.System):
             res_tensors = tensors after the dual layer
         """
 
-        res_tensors = self.Sigmas[i].copy()
-        res_tensors = self.noise_layer(res_tensors)
-        res_tensors = self.dual_unitary_layer(layer_num = i + 1,
-                                        var_tensors = res_tensors)
+        res_tensor = self.Sigmas[i]
+        res_tensor = self.noise_layer(res_tensor)
+        res_tensor = self.dual_unitary_layer(layer_num = i + 1,
+                                        var_tensor = res_tensor)
                                         # i + 1 here because unitary_layer
                                         # counts layers differently
 
-        return res_tensors
+        return res_tensor
 
-    def noise_layer(self, var_tensors: Dict):
+    def noise_layer(self, var_tensor: tn.Node):
 
         """
-        Applies depolarizing noise on the var_tensors at all sites.
+        Applies depolarizing noise on the var_tensor at all sites.
         """
 
-        res_tensors = var_tensors.copy()
+        res_tensor = var_tensor
 
-        for site_tuple, local_var_tensor in var_tensors.items():
+        for site_num in range(self.num_sites_in_lattice):
 
-            local_res_tensor = (1 - 3 * self.p/4) * local_var_tensor + (self.p/4) * \
-                (jnp.matmul(self.X_left, jnp.matmul(local_var_tensor, self.X_left)) + \
-                 jnp.matmul(self.Y_left, jnp.matmul(local_var_tensor, self.Y_left)) + \
-                 jnp.matmul(self.Z_left, jnp.matmul(local_var_tensor, self.Z_left)))
+            # --- applying I --- #
+            res_array = (1 - 3 * self.p/4) * res_tensor.tensor
 
-            local_res_tensor = (1 - 3 * self.p/4) * local_res_tensor + (self.p/4) * \
-                (jnp.matmul(self.X_right, jnp.matmul(local_res_tensor, self.X_right)) + \
-                 jnp.matmul(self.Y_right, jnp.matmul(local_res_tensor, self.Y_right)) + \
-                 jnp.matmul(self.Z_right, jnp.matmul(local_res_tensor, self.Z_right)))
+            # --- applying X --- #
+            tmp_tensor = res_tensor
 
-            res_tensors[site_tuple] = local_res_tensor
+            X_node = tn.Node(np.sqrt(self.p/4) * self.X_jax, axis_names = ["ja","ia"])
+            X_prime_node = tn.Node(np.sqrt(self.p/4) * self.X_jax, axis_names = ["iap","kap"])
 
-        return res_tensors
+            ia  = 2 * site_num
+            iap = 2 * site_num + 1
 
-    def dual_unitary_layer(self, layer_num: int, var_tensors: Dict):
+            edge_a      = X_node["ia"] ^ tmp_tensor[ia]
+            edge_a_p    = X_prime_node["iap"] ^ tmp_tensor[iap]
 
-        res_tensors = var_tensors.copy()
+            # perform the contraction
+            new_edge_order = tmp_tensor.edges[:ia] + [X_node["ja"]] +\
+                             tmp_tensor.edges[ia + 1:]
+            tmp_tensor = tn.contract_between(X_node, tmp_tensor, output_edge_order = new_edge_order)
+
+            new_edge_order = tmp_tensor.edges[:iap] + [X_prime_node["kap"]] +\
+                             tmp_tensor.edges[iap + 1:]
+            tmp_tensor = tn.contract_between(X_prime_node, tmp_tensor, output_edge_order = new_edge_order)
+
+            res_array += tmp_tensor.tensor
+
+            # --- applying Y --- #
+            tmp_tensor = res_tensor
+
+            Y_node = tn.Node(np.sqrt(self.p/4) * self.Y_jax, axis_names = ["ja","ia"])
+            Y_prime_node = tn.Node(np.sqrt(self.p/4) * self.Y_jax, axis_names = ["iap","kap"])
+
+            ia  = 2 * site_num
+            iap = 2 * site_num + 1
+
+            edge_a      = Y_node["ia"] ^ tmp_tensor[ia]
+            edge_a_p    = Y_prime_node["iap"] ^ tmp_tensor[iap]
+
+            # perform the contraction
+            new_edge_order = tmp_tensor.edges[:ia] + [Y_node["ja"]] +\
+                             tmp_tensor.edges[ia + 1:]
+            tmp_tensor = tn.contract_between(Y_node, tmp_tensor, output_edge_order = new_edge_order)
+
+            new_edge_order = tmp_tensor.edges[:iap] + [Y_prime_node["kap"]] +\
+                             tmp_tensor.edges[iap + 1:]
+            tmp_tensor = tn.contract_between(Y_prime_node, tmp_tensor, output_edge_order = new_edge_order)
+
+            res_array += tmp_tensor.tensor
+
+            # --- applying Z --- #
+            tmp_tensor = res_tensor
+
+            Z_node = tn.Node(np.sqrt(self.p/4) * self.Z_jax, axis_names = ["ja","ia"])
+            Z_prime_node = tn.Node(np.sqrt(self.p/4) * self.Z_jax, axis_names = ["iap","kap"])
+
+            ia  = 2 * site_num
+            iap = 2 * site_num + 1
+
+            edge_a      = Z_node["ia"] ^ tmp_tensor[ia]
+            edge_a_p    = Z_prime_node["iap"] ^ tmp_tensor[iap]
+
+            # perform the contraction
+            new_edge_order = tmp_tensor.edges[:ia] + [Z_node["ja"]] +\
+                             tmp_tensor.edges[ia + 1:]
+            tmp_tensor = tn.contract_between(Z_node, tmp_tensor, output_edge_order = new_edge_order)
+
+            new_edge_order = tmp_tensor.edges[:iap] + [Z_prime_node["kap"]] +\
+                             tmp_tensor.edges[iap + 1:]
+            tmp_tensor = tn.contract_between(Z_prime_node, tmp_tensor, output_edge_order = new_edge_order)
+
+            res_array += tmp_tensor.tensor
+
+            # update tensor
+            res_tensor = tn.Node(res_array)
+
+        return res_tensor
+
+    def dual_unitary_layer(self, layer_num: int, var_tensor: tn.Node):
+
+        res_tensor = var_tensor
 
         if layer_num % 2 == 0:
-            res_tensors = self.mixing_unitaries(layer_num, res_tensors)
+            res_tensor = self.mixing_unitaries(layer_num, res_tensor)
 
-        res_tensors = self.problem_unitaries(layer_num, res_tensors)
+        res_tensor = self.problem_unitaries(layer_num, res_tensor)
 
-        return res_tensors
+        return res_tensor
 
-    def problem_unitaries(self, layer_num: int, var_tensors: Dict):
+    def problem_unitaries(self, layer_num: int, var_tensor: tn.Node):
 
         #----- Applying the problem unitary -----#
         gamma = self.opt_gamma[layer_num - 1]
@@ -440,18 +522,73 @@ class MaxCut1D(meta_system.System):
         U = jnp.diag(jnp.array([1, jnp.exp(1j * gamma), jnp.exp(1j * gamma), 1]))
         U_dag = jnp.transpose(jnp.conj(U))
 
-        res_tensors = var_tensors.copy()
+        # adjoint because dual
+        U = jnp.conj(jnp.transpose(U))
+        U_dag = jnp.conj(jnp.transpose(U_dag))
 
-        for site_tuple, local_var_tensor in var_tensors.items():
+        # (ja jb) (ia ib) -> (ja jb ia ib)
+        U_tensor = jnp.ravel(U)
+        # (ja jb ia ib) -> (ja) (jb) (ia) (ib)
+        U_tensor = jnp.reshape(U_tensor, (2,2,2,2))
+        # (ja) (jb) (ia) (ib) -> (ja) (ia) (jb) (ib)
+        U_tensor = jnp.transpose(U_tensor, [0, 2, 1, 3])
+
+        # (iap ibp) (kap kbp) -> (iap ibp kap kbp)
+        U_dag_tensor = jnp.ravel(U_dag)
+        # (iap ibp kap kbp) -> (iap) (ibp) (kap) (kbp)
+        U_dag_tensor = jnp.reshape(U_dag_tensor, (2,2,2,2))
+        # (iap) (ibp) (kap) (kbp) -> (iap) (kap) (ibp) (kbp)
+        U_dag_tensor = jnp.transpose(U_dag_tensor, [0, 2, 1, 3])
+
+        res_tensor = var_tensor
+
+        if layer_num%2 == 0:
+            site_tuple_list = self.site_tuple_list_even_layer
+        else:
+            site_tuple_list = self.site_tuple_list_odd_layer
+
+        for site_tuple in site_tuple_list:
 
             if site_tuple in self.graph.edges:
 
-                local_res_tensor = jnp.matmul(U_dag, jnp.matmul(local_var_tensor, U))
-                res_tensors[site_tuple] = local_res_tensor
+                site_num_a = min(site_tuple[0], site_tuple[1])
+                site_num_b = max(site_tuple[0], site_tuple[1])
 
-        return res_tensors
+                ia = 2 * site_num_a
+                ib = 2 * site_num_b
 
-    def mixing_unitaries(self, layer_num: int, var_tensors: Dict):
+                iap = 2 * site_num_a + 1
+                ibp = 2 * site_num_b + 1
+
+                U_node      = tn.Node(U_tensor, axis_names = ["ja", "ia", "jb", "ib"], name = "U_node")
+                U_dag_node  = tn.Node(U_dag_tensor, axis_names = ["iap", "kap", "ibp", "kbp"], name = "U_dag_node")
+
+                # assumption that tn.Node() orders the axes in the same order as
+                # the input np.array
+
+                edge_a = U_node["ia"] ^ res_tensor[ia]
+                edge_b = U_node["ib"] ^ res_tensor[ib]
+
+                new_edge_order = res_tensor.edges[:ia] + [U_node["ja"]] +\
+                                 res_tensor.edges[ia + 1: ib] + [U_node["jb"]] +\
+                                 res_tensor.edges[ib + 1:]
+
+                res_tensor = tn.contract_between(U_node, res_tensor,
+                                            output_edge_order = new_edge_order)
+
+                edge_a_p = U_dag_node["iap"] ^ res_tensor[iap]
+                edge_b_p = U_dag_node["ibp"] ^ res_tensor[ibp]
+
+                new_edge_order = res_tensor.edges[:iap] + [U_dag_node["kap"]] +\
+                                 res_tensor.edges[iap + 1: ibp] + [U_dag_node["kbp"]] +\
+                                 res_tensor.edges[ibp + 1:]
+
+                res_tensor = tn.contract_between(U_dag_node, res_tensor,
+                                            output_edge_order = new_edge_order)
+
+        return res_tensor
+
+    def mixing_unitaries(self, layer_num: int, var_tensor: tn.Node):
 
         assert layer_num % 2 == 0
 
@@ -459,18 +596,37 @@ class MaxCut1D(meta_system.System):
         beta = self.opt_beta[(layer_num - 2)//2]
 
         Ux = jnp.cos(beta) * self.I_jax - 1j * jnp.sin(beta) * self.X_jax
+        Ux_dag = jnp.transpose(jnp.conj(Ux))
 
-        Ux_2site = jnp.kron(Ux, Ux)
-        Ux_2site_dag = jnp.transpose(jnp.conj(Ux_2site))
+        # adjoint because dual
+        Ux = jnp.conj(jnp.transpose(Ux))
+        Ux_dag = jnp.conj(jnp.transpose(Ux_dag))
 
-        res_tensors = var_tensors
+        res_tensor = var_tensor
 
-        for site_tuple, local_var_tensor in var_tensors.items():
+        for site_num in range(self.num_sites_in_lattice):
 
-            local_res_tensor = jnp.matmul(Ux_2site_dag, jnp.matmul(local_var_tensor, Ux_2site))
-            res_tensors[site_tuple] = local_res_tensor
+            Ux_node = tn.Node(Ux, axis_names = ["ja","ia"])
+            Ux_dag_node = tn.Node(Ux_dag, axis_names = ["iap","kap"])
 
-        return res_tensors
+            ia  = 2 * site_num
+            iap = 2 * site_num + 1
+
+            edge_a      = Ux_node["ia"] ^ res_tensor[ia]
+            edge_a_p    = Ux_dag_node["iap"] ^ res_tensor[iap]
+
+            # perform the contraction
+            new_edge_order = res_tensor.edges[:ia] + [Ux_node["ja"]] +\
+                             res_tensor.edges[ia + 1:]
+            res_tensor = tn.contract_between(Ux_node, res_tensor,
+                                    output_edge_order = new_edge_order)
+
+            new_edge_order = res_tensor.edges[:iap] + [Ux_dag_node["kap"]] +\
+                             res_tensor.edges[iap + 1:]
+            res_tensor = tn.contract_between(Ux_dag_node, res_tensor,
+                                    output_edge_order = new_edge_order)
+
+        return res_tensor
 
     def primal_noisy(self):
 
