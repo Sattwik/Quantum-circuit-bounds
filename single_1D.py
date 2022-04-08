@@ -1,8 +1,12 @@
-import pickle
-import os
 from datetime import datetime
 from datetime import date
 import time
+import pickle
+import sys
+import argparse
+import io
+import copy
+import shutil
 
 import numpy as np
 import networkx as nx
@@ -18,13 +22,23 @@ import scipy
 
 from vqa_bounds import maxcut1D, maxcut1Dlocal, graphs, circuit_utils, dual_utils
 
-m = 8
+parser = argparse.ArgumentParser(description='System size(N), layers(d), noise probability(p)')
+parser.add_argument('--N', type = str)
+parser.add_argument('--d', type = str)
+parser.add_argument('--p', type = str)
+parser.add_argument('--graph_num', type = str)
+parser.add_argument('--init_num', type = str)
+cliargs = parser.parse_args()
+
+m = cliargs.N
 lattice = graphs.define_lattice((m,))
 
 graph = graphs.create_random_connectivity(lattice)
 
-d = 4
-p = 0.1
+d = cliargs.d
+p = cliargs.p
+
+# Calculate circuit params
 
 sys_obj = maxcut1D.MaxCut1D(graph, lattice, d, p)
 sys_obj_local = maxcut1Dlocal.MaxCut1DLocal(graph, lattice, d, p)
@@ -43,16 +57,16 @@ circ_obj_over_opti, circ_opt_result = circuit_utils.optimize_circuit(circuit_par
 
 sys_obj_local.update_opt_circ_params(circ_opt_result.x)
 
+# Solve duals
 dual_vars_init = jnp.zeros(sys_obj.total_num_vars)
 dual_vars_init_local = jnp.zeros(sys_obj_local.total_num_vars)
 
-a_bound = -5.0
-sigma_bound = 100.0
-
+a_bound = -5
+sigma_bound = 100
 num_iters = 300
+
 dual_obj_over_opti, dual_opt_result = dual_utils.optimize_dual(dual_vars_init, sys_obj, num_iters, a_bound, sigma_bound, use_bounds = True)
 
-num_iters = 200
 dual_obj_over_opti_local, dual_opt_result_local = dual_utils.optimize_dual(dual_vars_init_local, sys_obj_local, num_iters, a_bound, sigma_bound, use_bounds = True)
 
 end = time.time()
@@ -69,7 +83,50 @@ print("actual_sol = ", actual_sol)
 print("clean_sol = ", clean_sol)
 print("noisy_sol = ", noisy_sol)
 print("noisy_bound = ", noisy_bound)
+
+if noisy_bound <= noisy_sol:
+    print("SUCCESS!")
+else:
+    print("FAIL :(")
+
 print("noisy_bound_local = ", noisy_bound_local)
+
+if noisy_bound_local <= noisy_sol:
+    print("SUCCESS!")
+else:
+    print("FAIL :(")
+
+#------ Gathering data  ------#
+
+data_list = [m, d, p,
+             actual_sol, clean_sol, noisy_sol, noisy_bound, noisy_bound_local,
+             a_bound, sigma_bound, num_iters,
+             circ_opt_result.x,
+             dual_obj_over_opti, dual_opt_result.x,
+             dual_obj_over_opti_local, dual_opt_result_local.x]
+
+data_file_name = "maxcut1D-" + str(m) + "-" + str(d) + "-" + str(p) + "-" + \
+                 str(cliargs.graph_num) + "-" + str(cliargs.init_num) + ".pkl"
+
+#------ Making result folder  ------#
+today = date.today()
+mmdd =  today.strftime("%m%d%y")[:4]
+
+data_folder_path = os.path.join('./../vqa_data', mmdd)
+
+if not os.path.exists(data_folder_path):
+    os.makedirs(data_folder_path)
+
+now = datetime.now().strftime("%Y%m%d-%H%M%S")
+
+result_save_path = os.path.join(data_folder_path, now)
+
+if not os.path.exists(result_save_path):
+    os.makedirs(result_save_path)
+
+with open(os.path.join(result_save_path, data_file_name), "wb") as f_for_pkl:
+    pickle.dump(data_list, f_for_pkl)
+
 
 # file = "../vqa_data/maxcut1D_dual_debug.pkl"
 #
