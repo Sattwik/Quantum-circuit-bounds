@@ -15,12 +15,15 @@ from jax.example_libraries import optimizers
 
 from vqa_bounds import graphs, meta_system
 
-class MaxCut1D(meta_system.System):
+class MaxCut2DLocal(meta_system.System):
 
-    def __init__(self, graph, lattice, d: int, p: float, circ_backend = "qutip"):
+    def __init__(self, dims, graph, lattice, d: int, p: float, circ_backend = "qutip"):
 
         self.graph = graph
         self.lattice = lattice
+
+        self.n_x = dims[0]
+        self.n_y = dims[1]
 
         self.circ_backend = circ_backend
 
@@ -34,8 +37,18 @@ class MaxCut1D(meta_system.System):
 
         self.num_sites_in_lattice = self.lattice.number_of_nodes() # assuming even
         # layer numbering starts from 1
-        self.site_tuple_list_odd_layer = list(zip(range(1, self.num_sites_in_lattice, 2), range(2, self.num_sites_in_lattice, 2)))
-        self.site_tuple_list_even_layer = list(zip(range(0, self.num_sites_in_lattice, 2), range(1, self.num_sites_in_lattice, 2)))
+
+        self.site_tuple_list_H_odd_proto = list(zip(range(1, self.n_y, 2), range(2, self.n_y, 2)))
+        self.site_tuple_list_H_even_proto = list(zip(range(0, self.n_y, 2), range(1, self.n_y, 2)))
+
+        self.site_tuple_list_H_odd_layer = [((i_x, tuple_y[0]), (i_x, tuple_y[1])) for i_x in range(n_x) for tuple_y in self.site_tuple_list_H_odd_proto]
+        self.site_tuple_list_H_even_layer = [((i_x, tuple_y[0]), (i_x, tuple_y[1])) for i_x in range(n_x) for tuple_y in self.site_tuple_list_H_even_proto]
+
+        self.site_tuple_list_V_odd_proto = list(zip(range(1, self.n_x, 2), range(2, self.n_x, 2)))
+        self.site_tuple_list_V_even_proto = list(zip(range(0, self.n_x, 2), range(1, self.n_x, 2)))
+
+        self.site_tuple_list_V_odd_layer = [((tuple_x[0], i_y), (tuple_x[1], i_y)) for i_y in range(n_y) for tuple_x in self.site_tuple_list_V_odd_proto]
+        self.site_tuple_list_V_even_layer = [((tuple_x[0], i_y), (tuple_x[1], i_y)) for i_y in range(n_y) for tuple_x in self.site_tuple_list_V_even_proto]
 
         self.Z_qutip = qutip.sigmaz()
         self.X_qutip = qutip.sigmax()

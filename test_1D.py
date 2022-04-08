@@ -18,13 +18,13 @@ import scipy
 
 from vqa_bounds import maxcut1D, graphs, circuit_utils, dual_utils
 
-m = 10
+m = 6
 lattice = graphs.define_lattice((m,))
 
 graph = graphs.create_random_connectivity(lattice)
 
 d = 4
-p = 0.5
+p = 0.1
 
 sys_obj = maxcut1D.MaxCut1D(graph, lattice, d, p)
 
@@ -42,7 +42,12 @@ circ_obj_over_opti, circ_opt_result = circuit_utils.optimize_circuit(circuit_par
 
 dual_vars_init = jnp.ones(sys_obj.total_num_vars)
 
-dual_obj_over_opti, dual_opt_result = dual_utils.optimize_dual(dual_vars_init, sys_obj)
+a_bound = -5
+sigma_bound = 100
+
+dual_obj_over_opti_nb, dual_opt_result_nb = dual_utils.optimize_dual(dual_vars_init, sys_obj, a_bound, sigma_bound, use_bounds = False)
+
+dual_obj_over_opti, dual_opt_result = dual_utils.optimize_dual(dual_vars_init, sys_obj, a_bound, sigma_bound, use_bounds = True)
 
 end = time.time()
 
@@ -58,9 +63,31 @@ print("clean_sol = ", clean_sol)
 print("noisy_sol = ", noisy_sol)
 print("noisy_bound = ", noisy_bound)
 
+# file = "../vqa_data/maxcut1D_dual_debug.pkl"
+#
+# with open(file, "rb") as f:
+#     sys_obj, error_circ_params, error_dual_vars = pickle.load(f)
+#
+# sys_obj.update_opt_circ_params(error_circ_params)
+#
+# new_dual = -1 * sys_obj.dual_obj(jnp.array(error_dual_vars))
+#
+# print(new_dual)
+#
+# dual_vars_init = jnp.ones(sys_obj.total_num_vars)
+#
+# dual_obj_over_opti, dual_opt_result = dual_utils.optimize_dual(dual_vars_init, sys_obj)
+
+
+
 # sys_obj.update_opt_circ_params(np.concatenate((gamma, beta)))
 #
 # state = sys_obj.circuit_layer(layer_num = 0, var_tensor = sys_obj.rho_init_tensor)
 # state = sys_obj.circuit_layer(layer_num = 1, var_tensor = state)
 #
 # print(np.linalg.norm(state.tensor - sys_obj.rho_init_tensor.tensor))
+
+# dual fails for
+# p = 0, d = 4, m = 6
+# gamma = array([0.80018109, 0.80018109, 1.43863243, 1.43863243])
+# beta = array([0.99118603, 1.25685429])

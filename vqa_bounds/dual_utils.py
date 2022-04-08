@@ -74,6 +74,7 @@ def unjaxify_grad(func):
     return wrap
 
 def optimize_dual(dual_vars_init: np.array, sys_obj: meta_system.System,
+                  a_bound: float, sigma_bound: float, use_bounds,
                   opt_method: str = "L-BFGS-B"):
 
     opt_args = (sys_obj,)
@@ -93,7 +94,14 @@ def optimize_dual(dual_vars_init: np.array, sys_obj: meta_system.System,
     # len_vars = dual_obj.len_vars
     # len_vars = vars_init.shape[0]
 
-    # bnds = scipy.optimize.Bounds(lb = [1e-2] * p + [-sigma_bound] * (len_vars - p), ub = [np.inf] * p + [-sigma_bound] * (len_vars - p))
+    if use_bounds:
+
+        bnds = scipy.optimize.Bounds(lb = [a_bound] * sys_obj.d + [-sigma_bound] * (sys_obj.total_num_vars - sys_obj.d),
+                                     ub = [np.inf] * sys_obj.d + [sigma_bound] * (sys_obj.total_num_vars - sys_obj.d))
+
+    else:
+
+        bnds = scipy.optimize.Bounds(lb = -np.inf, ub = np.inf)
 
     if opt_method == "L-BFGS-B":
 
@@ -111,6 +119,7 @@ def optimize_dual(dual_vars_init: np.array, sys_obj: meta_system.System,
                                 'maxiter': 300,
                                 'iprint': 10,
                                 'maxls': 20},
+                                bounds = bnds,
                                 callback = callback_func)
 
     elif opt_method == "BFGS":
