@@ -74,7 +74,7 @@ def unjaxify_grad(func):
     return wrap
 
 def optimize_dual(dual_vars_init: np.array, sys_obj: meta_system.System,
-                  a_bound: float, sigma_bound: float, use_bounds,
+                  num_iters: int, a_bound: float, sigma_bound: float, use_bounds,
                   opt_method: str = "L-BFGS-B"):
 
     opt_args = (sys_obj,)
@@ -116,7 +116,7 @@ def optimize_dual(dual_vars_init: np.array, sys_obj: meta_system.System,
                                 'gtol': 1e-05,
                                 'eps': 1e-08,
                                 'maxfun': 15000,
-                                'maxiter': 300,
+                                'maxiter': num_iters,
                                 'iprint': 10,
                                 'maxls': 20},
                                 bounds = bnds,

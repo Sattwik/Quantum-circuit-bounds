@@ -44,13 +44,16 @@ circ_obj_over_opti, circ_opt_result = circuit_utils.optimize_circuit(circuit_par
 sys_obj_local.update_opt_circ_params(circ_opt_result.x)
 
 dual_vars_init = jnp.zeros(sys_obj.total_num_vars)
-dual_vars_init_local = jnp.ones(sys_obj_local.total_num_vars)
+dual_vars_init_local = jnp.zeros(sys_obj_local.total_num_vars)
 
 a_bound = -5
 sigma_bound = 100
 
-dual_obj_over_opti, dual_opt_result = dual_utils.optimize_dual(dual_vars_init, sys_obj, a_bound, sigma_bound, use_bounds = True)
-dual_obj_over_opti_local, dual_opt_result_local = dual_utils.optimize_dual(dual_vars_init_local, sys_obj_local, a_bound, sigma_bound, use_bounds = True)
+num_iters = 300
+dual_obj_over_opti, dual_opt_result = dual_utils.optimize_dual(dual_vars_init, sys_obj, num_iters, a_bound, sigma_bound, use_bounds = True)
+
+num_iters = 200
+dual_obj_over_opti_local, dual_opt_result_local = dual_utils.optimize_dual(dual_vars_init_local, sys_obj_local, num_iters, a_bound, sigma_bound, use_bounds = True)
 
 end = time.time()
 
