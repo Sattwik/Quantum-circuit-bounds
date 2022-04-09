@@ -119,7 +119,7 @@ data_list = [m, d, p,
 data_file_name = "maxcut1D-" + str(m) + "-" + str(d) + "-" + str(p) + "-" + \
                  str(cliargs.graph_num) + "-" + str(cliargs.init_num) + ".pkl"
 
-with open(os.path.join(result_save_path, data_file_name), "wb") as f_for_pkl:
+with open(os.path.join(cliargs.result_save_path, data_file_name), "wb") as f_for_pkl:
     pickle.dump(data_list, f_for_pkl)
 
 
