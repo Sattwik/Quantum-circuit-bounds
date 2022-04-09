@@ -56,7 +56,8 @@ def submit_simulation(N, d, p, graph_num, init_num, result_save_path):
     if not os.path.exists(result_save_path):
         os.makedirs(result_save_path)
 
-    with open(os.path.join(result_save_path, "stdout-" + ib_ind + '-' + sample_num + ".txt"), "w+") as f_for_stdout:
+    with open(os.path.join(result_save_path, "maxcut1D-" + N + "-" + d + "-" + p + "-" + \
+                     graph_num + "-" + init_num + ".txt"), "w+") as f_for_stdout:
         subprocess.run(params, stdout = f_for_stdout, stderr = subprocess.STDOUT)
 
 N = 6
