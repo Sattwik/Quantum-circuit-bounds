@@ -30,15 +30,16 @@ parser.add_argument('--d', type = str)
 parser.add_argument('--p', type = str)
 parser.add_argument('--graph_num', type = str)
 parser.add_argument('--init_num', type = str)
+parser.add_argument('--result_save_path', type = str)
 cliargs = parser.parse_args()
 
-m = cliargs.N
+m = int(cliargs.N)
 lattice = graphs.define_lattice((m,))
 
 graph = graphs.create_random_connectivity(lattice)
 
-d = cliargs.d
-p = cliargs.p
+d = int(cliargs.d)
+p = float(cliargs.p)
 
 # Calculate circuit params
 
@@ -47,6 +48,13 @@ sys_obj_local = maxcut1Dlocal.MaxCut1DLocal(graph, lattice, d, p)
 
 gamma_init = np.ones(d)
 beta_init = np.ones(d//2)
+
+if int(cliargs.init_num) == 0:
+    gamma_init = np.ones(d) * 1.1
+    beta_init = np.ones(d//2) * 1.1
+else:
+    gamma_init = np.random.uniform(low = 0, high = 2 * np.pi, size = d)
+    beta_init = np.random.uniform(low = 0, high = np.pi, size = d//2)
 
 start = time.time()
 
@@ -65,10 +73,11 @@ dual_vars_init_local = jnp.zeros(sys_obj_local.total_num_vars)
 
 a_bound = -5
 sigma_bound = 100
-num_iters = 300
+num_iters = 400
 
 dual_obj_over_opti, dual_opt_result = dual_utils.optimize_dual(dual_vars_init, sys_obj, num_iters, a_bound, sigma_bound, use_bounds = True)
 
+num_iters = 300
 dual_obj_over_opti_local, dual_opt_result_local = dual_utils.optimize_dual(dual_vars_init_local, sys_obj_local, num_iters, a_bound, sigma_bound, use_bounds = True)
 
 end = time.time()
@@ -98,33 +107,16 @@ if noisy_bound_local <= noisy_sol:
 else:
     print("FAIL :(")
 
-#------ Gathering data  ------#
+#------ Gathering and saving data  ------#
 
 data_list = [m, d, p,
              actual_sol, clean_sol, noisy_sol, noisy_bound, noisy_bound_local,
              a_bound, sigma_bound, num_iters,
-             circ_opt_result.x,
-             dual_obj_over_opti, dual_opt_result.x,
-             dual_obj_over_opti_local, dual_opt_result_local.x]
+             circ_opt_result.x, graph,
+             dual_obj_over_opti, dual_obj_over_opti_local]
 
 data_file_name = "maxcut1D-" + str(m) + "-" + str(d) + "-" + str(p) + "-" + \
                  str(cliargs.graph_num) + "-" + str(cliargs.init_num) + ".pkl"
-
-#------ Making result folder  ------#
-today = date.today()
-mmdd =  today.strftime("%m%d%y")[:4]
-
-data_folder_path = os.path.join('./../vqa_data', mmdd)
-
-if not os.path.exists(data_folder_path):
-    os.makedirs(data_folder_path)
-
-now = datetime.now().strftime("%Y%m%d-%H%M%S")
-
-result_save_path = os.path.join(data_folder_path, now)
-
-if not os.path.exists(result_save_path):
-    os.makedirs(result_save_path)
 
 with open(os.path.join(result_save_path, data_file_name), "wb") as f_for_pkl:
     pickle.dump(data_list, f_for_pkl)
