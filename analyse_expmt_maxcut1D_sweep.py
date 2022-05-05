@@ -25,38 +25,68 @@ CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
                   '#999999', '#e41a1c', '#dede00']
 
 data_path = "./../vqa_data/0409/20220409-162634/"
-data_file_name = "maxcut1D_exact.pkl"
 
-p_noise_lists = []
-actual_sol_list = []
-noisy_sol_list = []
-noisy_bound_list = []
-graphs_list = []
 
-with open(os.path.join(data_path, data_file_name), "rb") as f_for_pkl:
 
-    # m, n, d, p_noise_list,\
-    # actual_sol, clean_sol, noisy_sol, noisy_bound = pickle.load(f_for_pkl)
+num_random_graphs = 10
+num_init_states = 1
+num_noise_probs = 9
 
-    m, d, p_noise_list,\
-        actual_sol, noisy_sol, noisy_bound,\
-        graphs_list = pickle.load(f_for_pkl)
+p_noise_list = [0.001, 0.1, 0.2, 0.35, 0.5, 0.65, 0.8, 0.95, 1.00]
 
-num_random_graphs = actual_sol.shape[0]
-num_init_states = actual_sol.shape[1]
-num_noise_probs = noisy_sol.shape[0]
+actual_sol_list = np.zeros((num_noise_probs, num_random_graphs, num_init_states), dtype = float)
+clean_sol_list = np.zeros((num_noise_probs, num_random_graphs, num_init_states), dtype = float)
+noisy_sol_list = np.zeros((num_noise_probs, num_random_graphs, num_init_states), dtype = float)
+noisy_bound_list = np.zeros((num_noise_probs, num_random_graphs, num_init_states), dtype = float)
+noisy_bound_local_list = np.zeros((num_noise_probs, num_random_graphs, num_init_states), dtype = float)
 
-approx_ratio_noisy = noisy_sol/actual_sol
-approx_ratio_noisy_bound = noisy_bound/actual_sol
+for root, sub_dirs, files in os.walk(data_path):
+
+    for fname in files:
+
+        if fname.endswith(".pkl"):
+
+            with open(os.path.join(root, fname), 'rb') as result_file:
+
+                print("Reading file: " + os.path.join(root, fname))
+
+                m, d, p,\
+                actual_sol, clean_sol, noisy_sol, noisy_bound, noisy_bound_local,\
+                a_bound, sigma_bound, num_iters,\
+                opt_gamma_beta, graph,\
+                dual_obj_over_opti, dual_obj_over_opti_local = pickle.load(result_file)
+
+                graph_num = int(fname[-7])
+                init_num = int(fname[-5])
+
+                assert np.imag(noisy_sol)  <= 1e-14
+                assert np.imag(noisy_bound)  <= 1e-14
+                assert np.imag(noisy_bound_local) <= 1e-14
+
+                actual_sol_list[p_noise_list.index(p), graph_num, init_num] = actual_sol
+                clean_sol_list[p_noise_list.index(p), graph_num, init_num] = clean_sol
+                noisy_sol_list[p_noise_list.index(p), graph_num, init_num] = np.real(noisy_sol)
+                noisy_bound_list[p_noise_list.index(p), graph_num, init_num] = np.real(noisy_bound)
+                noisy_bound_local_list[p_noise_list.index(p), graph_num, init_num] = np.real(noisy_bound_local)
+
+
+
+approx_ratio_noisy = noisy_sol_list/actual_sol_list
+approx_ratio_noisy_bound = noisy_bound_list/actual_sol_list
+approx_ratio_noisy_bound_local = noisy_bound_local_list/actual_sol_list
 
 approx_ratio_noisy = np.reshape(approx_ratio_noisy, (num_noise_probs, num_random_graphs * num_init_states))
 approx_ratio_noisy_bound = np.reshape(approx_ratio_noisy_bound, (num_noise_probs, num_random_graphs * num_init_states))
+approx_ratio_noisy_bound_local = np.reshape(approx_ratio_noisy_bound_local, (num_noise_probs, num_random_graphs * num_init_states))
 
 mean_approx_noisy = np.mean(approx_ratio_noisy, axis = 1)
 std_approx_noisy = np.std(approx_ratio_noisy, axis = 1)
 
 mean_approx_noisy_bound = np.mean(approx_ratio_noisy_bound, axis = 1)
 std_approx_noisy_bound = np.std(approx_ratio_noisy_bound, axis = 1)
+
+mean_approx_noisy_bound_local = np.mean(approx_ratio_noisy_bound_local, axis = 1)
+std_approx_noisy_bound_local = np.std(approx_ratio_noisy_bound_local, axis = 1)
 
 # ---- Plotting the approximation ratios ----- #
 
@@ -68,6 +98,9 @@ ax.fill_between(p_noise_list, (mean_approx_noisy - std_approx_noisy), (mean_appr
 
 ax.plot(p_noise_list, mean_approx_noisy_bound, marker = '.', color = CB_color_cycle[0], label = r'Bound')
 ax.fill_between(p_noise_list, (mean_approx_noisy_bound - std_approx_noisy_bound), (mean_approx_noisy_bound + std_approx_noisy_bound), color = CB_color_cycle[0], alpha = 0.1)
+
+ax.plot(p_noise_list, mean_approx_noisy_bound_local, marker = 'D', color = CB_color_cycle[5], label = r'Bound (local ansatz)')
+ax.fill_between(p_noise_list, (mean_approx_noisy_bound_local - std_approx_noisy_bound_local), (mean_approx_noisy_bound_local + std_approx_noisy_bound_local), color = CB_color_cycle[5], alpha = 0.1)
 
 ax.axhline(y = 0.85, ls = '--', lw = 1, color = 'gray')
 
@@ -118,10 +151,15 @@ plt.savefig(os.path.join(data_path, figname), format = 'pdf')
 
 
 # ---- Plotting the duality gap ----- #
-duality_gap = noisy_sol - noisy_bound
+duality_gap = noisy_sol_list - noisy_bound_list
 duality_gap = np.reshape(duality_gap, (num_noise_probs, num_random_graphs * num_init_states))
 mean_duality_gap = np.mean(duality_gap, axis = 1)
 std_duality_gap = np.std(duality_gap, axis = 1)
+
+duality_gap_local = noisy_sol_list - noisy_bound_local_list
+duality_gap_local = np.reshape(duality_gap_local, (num_noise_probs, num_random_graphs * num_init_states))
+mean_duality_gap_local = np.mean(duality_gap_local, axis = 1)
+std_duality_gap_local = np.std(duality_gap_local, axis = 1)
 
 # fig = plt.figure()
 # num_bins = 30
