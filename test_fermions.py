@@ -22,7 +22,7 @@ from fermions import gaussian, fermion_test_utils
 
 # TEST1: unitary on hamiltonian
 
-N = 4
+N = 5
 seed = 69
 
 key = jax.random.PRNGKey(seed)
@@ -35,6 +35,7 @@ parent_h = parent_h/jnp.sqrt(N)
 Ome = fermion_test_utils.Omega(N)
 Gamma_mjr, f, V, key = gaussian.random_normal_corr_majorana(N, jnp.array(Ome), key)
 
-print(fermion_test_utils.test_unitary_on_hamiltonian(np.array(s), np.array(h)))
-print(fermion_test_utils.test_energy(np.array(Gamma_mjr), np.array(f), np.array(V), np.array(h)))
-print(fermion_test_utils.test_trace_fgs(np.array(parent_h), N))
+print("Unitary on Hamiltonian test = ", fermion_test_utils.test_unitary_on_hamiltonian(np.array(s), np.array(h)))
+print("Energy test = ", fermion_test_utils.test_energy(np.array(Gamma_mjr), np.array(f), np.array(V), np.array(h)))
+print("FGS trace test = ", fermion_test_utils.test_trace_fgs(np.array(parent_h), N))
+print("Noise on hamiltonian test = ", fermion_test_utils.test_noise_on_hamiltonian(np.array(s), 0.5, N))

@@ -78,7 +78,7 @@ def energy(Gamma_mjr: jnp.array, h: jnp.array):
     return -1j * jnp.trace(jnp.matmul(h, Gamma_mjr))
 
 #--------------- Primal methods ---------------#
-def trace_fgs(parent_h: jnp.array, N: int):
+def trace_fgstate(parent_h: jnp.array, N: int):
 
     """
     Parameters
@@ -98,8 +98,7 @@ def trace_fgs(parent_h: jnp.array, N: int):
     return jnp.prod(jnp.exp(positive_eigs) + jnp.exp(-positive_eigs))
 
 #--------------- Dual methods ---------------#
-def unitary_on_hamiltonian(s: jnp.array, h: jnp.array):
-
+def unitary_on_fghamiltonian(s: jnp.array, h: jnp.array):
     """
     Parameters
     ----------
@@ -118,8 +117,7 @@ def unitary_on_hamiltonian(s: jnp.array, h: jnp.array):
 
     return jnp.matmul(jnp.matmul(exp_p2h, s), exp_m2h)
 
-def noise_on_hamiltonian(s: jnp.array, p: float, N: int):
-
+def noise_on_fghamiltonian(s: jnp.array, p: float, N: int):
     """
     Parameters
     ----------
@@ -135,9 +133,35 @@ def noise_on_hamiltonian(s: jnp.array, p: float, N: int):
     s_prime = s
 
     for k in range(N):
+        s_prime_zeroed_out = s_prime.at[k, :].set(jnp.zeros(2 * N))
+        s_prime_zeroed_out = s_prime_zeroed_out.at[:, k].set(jnp.zeros(2 * N))
+        s_prime_zeroed_out = s_prime_zeroed_out.at[k + N, :].set(jnp.zeros(2 * N))
+        s_prime_zeroed_out = s_prime_zeroed_out.at[:, k + N].set(jnp.zeros(2 * N))
 
-        s_prime_zeroed_out = s_prime.at[k, :].set(jnp.zeros(N))
-        s_prime_zeroed_out = s_prime_zeroed_out.at[:, k].set(jnp.zeros(N))
+        s_prime = (1 - p) * s_prime + p * (s_prime_zeroed_out)
+
+    return s_prime
+
+def noise_on_fgstate(s: jnp.array, p: float, N: int):
+    """
+    Parameters
+    ----------
+    s: Hamiltonian (from dual variable) to act on (Majorana representation)
+    p: noise probability
+    N: number of fermionic modes
+
+    Returns
+    -------
+    Majorana rep after depol. noise on individual fermions
+    """
+
+    s_prime = s
+
+    for k in range(N):
+        s_prime_zeroed_out = s_prime.at[k, :].set(jnp.zeros(2 * N))
+        s_prime_zeroed_out = s_prime_zeroed_out.at[:, k].set(jnp.zeros(2 * N))
+        s_prime_zeroed_out = s_prime_zeroed_out.at[k + N, :].set(jnp.zeros(2 * N))
+        s_prime_zeroed_out = s_prime_zeroed_out.at[:, k + N].set(jnp.zeros(2 * N))
 
         s_prime = (1 - p) * s_prime + p * (s_prime_zeroed_out)
 
