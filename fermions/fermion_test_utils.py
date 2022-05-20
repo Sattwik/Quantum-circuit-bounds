@@ -20,6 +20,9 @@ from fermions import gaussian
 def anticommutator(a, b):
     return a * b + b * a
 
+def commutator(a, b):
+    return a * b - b * a
+
 # lists of operators
 def Is(i): return [qutip.qeye(2) for j in range(0, i)]
 def I(N): return qutip.tensor(Is(N))
@@ -82,6 +85,19 @@ def rotate_cr_ann_ops(U, N):
             beta[i] += U[i, j] * alpha[j]
 
     return beta
+
+def rotate_majorana_ops(O, N):
+    x_list = [x(N, n) for n in range(0, N)]
+    p_list = [p(N, n) for n in range(0, N)]
+    r_list = x_list + p_list
+
+    s_list = [0.0 + 0.0j] * 2 * N
+
+    for i in range(2 * N):
+        for j in range(2 * N):
+            s_list[i] += O[i, j] * r_list[j]
+
+    return s_list
 
 #--------------- Gates and operations ---------------#
 def fswap_gate(idx: int, N: int) -> qutip.Qobj:
@@ -215,6 +231,82 @@ def test_trace_fgs(parent_h: np.array, N: int):
     trace_majorana = gaussian.trace_fgstate(jnp.array(parent_h), N)
 
     return trace_full - trace_majorana, trace_full, trace_majorana
+
+def test_covariance_def(Gamma_mjr: np.array, f:np.array, O: np.array, N: int):
+    gamma = gaussian.covariance_from_corr_major(jnp.array(Gamma_mjr), N)
+    gamma = O @ np.array(gamma) @ O.T
+
+    gamma_prime = np.zeros((2*N, 2*N), dtype = complex)
+    rho_beta = qutip.tensor([diagonal_2x2_dm(f[n]) for n in range(N)])
+    x_list = [x(N, n) for n in range(0, N)]
+    p_list = [p(N, n) for n in range(0, N)]
+    r_list = x_list + p_list
+
+    for i in range(2*N):
+        for j in range(2*N):
+            gamma_prime[i,j] = 1j * (rho_beta * commutator(r_list[i], r_list[j])).tr()
+
+    return np.linalg.norm(np.array(gamma) - gamma_prime)
+
+def test_unitary_on_fgstate(Gamma_mjr: np.array, f: np.array, O: np.array, V: np.array, h: np.array):
+    N = len(f)
+    rho_beta = qutip.tensor([diagonal_2x2_dm(f[n]) for n in range(N)])
+    h_full = full_op_from_majorana(h, rotate = V)
+    Ut_full = (-1j * h_full).expm()
+    rhot = Ut_full * rho_beta * Ut_full.dag()
+
+    Gamma_mjr_prime_full = np.zeros((2*N, 2*N), dtype = complex)
+    x_list = [x(N, n) for n in range(0, N)]
+    p_list = [p(N, n) for n in range(0, N)]
+    r_list = x_list + p_list
+
+    for i in range(2*N):
+        for j in range(2*N):
+            Gamma_mjr_prime_full[i,j] = (rhot * r_list[i] * r_list[j]).tr()
+
+    Gamma_mjr_prime = gaussian.unitary_on_fgstate(jnp.array(Gamma_mjr), jnp.array(h))
+    Gamma_mjr_prime = O @ np.array(Gamma_mjr_prime) @ O.T
+
+    return np.linalg.norm(Gamma_mjr_prime_full - Gamma_mjr_prime)
+
+def test_corr_major_from_parenth(parent_h: np.array, N: int):
+    Gamma_mjr = np.array(gaussian.corr_major_from_parenth(jnp.array(parent_h), N))
+
+    Gamma_mjr_prime = np.zeros((2*N, 2*N), dtype = complex)
+    x_list = [x(N, n) for n in range(0, N)]
+    p_list = [p(N, n) for n in range(0, N)]
+    r_list = x_list + p_list
+
+    rho = (-full_op_from_majorana(parent_h)).expm()
+    rho = rho/rho.tr()
+
+    for i in range(2*N):
+        for j in range(2*N):
+            Gamma_mjr_prime[i,j] = (rho * r_list[i] * r_list[j]).tr()
+
+    return np.linalg.norm(Gamma_mjr - Gamma_mjr_prime)
+
+def test_noise_on_fgstate(parent_h: np.array, test_h: np.array, N: int, p: float, key: jnp.array):
+
+    rho = (-full_op_from_majorana(parent_h)).expm()
+    rho = rho/rho.tr()
+
+    rho_noisy = noise_on_full_op(rho, p, N)
+    test_exp = (rho_noisy * full_op_from_majorana(test_h)).tr()
+
+    Gamma_mjr = gaussian.corr_major_from_parenth(jnp.array(parent_h), N)
+
+    num_mc_samples = 100
+    test_exp_gaussian = 0
+    for mc_num in range(int(num_mc_samples)):
+        Gamma_mjr_noisy, key = \
+                    gaussian.noise_on_fgstate_mc_sample(Gamma_mjr, p, N, key)
+
+        test_exp_gaussian += gaussian.energy(Gamma_mjr_noisy, test_h)/num_mc_samples
+
+    return np.abs(test_exp - test_exp_gaussian), test_exp, test_exp_gaussian
+
+
 
 # def full_state_from_corr(Gamma_mjr: np.array):
 #

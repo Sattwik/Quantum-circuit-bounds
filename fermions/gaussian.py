@@ -15,7 +15,6 @@ from jax import jit, grad, vmap, value_and_grad
 from jax.example_libraries import optimizers
 
 #--------------- Tools ---------------#
-
 def random_normal_hamiltonian_majorana(N: int, key: jnp.array):
 
     """
@@ -58,12 +57,56 @@ def random_normal_corr_majorana(N: int, Ome: jnp.array, key: jnp.array):
 
     _, O = jnp.linalg.eigh(random_symm_mat)
 
-    V = jnp.matmul(O, Ome)
+    V = jnp.matmul(O.T, Ome)
 
-    return jnp.matmul(V, jnp.matmul(F, V.conj().T)), f, V, key
+    return jnp.matmul(V, jnp.matmul(F, V.conj().T)), f, V, O, key
 
+def Omega(N: int) -> jnp.array:
+    return jp.sqrt(1/2) * jnp.block(
+                [[jnp.eye(N), jnp.eye(N)],
+                 [1j * jnp.eye(N), -1j * jnp.eye(N)]])
+
+def covariance_from_corr_major(Gamma_mjr: jnp.array, N: int):
+    """
+    Parameters
+    ----------
+    Gamma_mjr: Correlation matrix of f.g.s. (majorana rep.)
+    N: number of fermionic modes
+    """
+    gamma = 1j * (2 * Gamma_mjr - jnp.identity(2 * N, dtype = complex))
+    return gamma
+
+def corr_major_from_covariance(gamma: jnp.array, N: int):
+    """
+    Parameters
+    ----------
+    gamma: Covariance matrix of f.g.s. (majorana rep.)
+    N: number of fermionic modes
+    """
+    Gamma_mjr = (jnp.identity(2 * N, dtype = complex) - 1j * gamma)/2.0
+    return Gamma_mjr
+
+def corr_from_corr_major(gamma: jnp.array, N: int):
+    """
+    Parameters
+    ----------
+    Gamma_mjr: Correlation matrix of f.g.s. (majorana rep.)
+    N: number of fermionic modes
+    """
+    Ome = Omega(N)
+    Gamma = jnp.matmul(jnp.matmul(Ome.conj().T, Gamma_mjr), Ome)
+    return Gamma
+
+def corr_major_from_parenth(h: jnp.array, N: int):
+
+    w, v = jnp.linalg.eig(-2j * h)
+    w_Gamma_mjr = jnp.diag((jnp.ones(2*N) + jnp.exp(w)) ** (-1))
+
+    Gamma_mjr = jnp.matmul(jnp.matmul(v, w_Gamma_mjr), v.conj().T)
+    return Gamma_mjr
+
+#--------------- Primal methods ---------------#
 def energy(Gamma_mjr: jnp.array, h: jnp.array):
-
     """
     Parameters
     ----------
@@ -77,7 +120,26 @@ def energy(Gamma_mjr: jnp.array, h: jnp.array):
 
     return -1j * jnp.trace(jnp.matmul(h, Gamma_mjr))
 
-#--------------- Primal methods ---------------#
+def unitary_on_fgstate(Gamma_mjr: jnp.array, h: jnp.array):
+    """
+    Parameters
+    ----------
+    Gamma_mjr: Correlation matrix of f.g.s. (majorana rep.)
+    h: Generator of Gaussian unitary in majorana rep..
+       Gaussian unitary = e^{-iH} where H = i r^{\dagger} h r.
+
+    Returns
+    -------
+    Gamma_mjr_prime: Correlation matrix of f.g.s. after unitary.
+    """
+    w, v = jnp.linalg.eig(2 * h)
+
+    exp_p2h = jnp.matmul(jnp.matmul(v, jnp.diag(jnp.exp(w))), jnp.conj(jnp.transpose(v)))
+    exp_m2h = jnp.matmul(jnp.matmul(v, jnp.diag(jnp.exp(-w))), jnp.conj(jnp.transpose(v)))
+
+    return jnp.matmul(jnp.matmul(exp_p2h, Gamma_mjr), exp_m2h)
+
+#--------------- Dual methods ---------------#
 def trace_fgstate(parent_h: jnp.array, N: int):
 
     """
@@ -97,7 +159,6 @@ def trace_fgstate(parent_h: jnp.array, N: int):
 
     return jnp.prod(jnp.exp(positive_eigs) + jnp.exp(-positive_eigs))
 
-#--------------- Dual methods ---------------#
 def unitary_on_fghamiltonian(s: jnp.array, h: jnp.array):
     """
     Parameters
@@ -142,27 +203,69 @@ def noise_on_fghamiltonian(s: jnp.array, p: float, N: int):
 
     return s_prime
 
-def noise_on_fgstate(s: jnp.array, p: float, N: int):
+def noise_on_fgstate_mc_sample(Gamma_mjr: jnp.array, p: float, N: int,
+                               key: jnp.array):
     """
     Parameters
     ----------
-    s: Hamiltonian (from dual variable) to act on (Majorana representation)
+    Gamma_mjr: Correlation matrix (Majorana rep.)
     p: noise probability
     N: number of fermionic modes
+    key: to generate random mc sample
 
     Returns
     -------
-    Majorana rep after depol. noise on individual fermions
+    Correlation matrix (Majorana rep.) of f.g.s. after one MC sampling of noise
+    (on every mode).
     """
+    gamma = covariance_from_corr_major(Gamma_mjr, N)
 
-    s_prime = s
+    # print('gamma = ', gamma)
+
+    key, subkey = jax.random.split(key)
+    mc_probs = jax.random.uniform(key, shape = (N,))
+
+    # print(mc_probs)
+
+    gamma_noisy = gamma
 
     for k in range(N):
-        s_prime_zeroed_out = s_prime.at[k, :].set(jnp.zeros(2 * N))
-        s_prime_zeroed_out = s_prime_zeroed_out.at[:, k].set(jnp.zeros(2 * N))
-        s_prime_zeroed_out = s_prime_zeroed_out.at[k + N, :].set(jnp.zeros(2 * N))
-        s_prime_zeroed_out = s_prime_zeroed_out.at[:, k + N].set(jnp.zeros(2 * N))
+        if mc_probs[k] <= p:
+            # print('k = ', k)
+            gamma_noisy = gamma_noisy.at[k, :].set(jnp.zeros(2 * N))
+            gamma_noisy = gamma_noisy.at[:, k].set(jnp.zeros(2 * N))
+            gamma_noisy = gamma_noisy.at[k + N, :].set(jnp.zeros(2 * N))
+            gamma_noisy = gamma_noisy.at[:, k + N].set(jnp.zeros(2 * N))
 
-        s_prime = (1 - p) * s_prime + p * (s_prime_zeroed_out)
+    # print('gamma_noisy = ', gamma_noisy)
 
-    return s_prime
+    Gamma_mjr_noisy = corr_major_from_covariance(gamma_noisy, N)
+
+    return Gamma_mjr_noisy, key
+
+# def noise_on_fgstate_mc_realisation(Gamma_mjr: jnp.array, key: jnp.array,
+#                                     p: float, N: int):
+#     """
+#     Parameters
+#     ----------
+#     Gamma_mjr: Correlation matrix (Majorana rep.)
+#     key: to generate random mc samples
+#     p: noise probability
+#     N: number of fermionic modes
+#
+#     Returns
+#     -------
+#     Correlation matrix (Majorana rep.) of f.g.s. after MC sim. of noise
+#     """
+#
+#     s_prime = s
+#
+#     for k in range(N):
+#         s_prime_zeroed_out = s_prime.at[k, :].set(jnp.zeros(2 * N))
+#         s_prime_zeroed_out = s_prime_zeroed_out.at[:, k].set(jnp.zeros(2 * N))
+#         s_prime_zeroed_out = s_prime_zeroed_out.at[k + N, :].set(jnp.zeros(2 * N))
+#         s_prime_zeroed_out = s_prime_zeroed_out.at[:, k + N].set(jnp.zeros(2 * N))
+#
+#         s_prime = (1 - p) * s_prime + p * (s_prime_zeroed_out)
+#
+#     return s_prime
