@@ -15,8 +15,57 @@ from jax import jit, grad, vmap, value_and_grad
 from jax.example_libraries import optimizers
 
 #--------------- Tools ---------------#
-def random_normal_hamiltonian_majorana(N: int, key: jnp.array):
+def unjaxify_obj(func):
 
+    def wrap(*args):
+        return float(func(jnp.array(args[0]), args[1]))
+
+    return wrap
+
+def unjaxify_grad(func):
+
+    def wrap(*args):
+        return np.array(func(jnp.array(args[0]), args[1]), order = 'F')
+
+    return wrap
+
+def optimize(vars_init: np.array, params, obj_fun: Callable, grad_fun: Callable,
+             num_iters: int = 50, bounds = None, opt_method: str = "L-BFGS-B"):
+
+    opt_args = (params,)
+
+    obj_over_opti = []
+
+    def callback_func(x):
+        obj_eval = unjaxify_obj(obj_fun)(x, opt_args[0])
+        obj_over_opti.append(obj_eval)
+
+    if bounds is not None:
+        bnds = bounds
+    else:
+        bnds = scipy.optimize.Bounds(lb = -np.inf, ub = np.inf)
+
+    if opt_method == "L-BFGS-B":
+        opt_result = scipy.optimize.minimize(
+                                unjaxify_obj(obj_fun),
+                                vars_init, args = opt_args,
+                                method = opt_method,
+                                jac = unjaxify_grad(grad_fun),
+                                options={'disp': None,
+                                'maxcor': 10,
+                                'ftol': 2.220446049250313e-09,
+                                'gtol': 1e-05,
+                                'eps': 1e-08,
+                                'maxfun': 15000,
+                                'maxiter': num_iters,
+                                'iprint': 10,
+                                'maxls': 20},
+                                bounds = bnds,
+                                callback = callback_func)
+
+    return np.array(obj_over_opti), opt_result
+
+def random_normal_hamiltonian_majorana(N: int, key: jnp.array):
     """
     Parameters
     ----------
@@ -33,7 +82,6 @@ def random_normal_hamiltonian_majorana(N: int, key: jnp.array):
     return h - h.T, key
 
 def random_normal_corr_majorana(N: int, Ome: jnp.array, key: jnp.array):
-
     """
     Parameters
     ----------
@@ -43,7 +91,6 @@ def random_normal_corr_majorana(N: int, Ome: jnp.array, key: jnp.array):
     -------
     Correlation matrix (2N x 2N) in Majorana representation of a random f.g.s.
     """
-
     # generate occupation probabilities
     key, subkey = jax.random.split(key)
     f = jax.random.uniform(subkey, (N,))
@@ -66,39 +113,44 @@ def Omega(N: int) -> jnp.array:
                 [[jnp.eye(N), jnp.eye(N)],
                  [1j * jnp.eye(N), -1j * jnp.eye(N)]])
 
-def covariance_from_corr_major(Gamma_mjr: jnp.array, N: int):
+def covariance_from_corr_major(Gamma_mjr: jnp.array):
     """
     Parameters
     ----------
     Gamma_mjr: Correlation matrix of f.g.s. (majorana rep.)
-    N: number of fermionic modes
     """
+    N = Gamma_mjr.shape[0]//2
     gamma = 1j * (2 * Gamma_mjr - jnp.identity(2 * N, dtype = complex))
     return gamma
 
-def corr_major_from_covariance(gamma: jnp.array, N: int):
+def corr_major_from_covariance(gamma: jnp.array):
     """
     Parameters
     ----------
     gamma: Covariance matrix of f.g.s. (majorana rep.)
-    N: number of fermionic modes
     """
+    N = gamma.shape[0]//2
     Gamma_mjr = (jnp.identity(2 * N, dtype = complex) - 1j * gamma)/2.0
     return Gamma_mjr
 
-def corr_from_corr_major(gamma: jnp.array, N: int):
+def corr_from_corr_major(gamma: jnp.array):
     """
     Parameters
     ----------
     Gamma_mjr: Correlation matrix of f.g.s. (majorana rep.)
-    N: number of fermionic modes
     """
+    N = gamma.shape[0]//2
     Ome = Omega(N)
     Gamma = jnp.matmul(jnp.matmul(Ome.conj().T, Gamma_mjr), Ome)
     return Gamma
 
-def corr_major_from_parenth(h: jnp.array, N: int):
-
+def corr_major_from_parenth(h: jnp.array):
+    """
+    Parameters
+    ----------
+    h: Parent Hamiltonian of f.g.h.
+    """
+    N = h.shape[0]//2
     w, v = jnp.linalg.eig(-2j * h)
     w_Gamma_mjr = jnp.diag((jnp.ones(2*N) + jnp.exp(w)) ** (-1))
 
@@ -117,9 +169,9 @@ def energy(Gamma_mjr: jnp.array, h: jnp.array):
     -------
     Expected energy
     """
-
     return -1j * jnp.trace(jnp.matmul(h, Gamma_mjr))
 
+@jit
 def unitary_on_fgstate(Gamma_mjr: jnp.array, h: jnp.array):
     """
     Parameters
@@ -139,20 +191,117 @@ def unitary_on_fgstate(Gamma_mjr: jnp.array, h: jnp.array):
 
     return jnp.matmul(jnp.matmul(exp_p2h, Gamma_mjr), exp_m2h)
 
-#--------------- Dual methods ---------------#
-def trace_fgstate(parent_h: jnp.array, N: int):
+@jit
+def weighted_unitary_on_fgstate(Gamma_mjr: jnp.array, h: jnp.array, theta: float):
+    """
+    Parameters
+    ----------
+    Gamma_mjr: Correlation matrix of f.g.s. (majorana rep.)
+    h: Generator of Gaussian unitary in majorana rep..
+       Gaussian unitary = e^{-iH} where H = i r^{\dagger} h r.
 
+    Returns
+    -------
+    Gamma_mjr_prime: Correlation matrix of f.g.s. after unitary.
+    """
+    w, v = jnp.linalg.eig(2 * h)
+
+    exp_p2h = jnp.matmul(jnp.matmul(v, jnp.diag(jnp.exp(theta * w))), jnp.conj(jnp.transpose(v)))
+    exp_m2h = jnp.matmul(jnp.matmul(v, jnp.diag(jnp.exp(-theta * w))), jnp.conj(jnp.transpose(v)))
+
+    return jnp.matmul(jnp.matmul(exp_p2h, Gamma_mjr), exp_m2h)
+
+class PrimalParams():
+    def __init__(self, N: int, d: int, key: jnp.array,
+                 init_state_desc: str = "all zero"):
+        self.N = N
+        self.d = d
+        self.generate_layer_hamiltonians(key)
+        self.generate_target_hamiltonian(key)
+        self.generate_init_state(init_state_desc)
+
+    def generate_layer_hamiltonians(self, key: jnp.array):
+        self.layer_hamiltonians = []
+
+        for i in range(self.d):
+            random_h, key = random_normal_hamiltonian_majorana(self.N, key)
+            self.layer_hamiltonians.append(random_h)
+
+        self.key_after_ham_gen = key
+
+    def generate_target_hamiltonian(self, key: jnp.array):
+        self.h_target, key = random_normal_hamiltonian_majorana(self.N, key)
+
+    def generate_init_state(self, init_state_desc: str = "all zero"):
+        if init_state_desc == "all zero":
+            I = jnp.identity(self.N, dtype = complex)
+
+            self.Gamma_mjr_init = 0.5 * jnp.block(
+            [[I      , 1j * I],
+             [-1j * I, I     ]])
+
+@partial(jit, static_argnums = (1,))
+def circ_obj(theta: jnp.array, params: PrimalParams):
+    Gamma_mjr = params.Gamma_mjr_init
+
+    for i in range(params.d):
+        Gamma_mjr = weighted_unitary_on_fgstate(Gamma_mjr,
+                                                params.layer_hamiltonians[i],
+                                                theta[i])
+
+    return jnp.real(energy(Gamma_mjr, params.h_target))
+
+@partial(jit, static_argnums = (1,))
+def circ_grad(theta: jnp.array, params: PrimalParams):
+    return grad(circ_obj, argnums = 0)(theta, params)
+
+def optimize_circuit(theta_init: jnp.array, params: PrimalParams):
+    bounds = scipy.optimize.Bounds(lb = 0.0, ub = 2 * np.pi)
+
+    return optimize(np.array(theta_init),
+                    params, circ_obj, circ_grad,
+                    num_iters = 50, bounds = bounds)
+#--------------- Dual methods ---------------#
+class DualParams():
+    def __init__(self, N: int, d: int, key: jnp.array,
+                 init_state_desc: str = "all zero"):
+        self.N = N
+        self.d = d
+        self.generate_layer_hamiltonians(key)
+        self.generate_target_hamiltonian(key)
+        self.generate_init_state(init_state_desc)
+
+    def generate_layer_hamiltonians(self, key: jnp.array):
+        self.layer_hamiltonians = []
+
+        for i in range(self.d):
+            random_h, key = random_normal_hamiltonian_majorana(self.N, key)
+            self.layer_hamiltonians.append(random_h)
+
+        self.key_after_ham_gen = key
+
+    def generate_target_hamiltonian(self, key: jnp.array):
+        self.h_target, key = random_normal_hamiltonian_majorana(self.N, key)
+
+    def generate_init_state(self, init_state_desc: str = "all zero"):
+        if init_state_desc == "all zero":
+            I = jnp.identity(self.N, dtype = complex)
+
+            self.Gamma_mjr_init = 0.5 * jnp.block(
+            [[I      , 1j * I],
+             [-1j * I, I     ]])
+
+def trace_fgstate(parent_h: jnp.array):
     """
     Parameters
     ----------
     parent_h: Parent Hamiltonian of the f.g.s (Majorana rep.)
-    N: number of fermionic modes
 
     Returns
     -------
     Trace of f.g.s.
     """
-
+    N = parent_h.shape[0]//2
     w, v = jnp.linalg.eigh(1j * parent_h)
 
     positive_eigs = w[N:]
@@ -170,7 +319,6 @@ def unitary_on_fghamiltonian(s: jnp.array, h: jnp.array):
     -------
     Majorana rep after unitary
     """
-
     w, v = jnp.linalg.eig(2 * h)
 
     exp_p2h = jnp.matmul(jnp.matmul(v, jnp.diag(jnp.exp(w))), jnp.conj(jnp.transpose(v)))
@@ -184,13 +332,12 @@ def noise_on_fghamiltonian(s: jnp.array, p: float, N: int):
     ----------
     s: Hamiltonian (from dual variable) to act on (Majorana representation)
     p: noise probability
-    N: number of fermionic modes
 
     Returns
     -------
     Majorana rep after depol. noise on individual fermions
     """
-
+    N = s.shape[0]//2
     s_prime = s
 
     for k in range(N):
@@ -203,14 +350,12 @@ def noise_on_fghamiltonian(s: jnp.array, p: float, N: int):
 
     return s_prime
 
-def noise_on_fgstate_mc_sample(Gamma_mjr: jnp.array, p: float, N: int,
-                               key: jnp.array):
+def noise_on_fgstate_mc_sample(Gamma_mjr: jnp.array, p: float, key: jnp.array):
     """
     Parameters
     ----------
     Gamma_mjr: Correlation matrix (Majorana rep.)
     p: noise probability
-    N: number of fermionic modes
     key: to generate random mc sample
 
     Returns
@@ -218,6 +363,7 @@ def noise_on_fgstate_mc_sample(Gamma_mjr: jnp.array, p: float, N: int,
     Correlation matrix (Majorana rep.) of f.g.s. after one MC sampling of noise
     (on every mode).
     """
+    N = Gamma_mjr.shape[0]//2
     gamma = covariance_from_corr_major(Gamma_mjr, N)
 
     # print('gamma = ', gamma)
