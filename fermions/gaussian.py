@@ -212,8 +212,16 @@ def weighted_unitary_on_fgstate(Gamma_mjr: jnp.array, h: jnp.array, theta: float
     return jnp.matmul(jnp.matmul(exp_p2h, Gamma_mjr), exp_m2h)
 
 class PrimalParams():
+    """
+    Class to store parameters required to define the primal problem.
+    """
+
     def __init__(self, N: int, d: int, key: jnp.array,
                  init_state_desc: str = "all zero"):
+        """
+        d: depth of circuit
+        init_state_desc: description of the initial state wanted
+        """
         self.N = N
         self.d = d
         self.generate_layer_hamiltonians(key)
@@ -225,12 +233,13 @@ class PrimalParams():
 
         for i in range(self.d):
             random_h, key = random_normal_hamiltonian_majorana(self.N, key)
-            self.layer_hamiltonians.append(random_h)
+            self.layer_hamiltonians.append(random_h/jnp.sqrt(self.N))
 
         self.key_after_ham_gen = key
 
     def generate_target_hamiltonian(self, key: jnp.array):
-        self.h_target, key = random_normal_hamiltonian_majorana(self.N, key)
+        h_target, key = random_normal_hamiltonian_majorana(self.N, key)
+        self.h_target = h_target/jnp.sqrt(self.N)
 
     def generate_init_state(self, init_state_desc: str = "all zero"):
         if init_state_desc == "all zero":
@@ -261,94 +270,6 @@ def optimize_circuit(theta_init: jnp.array, params: PrimalParams):
     return optimize(np.array(theta_init),
                     params, circ_obj, circ_grad,
                     num_iters = 50, bounds = bounds)
-#--------------- Dual methods ---------------#
-class DualParams():
-    def __init__(self, N: int, d: int, key: jnp.array,
-                 init_state_desc: str = "all zero"):
-        self.N = N
-        self.d = d
-        self.generate_layer_hamiltonians(key)
-        self.generate_target_hamiltonian(key)
-        self.generate_init_state(init_state_desc)
-
-    def generate_layer_hamiltonians(self, key: jnp.array):
-        self.layer_hamiltonians = []
-
-        for i in range(self.d):
-            random_h, key = random_normal_hamiltonian_majorana(self.N, key)
-            self.layer_hamiltonians.append(random_h)
-
-        self.key_after_ham_gen = key
-
-    def generate_target_hamiltonian(self, key: jnp.array):
-        self.h_target, key = random_normal_hamiltonian_majorana(self.N, key)
-
-    def generate_init_state(self, init_state_desc: str = "all zero"):
-        if init_state_desc == "all zero":
-            I = jnp.identity(self.N, dtype = complex)
-
-            self.Gamma_mjr_init = 0.5 * jnp.block(
-            [[I      , 1j * I],
-             [-1j * I, I     ]])
-
-def trace_fgstate(parent_h: jnp.array):
-    """
-    Parameters
-    ----------
-    parent_h: Parent Hamiltonian of the f.g.s (Majorana rep.)
-
-    Returns
-    -------
-    Trace of f.g.s.
-    """
-    N = parent_h.shape[0]//2
-    w, v = jnp.linalg.eigh(1j * parent_h)
-
-    positive_eigs = w[N:]
-
-    return jnp.prod(jnp.exp(positive_eigs) + jnp.exp(-positive_eigs))
-
-def unitary_on_fghamiltonian(s: jnp.array, h: jnp.array):
-    """
-    Parameters
-    ----------
-    s: Hamiltonian (from dual variable) to act on (Majorana representation)
-    h: Generator of unitary (Majorana representation)
-
-    Returns
-    -------
-    Majorana rep after unitary
-    """
-    w, v = jnp.linalg.eig(2 * h)
-
-    exp_p2h = jnp.matmul(jnp.matmul(v, jnp.diag(jnp.exp(w))), jnp.conj(jnp.transpose(v)))
-    exp_m2h = jnp.matmul(jnp.matmul(v, jnp.diag(jnp.exp(-w))), jnp.conj(jnp.transpose(v)))
-
-    return jnp.matmul(jnp.matmul(exp_p2h, s), exp_m2h)
-
-def noise_on_fghamiltonian(s: jnp.array, p: float, N: int):
-    """
-    Parameters
-    ----------
-    s: Hamiltonian (from dual variable) to act on (Majorana representation)
-    p: noise probability
-
-    Returns
-    -------
-    Majorana rep after depol. noise on individual fermions
-    """
-    N = s.shape[0]//2
-    s_prime = s
-
-    for k in range(N):
-        s_prime_zeroed_out = s_prime.at[k, :].set(jnp.zeros(2 * N))
-        s_prime_zeroed_out = s_prime_zeroed_out.at[:, k].set(jnp.zeros(2 * N))
-        s_prime_zeroed_out = s_prime_zeroed_out.at[k + N, :].set(jnp.zeros(2 * N))
-        s_prime_zeroed_out = s_prime_zeroed_out.at[:, k + N].set(jnp.zeros(2 * N))
-
-        s_prime = (1 - p) * s_prime + p * (s_prime_zeroed_out)
-
-    return s_prime
 
 def noise_on_fgstate_mc_sample(Gamma_mjr: jnp.array, p: float, key: jnp.array):
     """
@@ -388,6 +309,158 @@ def noise_on_fgstate_mc_sample(Gamma_mjr: jnp.array, p: float, key: jnp.array):
     Gamma_mjr_noisy = corr_major_from_covariance(gamma_noisy, N)
 
     return Gamma_mjr_noisy, key
+
+#--------------- Dual methods ---------------#
+class DualParams():
+    def __init__(self, circ_params: PrimalParams, theta_opt: jnp.array, p: float):
+        self.circ_params = circ_params
+        self.theta_opt = theta_opt
+        self.p = p
+
+        self.total_num_dual_vars = self.circ_params.d + \
+        (2*self.circ_params.N - 1) * self.circ_params.N * self.circ_params.d
+
+def unvec_and_process_dual_vars(dual_vars: jnp.array, d: int, N: int):
+    utri_indices = jnp.triu_indices(2*N, 1)
+    ltri_indices = (utri_indices[1], utri_indices[0])
+
+    lambda_list = []
+    sigma_list = []
+
+    a_vars = dual_vars.at[:d].get()
+    lambdas = jnp.log(1 + jnp.exp(a_vars))
+
+    dual_vars_split = jnp.split(dual_vars.at[d:].get(), d)
+
+    for i in range(d):
+        sigma = jnp.zeros((2 * N, 2 * N))
+        sigma = sigma.at[utri_indices].set(dual_vars_split[i])
+        sigma = sigma.at[ltri_indices].set(-dual_vars_split[i])
+        sigma_list.append(sigma)
+
+    return lambdas, sigma_list
+
+def noisy_dual_layer(h_layer: jnp.array, sigma_layer: jnp.array, p: float):
+    """
+    h_layer: Generating Hamiltonian (majorana rep.) of the unitary layer of the
+    circuit. Intended to be already scaled by circuit params.
+    """
+    sigma = noise_on_fghamiltonian(sigma_layer, p)
+    sigma = unitary_on_fghamiltonian(sigma, -h_layer) # -ve because dual
+
+    return sigma
+
+@partial(jit, static_argnums = (1,))
+def dual_obj(dual_vars: jnp.array, dual_params: DualParams):
+    N = dual_params.circ_params.N
+    d = dual_params.circ_params.d
+    h_target = dual_params.circ_params.h_target
+    layer_hamiltonians = dual_params.circ_params.layer_hamiltonians
+    theta_opt = dual_params.theta_opt
+    p = dual_params.p
+    Gamma_mjr_init = dual_params.circ_params.Gamma_mjr_init
+
+    lambdas, sigma_list = unvec_and_process_dual_vars(dual_vars, d, N)
+
+    cost = 0
+    # log Tr exp terms
+    for i in range(d):
+        if i == d-1:
+            hi = h_target + sigma_list[i]
+        else:
+            hi = sigma_list[i] - \
+                 noisy_dual_layer(theta_opt[i+1] * layer_hamiltonians[i+1],
+                                  sigma_list[i+1], p)
+
+        cost += -lambdas[i] * jnp.log(trace_fgstate(-hi/lambdas[i]))
+
+    # init. state term
+    epsilon_1_dag_sigma1 = \
+    noisy_dual_layer(theta_opt[0] * layer_hamiltonians[0], sigma_list[0], p)
+
+    cost += -energy(Gamma_mjr_init, epsilon_1_dag_sigma1)
+
+    # entropy term
+    q = 1 - p
+    q_powers = jnp.array([q**i for i in range(d)])
+
+    entropy_bounds = N * p * jnp.log(2) * \
+             jnp.array([jnp.sum(q_powers.at[:i+1].get()) for i in range(d)])
+
+    cost += jnp.dot(lambdas, entropy_bounds)
+
+    return -jnp.real(cost)
+
+@partial(jit, static_argnums = (1,))
+def dual_grad(dual_vars: jnp.array, dual_params: DualParams):
+    return grad(dual_obj, argnums = 0)(dual_vars, dual_params)
+
+def optimize_dual(dual_vars_init: jnp.array, dual_params: DualParams):
+
+    return optimize(np.array(dual_vars_init),
+                    dual_params, dual_obj, dual_grad,
+                    num_iters = 50, bounds = None)
+
+def trace_fgstate(parent_h: jnp.array):
+    """
+    Parameters
+    ----------
+    parent_h: Parent Hamiltonian of the f.g.s (Majorana rep.)
+
+    Returns
+    -------
+    Trace of f.g.s.
+    """
+    N = parent_h.shape[0]//2
+    w, v = jnp.linalg.eigh(1j * parent_h)
+
+    positive_eigs = w[N:]
+
+    return jnp.prod(jnp.exp(positive_eigs) + jnp.exp(-positive_eigs))
+
+def unitary_on_fghamiltonian(s: jnp.array, h: jnp.array):
+    """
+    Parameters
+    ----------
+    s: Hamiltonian (from dual variable) to act on (Majorana representation)
+    h: Generator of unitary (Majorana representation)
+
+    Returns
+    -------
+    Majorana rep after unitary
+    """
+    w, v = jnp.linalg.eig(2 * h)
+
+    exp_p2h = jnp.matmul(jnp.matmul(v, jnp.diag(jnp.exp(w))), jnp.conj(jnp.transpose(v)))
+    exp_m2h = jnp.matmul(jnp.matmul(v, jnp.diag(jnp.exp(-w))), jnp.conj(jnp.transpose(v)))
+
+    return jnp.matmul(jnp.matmul(exp_p2h, s), exp_m2h)
+
+def noise_on_fghamiltonian(s: jnp.array, p: float):
+    """
+    Parameters
+    ----------
+    s: Hamiltonian (from dual variable) to act on (Majorana representation)
+    p: noise probability
+
+    Returns
+    -------
+    Majorana rep after depol. noise on individual fermions
+    """
+    N = s.shape[0]//2
+    s_prime = s
+
+    for k in range(N):
+        s_prime_zeroed_out = s_prime.at[k, :].set(jnp.zeros(2 * N))
+        s_prime_zeroed_out = s_prime_zeroed_out.at[:, k].set(jnp.zeros(2 * N))
+        s_prime_zeroed_out = s_prime_zeroed_out.at[k + N, :].set(jnp.zeros(2 * N))
+        s_prime_zeroed_out = s_prime_zeroed_out.at[:, k + N].set(jnp.zeros(2 * N))
+
+        s_prime = (1 - p) * s_prime + p * (s_prime_zeroed_out)
+
+    return s_prime
+
+
 
 # def noise_on_fgstate_mc_realisation(Gamma_mjr: jnp.array, key: jnp.array,
 #                                     p: float, N: int):
