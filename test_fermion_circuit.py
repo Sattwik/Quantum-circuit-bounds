@@ -23,8 +23,8 @@ from fermions import gaussian, fermion_test_utils
 
 rng = np.random.default_rng()
 
-N = 80
-d = 3
+N = 6
+d = 5
 seed = rng.integers(low=0, high=100, size=1)[0]
 key = jax.random.PRNGKey(seed)
 
@@ -47,13 +47,18 @@ print("gs energy = ", actual_sol)
 clean_sol = circ_obj_over_opti[-1]
 print("clean sol = ", clean_sol)
 
-p = 0.001
+p = 0.5
 dual_params = gaussian.DualParams(circ_params, jnp.array(circ_opt_result.x), p)
 
-key, subkey = jax.random.split(key)
-dual_vars_init = jax.random.uniform(key, shape = (dual_params.total_num_dual_vars,))
 
-dual_obj_over_opti, dual_opt_result = gaussian.optimize_dual(dual_vars_init, dual_params)
+key, subkey = jax.random.split(key)
+dual_vars_init = jax.random.uniform(key, shape = (dual_params.total_num_dual_vars,))/N
+sigma_bound = 0.1/N
+lambda_bound = 100.0
+dual_bnds = scipy.optimize.Bounds(lb = [-lambda_bound] * d + [-sigma_bound] * (dual_params.total_num_dual_vars - d),
+                                  ub = [lambda_bound]  * d + [sigma_bound]  * (dual_params.total_num_dual_vars - d))
+
+dual_obj_over_opti, dual_opt_result = gaussian.optimize_dual(dual_vars_init, dual_params, dual_bnds)
 
 noisy_bound = -dual_obj_over_opti[-1]
 print("noisy bound = ", noisy_bound)

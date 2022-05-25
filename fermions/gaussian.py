@@ -233,13 +233,13 @@ class PrimalParams():
 
         for i in range(self.d):
             random_h, key = random_normal_hamiltonian_majorana(self.N, key)
-            self.layer_hamiltonians.append(random_h/jnp.sqrt(self.N))
+            self.layer_hamiltonians.append(random_h/self.N)
 
         self.key_after_ham_gen = key
 
     def generate_target_hamiltonian(self, key: jnp.array):
         h_target, key = random_normal_hamiltonian_majorana(self.N, key)
-        self.h_target = h_target/jnp.sqrt(self.N)
+        self.h_target = h_target/self.N
 
     def generate_init_state(self, init_state_desc: str = "all zero"):
         if init_state_desc == "all zero":
@@ -320,12 +320,12 @@ class DualParams():
         self.total_num_dual_vars = self.circ_params.d + \
         (2*self.circ_params.N - 1) * self.circ_params.N * self.circ_params.d
 
+@partial(jit, static_argnums = (1,2))
 def unvec_and_process_dual_vars(dual_vars: jnp.array, d: int, N: int):
     utri_indices = jnp.triu_indices(2*N, 1)
     ltri_indices = (utri_indices[1], utri_indices[0])
 
-    lambda_list = []
-    sigma_list = []
+    sigmas = jnp.zeros((2 * N, 2 * N, d))
 
     a_vars = dual_vars.at[:d].get()
     lambdas = jnp.log(1 + jnp.exp(a_vars))
@@ -333,13 +333,14 @@ def unvec_and_process_dual_vars(dual_vars: jnp.array, d: int, N: int):
     dual_vars_split = jnp.split(dual_vars.at[d:].get(), d)
 
     for i in range(d):
-        sigma = jnp.zeros((2 * N, 2 * N))
-        sigma = sigma.at[utri_indices].set(dual_vars_split[i])
-        sigma = sigma.at[ltri_indices].set(-dual_vars_split[i])
-        sigma_list.append(sigma)
+        sigma_layer = jnp.zeros((2*N, 2*N))
+        sigma_layer = sigma_layer.at[utri_indices].set(dual_vars_split[i])
+        sigma_layer = sigma_layer.at[ltri_indices].set(-dual_vars_split[i])
+        sigmas = sigmas.at[:,:,i].set(sigma_layer)
 
-    return lambdas, sigma_list
+    return lambdas, sigmas
 
+@partial(jit, static_argnums = (2,))
 def noisy_dual_layer(h_layer: jnp.array, sigma_layer: jnp.array, p: float):
     """
     h_layer: Generating Hamiltonian (majorana rep.) of the unitary layer of the
@@ -360,23 +361,23 @@ def dual_obj(dual_vars: jnp.array, dual_params: DualParams):
     p = dual_params.p
     Gamma_mjr_init = dual_params.circ_params.Gamma_mjr_init
 
-    lambdas, sigma_list = unvec_and_process_dual_vars(dual_vars, d, N)
+    lambdas, sigmas = unvec_and_process_dual_vars(dual_vars, d, N)
 
     cost = 0
     # log Tr exp terms
     for i in range(d):
         if i == d-1:
-            hi = h_target + sigma_list[i]
+            hi = h_target + sigmas.at[:,:,i].get()
         else:
-            hi = sigma_list[i] - \
+            hi = sigmas.at[:,:,i].get() - \
                  noisy_dual_layer(theta_opt[i+1] * layer_hamiltonians[i+1],
-                                  sigma_list[i+1], p)
+                                  sigmas.at[:,:,i+1].get(), p)
 
         cost += -lambdas[i] * jnp.log(trace_fgstate(-hi/lambdas[i]))
 
     # init. state term
     epsilon_1_dag_sigma1 = \
-    noisy_dual_layer(theta_opt[0] * layer_hamiltonians[0], sigma_list[0], p)
+    noisy_dual_layer(theta_opt[0] * layer_hamiltonians[0], sigmas.at[:,:,0].get(), p)
 
     cost += -energy(Gamma_mjr_init, epsilon_1_dag_sigma1)
 
@@ -395,12 +396,14 @@ def dual_obj(dual_vars: jnp.array, dual_params: DualParams):
 def dual_grad(dual_vars: jnp.array, dual_params: DualParams):
     return grad(dual_obj, argnums = 0)(dual_vars, dual_params)
 
-def optimize_dual(dual_vars_init: jnp.array, dual_params: DualParams):
+def optimize_dual(dual_vars_init: jnp.array, dual_params: DualParams,
+                  bnds: scipy.optimize.Bounds = None):
 
     return optimize(np.array(dual_vars_init),
                     dual_params, dual_obj, dual_grad,
-                    num_iters = 50, bounds = None)
+                    num_iters = 50, bounds = bnds)
 
+@jit
 def trace_fgstate(parent_h: jnp.array):
     """
     Parameters
@@ -418,6 +421,7 @@ def trace_fgstate(parent_h: jnp.array):
 
     return jnp.prod(jnp.exp(positive_eigs) + jnp.exp(-positive_eigs))
 
+@jit
 def unitary_on_fghamiltonian(s: jnp.array, h: jnp.array):
     """
     Parameters
@@ -436,6 +440,7 @@ def unitary_on_fghamiltonian(s: jnp.array, h: jnp.array):
 
     return jnp.matmul(jnp.matmul(exp_p2h, s), exp_m2h)
 
+@partial(jit, static_argnums = (1,))
 def noise_on_fghamiltonian(s: jnp.array, p: float):
     """
     Parameters
