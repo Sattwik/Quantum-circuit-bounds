@@ -41,3 +41,4 @@ print("Covariance def. test = ", fermion_test_utils.test_covariance_def(np.array
 print("Unitary on fgs test = ", fermion_test_utils.test_unitary_on_fgstate(np.array(Gamma_mjr), np.array(f), np.array(O), np.array(V), np.array(h)))
 print("Corr major from parenth test = ", fermion_test_utils.test_corr_major_from_parenth(np.array(h), N))
 print("Noise on fgstate test = ", fermion_test_utils.test_noise_on_fgstate(np.array(s), np.array(h), N, 1.0, key))
+print("Noise on fgstate test = ", fermion_test_utils.test_noise_on_fgstate(np.array(s), np.array(h), N, 0.0, key))

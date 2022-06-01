@@ -306,6 +306,78 @@ def test_noise_on_fgstate(parent_h: np.array, test_h: np.array, N: int, p: float
 
     return np.abs(test_exp - test_exp_gaussian), test_exp, test_exp_gaussian
 
+def primal_noisy_circuit_full(dual_params: gaussian.DualParams):
+
+    N = dual_params.circ_params.N
+    d = dual_params.circ_params.d
+    p = dual_params.p
+
+    rho_init = qutip.tensor([diagonal_2x2_dm(0) for n in range(N)])
+
+    rho = rho_init
+    for i in range(d):
+        H_layer_full = full_op_from_majorana(np.array(dual_params.circ_params.layer_hamiltonians[i]))
+        U_layer_full = (-1j * float(dual_params.theta_opt[i]) * H_layer_full).expm()
+        rho = U_layer_full * rho * U_layer_full.dag()
+
+        rho = noise_on_full_op(rho, p, N)
+
+    H_target_full = full_op_from_majorana(np.array(dual_params.circ_params.h_target))
+
+    return (H_target_full * rho).tr()
+
+def full_noisy_dual_layer(h_layer: np.array, sigma_layer: np.array, p: float):
+    N = h_layer.shape[0]//2
+    sigma_full = full_op_from_majorana(sigma_layer)
+    sigma_full = noise_on_full_op(sigma_full, p, N)
+
+    U_layer = (-1j * full_op_from_majorana(-h_layer)).expm()
+    sigma_full = U_layer * sigma_full * U_layer.dag()
+
+    return sigma_full
+
+def dual_full(dual_vars: jnp.array, dual_params: gaussian.DualParams):
+    N = dual_params.circ_params.N
+    d = dual_params.circ_params.d
+    h_target = dual_params.circ_params.h_target
+    layer_hamiltonians = dual_params.circ_params.layer_hamiltonians
+    theta_opt = np.array(dual_params.theta_opt)
+    p = dual_params.p
+    rho_init = qutip.tensor([diagonal_2x2_dm(0) for n in range(N)])
+
+    lambdas, sigmas = gaussian.unvec_and_process_dual_vars(dual_vars, d, N)
+    lambdas = np.array(lambdas)
+    sigmas = np.array(sigmas)
+
+    cost = 0
+    # log Tr exp terms
+    for i in range(d):
+        if i == d-1:
+            hi = np.array(h_target) + sigmas[:,:,i]
+            hi = full_op_from_majorana(hi)
+        else:
+            hi = full_op_from_majorana(sigmas[:,:,i]) - \
+                 full_noisy_dual_layer(theta_opt[i+1] * np.array(layer_hamiltonians[i+1]),
+                                  sigmas[:,:,i+1], p)
+
+        cost += -lambdas[i] * np.log((-hi/lambdas[i]).expm().tr())
+
+    # init. state term
+    epsilon_1_dag_sigma1 = \
+    full_noisy_dual_layer(theta_opt[0] * np.array(layer_hamiltonians[0]), sigmas[:,:,0], p)
+
+    cost += -(rho_init * epsilon_1_dag_sigma1).tr()
+
+    # entropy term
+    q = 1 - p
+    q_powers = np.array([q**i for i in range(d)])
+
+    entropy_bounds = N * p * np.log(2) * \
+             np.array([np.sum(q_powers[:i+1]) for i in range(d)])
+
+    cost += np.dot(lambdas, entropy_bounds)
+
+    return -dual_params.scale * np.real(cost)
 
 
 # def full_state_from_corr(Gamma_mjr: np.array):
