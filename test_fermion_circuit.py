@@ -26,7 +26,7 @@ colorama.init()
 
 rng = np.random.default_rng()
 
-N = 8
+N = 10
 d = 5
 seed = rng.integers(low=0, high=100, size=1)[0]
 key = jax.random.PRNGKey(seed)
@@ -52,7 +52,7 @@ clean_sol = circ_obj_over_opti[-1]
 print(colorama.Fore.GREEN + "clean sol = ", clean_sol)
 print(colorama.Style.RESET_ALL)
 
-p = 0.5
+p = 0.1
 scale = 1
 dual_params = gaussian.DualParams(circ_params, jnp.array(circ_opt_result.x), p,
                                   scale = scale)
@@ -68,8 +68,12 @@ dual_vars_init = jnp.ones((dual_params.total_num_dual_vars,))
 
 # obj_init = gaussian.dual_obj(dual_vars_init, dual_params)
 # print("obj init = ", obj_init)
+#
+# start = time.time()
 # grad_init = gaussian.dual_grad(dual_vars_init, dual_params)
+# end = time.time()
 # print("grad init = ", grad_init)
+# print("grad exec time (s) = ", end - start)
 
 # dual_bnds = scipy.optimize.Bounds(lb = [-lambda_bound] * d + [-sigma_bound] * (dual_params.total_num_dual_vars - d),
 #                                   ub = [lambda_bound]  * d + [sigma_bound]  * (dual_params.total_num_dual_vars - d))

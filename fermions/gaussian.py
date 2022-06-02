@@ -499,7 +499,8 @@ def unitary_on_fghamiltonian(s: jnp.array, h: jnp.array):
 
 
 def noise_on_fghamiltonian_at_index(k: int, args: Tuple):
-    s_prime, p, N = args
+    s_prime, p = args
+    N = s_prime.shape[0]//2
 
     s_prime_zeroed_out = s_prime.at[k, :].set(jnp.zeros(2 * N))
     s_prime_zeroed_out = s_prime_zeroed_out.at[:, k].set(jnp.zeros(2 * N))
@@ -508,7 +509,7 @@ def noise_on_fghamiltonian_at_index(k: int, args: Tuple):
 
     s_prime = (1 - p) * s_prime + p * (s_prime_zeroed_out)
 
-    return (s_prime, p, N)
+    return (s_prime, p)
 
 @partial(jit, static_argnums = (1,))
 def noise_on_fghamiltonian(s: jnp.array, p: float):
@@ -525,7 +526,8 @@ def noise_on_fghamiltonian(s: jnp.array, p: float):
     N = s.shape[0]//2
     s_prime = s
 
-    s_prime = lax.fori_loop(0, N, noise_on_fghamiltonian_at_index, s_prime)
+    init_args = (s_prime, p)
+    s_prime, _ = jax.lax.fori_loop(0, N, noise_on_fghamiltonian_at_index, init_args)
 
     # for k in range(N):
     #     s_prime_zeroed_out = s_prime.at[k, :].set(jnp.zeros(2 * N))
