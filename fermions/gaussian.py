@@ -16,14 +16,12 @@ from jax.example_libraries import optimizers
 
 #--------------- Tools ---------------#
 def unjaxify_obj(func):
-
     def wrap(*args):
         return float(func(jnp.array(args[0]), args[1]))
 
     return wrap
 
 def unjaxify_grad(func):
-
     def wrap(*args):
         return np.array(func(jnp.array(args[0]), args[1]), order = 'F')
 
@@ -261,6 +259,20 @@ class PrimalParams():
             [[I      , 1j * I],
              [-1j * I, I     ]])
 
+def parenth_from_circuit(circ_params: PrimalParams):
+    Ome = Omega(circ_params.N)
+    epsilon = jnp.arange(start = circ_params.N, stop = 0, step = -1)
+    D = jnp.diag(jnp.concatenate((-epsilon, epsilon)))
+    d_parent = -1j * jnp.matmul(Ome, jnp.matmul(D, Ome.conj().T))
+
+    h_parent = d_parent
+
+    for i in range(circ_params.d):
+        h_parent = unitary_on_fghamiltonian(h_parent,
+                                            -circ_params.layer_hamiltonians[i])
+
+    return h_parent
+
 @partial(jit, static_argnums = (1,))
 def circ_obj(theta: jnp.array, params: PrimalParams):
     Gamma_mjr = params.Gamma_mjr_init
@@ -452,9 +464,9 @@ def adam_optimize_dual(dual_vars_init: jnp.array, dual_params: DualParams,
     value_array = jnp.zeros(num_steps)
 
     for t in range(num_steps):
-        if t%(num_steps//10) == 0:
-            print("Step :", t)
-        # print("Step :", t)
+        # if t%(num_steps//10) == 0:
+        #     print("Step :", t)
+        print("Step :", t)
         value, opt_state = step(t, opt_state)
         value_array = value_array.at[t].set(value)
 
