@@ -194,7 +194,7 @@ def test_noise_on_hamiltonian(s: np.array, p: float, N: int):
     s_noisy_full = noise_on_full_op(s_full, p, N)
 
     # rep
-    s_prime = gaussian.noise_on_fghamiltonian(jnp.array(s), p, N)
+    s_prime = gaussian.noise_on_fghamiltonian(jnp.array(s), p)
     s_prime_full = full_op_from_majorana(np.array(s_prime))
 
     return np.linalg.norm(s_noisy_full.full() - s_prime_full.full())
@@ -228,12 +228,12 @@ def test_trace_fgs(parent_h: np.array, N: int):
 
     trace_full = s_full.expm().tr()
 
-    trace_majorana = gaussian.trace_fgstate(jnp.array(parent_h), N)
+    trace_majorana = gaussian.trace_fgstate(jnp.array(parent_h))
 
     return trace_full - trace_majorana, trace_full, trace_majorana
 
 def test_covariance_def(Gamma_mjr: np.array, f:np.array, O: np.array, N: int):
-    gamma = gaussian.covariance_from_corr_major(jnp.array(Gamma_mjr), N)
+    gamma = gaussian.covariance_from_corr_major(jnp.array(Gamma_mjr))
     gamma = O @ np.array(gamma) @ O.T
 
     gamma_prime = np.zeros((2*N, 2*N), dtype = complex)
@@ -270,7 +270,7 @@ def test_unitary_on_fgstate(Gamma_mjr: np.array, f: np.array, O: np.array, V: np
     return np.linalg.norm(Gamma_mjr_prime_full - Gamma_mjr_prime)
 
 def test_corr_major_from_parenth(parent_h: np.array, N: int):
-    Gamma_mjr = np.array(gaussian.corr_major_from_parenth(jnp.array(parent_h), N))
+    Gamma_mjr = np.array(gaussian.corr_major_from_parenth(jnp.array(parent_h)))
 
     Gamma_mjr_prime = np.zeros((2*N, 2*N), dtype = complex)
     x_list = [x(N, n) for n in range(0, N)]
@@ -294,7 +294,7 @@ def test_noise_on_fgstate(parent_h: np.array, test_h: np.array, N: int, p: float
     rho_noisy = noise_on_full_op(rho, p, N)
     test_exp = (rho_noisy * full_op_from_majorana(test_h)).tr()
 
-    Gamma_mjr = gaussian.corr_major_from_parenth(jnp.array(parent_h), N)
+    Gamma_mjr = gaussian.corr_major_from_parenth(jnp.array(parent_h))
 
     num_mc_samples = 100
     test_exp_gaussian = 0
@@ -305,6 +305,23 @@ def test_noise_on_fgstate(parent_h: np.array, test_h: np.array, N: int, p: float
         test_exp_gaussian += gaussian.energy(Gamma_mjr_noisy, test_h)/num_mc_samples
 
     return np.abs(test_exp - test_exp_gaussian), test_exp, test_exp_gaussian
+
+def primal_clean_circuit_full(circ_params: gaussian.PrimalParams):
+
+    N = circ_params.N
+    d = circ_params.d
+
+    psi_init = qutip.tensor([qutip.basis(2,0)] * N)
+
+    psi = psi_init
+    for i in range(d):
+        H_layer_full = full_op_from_majorana(np.array(circ_params.layer_hamiltonians[i]))
+        U_layer_full = (-1j * float(circ_params.theta[i]) * H_layer_full).expm()
+        psi = U_layer_full * psi
+
+    H_target_full = full_op_from_majorana(np.array(circ_params.h_parent))
+
+    return psi, H_target_full * psi, qutip.expect(H_target_full, psi)
 
 def primal_noisy_circuit_full(dual_params: gaussian.DualParams):
 
@@ -378,6 +395,21 @@ def dual_full(dual_vars: jnp.array, dual_params: gaussian.DualParams):
     cost += np.dot(lambdas, entropy_bounds)
 
     return -dual_params.scale * np.real(cost)
+
+def test_circuit_parent_hamiltonian(N: int, d: int, key: jnp.array):
+
+    theta_init = jax.random.uniform(key, shape = (d,), minval = 0.0, maxval = 1.0)
+    circ_params = gaussian.PrimalParams(N, d, theta_init, key)
+    key, subkey = jax.random.split(circ_params.key_after_ham_gen)
+
+    e_circ = gaussian.energy_after_circuit(circ_params)
+
+    psi, h_times_psi, e_psi = primal_clean_circuit_full(circ_params)
+
+    return key, np.abs(e_circ - e_psi), (e_psi * psi - h_times_psi).norm()
+
+
+
 
 
 # def full_state_from_corr(Gamma_mjr: np.array):

@@ -119,7 +119,7 @@ def random_normal_corr_majorana(N: int, Ome: jnp.array, key: jnp.array):
     return jnp.matmul(V, jnp.matmul(F, V.conj().T)), f, V, O, key
 
 def Omega(N: int) -> jnp.array:
-    return jp.sqrt(1/2) * jnp.block(
+    return jnp.sqrt(1/2) * jnp.block(
                 [[jnp.eye(N), jnp.eye(N)],
                  [1j * jnp.eye(N), -1j * jnp.eye(N)]])
 
@@ -226,7 +226,8 @@ class PrimalParams():
     Class to store parameters required to define the primal problem.
     """
 
-    def __init__(self, N: int, d: int, key: jnp.array,
+    def __init__(self, N: int, d: int, theta: jnp.array,
+                 key: jnp.array,
                  init_state_desc: str = "all zero"):
         """
         d: depth of circuit
@@ -234,8 +235,10 @@ class PrimalParams():
         """
         self.N = N
         self.d = d
+        self.theta = theta
         self.generate_layer_hamiltonians(key)
-        self.generate_target_hamiltonian(key)
+        # self.generate_target_hamiltonian(key)
+        self.generate_parent_hamiltonian()
         self.generate_init_state(init_state_desc)
 
     def generate_layer_hamiltonians(self, key: jnp.array):
@@ -247,9 +250,21 @@ class PrimalParams():
 
         self.key_after_ham_gen = key
 
-    def generate_target_hamiltonian(self, key: jnp.array):
-        h_target, key = random_normal_hamiltonian_majorana(self.N, key)
-        self.h_target = h_target/self.N
+    # def generate_target_hamiltonian(self, key: jnp.array):
+    #     h_target, key = random_normal_hamiltonian_majorana(self.N, key)
+    #     self.h_target = h_target/self.N
+
+    def generate_parent_hamiltonian(self):
+        Ome = Omega(self.N)
+        epsilon = jnp.arange(start = self.N, stop = 0, step = -1)
+        D = jnp.diag(jnp.concatenate((-epsilon, epsilon)))
+        d_parent = -1j * jnp.matmul(Ome, jnp.matmul(D, Ome.conj().T))
+        h_parent = d_parent
+
+        for i in range(self.d):
+            h_parent = unitary_on_fghamiltonian(h_parent,
+                                     self.theta[i] * self.layer_hamiltonians[i])
+        self.h_parent = h_parent
 
     def generate_init_state(self, init_state_desc: str = "all zero"):
         if init_state_desc == "all zero":
@@ -259,41 +274,40 @@ class PrimalParams():
             [[I      , 1j * I],
              [-1j * I, I     ]])
 
-def parenth_from_circuit(circ_params: PrimalParams):
-    Ome = Omega(circ_params.N)
-    epsilon = jnp.arange(start = circ_params.N, stop = 0, step = -1)
-    D = jnp.diag(jnp.concatenate((-epsilon, epsilon)))
-    d_parent = -1j * jnp.matmul(Ome, jnp.matmul(D, Ome.conj().T))
-
-    h_parent = d_parent
-
-    for i in range(circ_params.d):
-        h_parent = unitary_on_fghamiltonian(h_parent,
-                                            -circ_params.layer_hamiltonians[i])
-
-    return h_parent
-
-@partial(jit, static_argnums = (1,))
-def circ_obj(theta: jnp.array, params: PrimalParams):
+def energy_after_circuit(params: PrimalParams):
     Gamma_mjr = params.Gamma_mjr_init
 
     for i in range(params.d):
         Gamma_mjr = weighted_unitary_on_fgstate(Gamma_mjr,
                                                 params.layer_hamiltonians[i],
-                                                theta[i])
+                                                params.theta[i])
 
-    return jnp.real(energy(Gamma_mjr, params.h_target))
+    return jnp.real(energy(Gamma_mjr, params.h_parent))
 
-@partial(jit, static_argnums = (1,))
-def circ_grad(theta: jnp.array, params: PrimalParams):
-    return grad(circ_obj, argnums = 0)(theta, params)
 
-def optimize_circuit(theta_init: jnp.array, params: PrimalParams):
-    bounds = scipy.optimize.Bounds(lb = 0.0, ub = 2 * np.pi)
 
-    return optimize(np.array(theta_init),
-                    params, circ_obj, circ_grad,
-                    num_iters = 50, bounds = bounds)
+
+# @partial(jit, static_argnums = (1,))
+# def circ_obj(theta: jnp.array, params: PrimalParams):
+#     Gamma_mjr = params.Gamma_mjr_init
+#
+#     for i in range(params.d):
+#         Gamma_mjr = weighted_unitary_on_fgstate(Gamma_mjr,
+#                                                 params.layer_hamiltonians[i],
+#                                                 theta[i])
+#
+#     return jnp.real(energy(Gamma_mjr, params.h_target))
+#
+# @partial(jit, static_argnums = (1,))
+# def circ_grad(theta: jnp.array, params: PrimalParams):
+#     return grad(circ_obj, argnums = 0)(theta, params)
+#
+# def optimize_circuit(theta_init: jnp.array, params: PrimalParams):
+#     bounds = scipy.optimize.Bounds(lb = 0.0, ub = 2 * np.pi)
+#
+#     return optimize(np.array(theta_init),
+#                     params, circ_obj, circ_grad,
+#                     num_iters = 50, bounds = bounds)
 
 def noise_on_fgstate_mc_sample(Gamma_mjr: jnp.array, p: float, key: jnp.array):
     """

@@ -20,7 +20,8 @@ from fermions import gaussian, fermion_test_utils
 #----------------------------------- TESTS ------------------------------------#
 #------------------------------------------------------------------------------#
 
-N = 4
+N = 8
+d = 5
 seed = 69
 
 key = jax.random.PRNGKey(seed)
@@ -40,5 +41,6 @@ print("Noise on hamiltonian test = ", fermion_test_utils.test_noise_on_hamiltoni
 print("Covariance def. test = ", fermion_test_utils.test_covariance_def(np.array(Gamma_mjr), np.array(f), np.array(O), N))
 print("Unitary on fgs test = ", fermion_test_utils.test_unitary_on_fgstate(np.array(Gamma_mjr), np.array(f), np.array(O), np.array(V), np.array(h)))
 print("Corr major from parenth test = ", fermion_test_utils.test_corr_major_from_parenth(np.array(h), N))
-print("Noise on fgstate test = ", fermion_test_utils.test_noise_on_fgstate(np.array(s), np.array(h), N, 1.0, key))
-print("Noise on fgstate test = ", fermion_test_utils.test_noise_on_fgstate(np.array(s), np.array(h), N, 0.0, key))
+# print("Noise on fgstate test = ", fermion_test_utils.test_noise_on_fgstate(np.array(s), np.array(h), N, 1.0, key))
+key, energy_diff, norm_diff = fermion_test_utils.test_circuit_parent_hamiltonian(N, d, key)
+print("Parent Hamiltonian circuit test = ", energy_diff, norm_diff)
