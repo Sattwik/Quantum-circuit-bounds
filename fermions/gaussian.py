@@ -75,6 +75,39 @@ def optimize(vars_init: np.array, params, obj_fun: Callable, grad_fun: Callable,
 
     return np.array(obj_over_opti), opt_result
 
+def random_k_local_normal_hamiltonian_majorana(N: int, k: int, key: jnp.array):
+    """
+    Parameters
+    ----------
+    N: number of fermionic modes
+    k < N: range of interactions
+
+    Returns
+    -------
+    A random k-local f.g.h. (2N x 2N) in Majorana representation
+    """
+    key, subkey = jax.random.split(key)
+    hxx = jax.random.normal(subkey, (N, N))
+    hxx = hxx - hxx.T
+    hxx = hxx.at[jnp.triu_indices(N, k + 1)].set(0.0)
+    hxx = hxx.at[jnp.tril_indices(N, -k - 1)].set(0.0)
+
+    key, subkey = jax.random.split(key)
+    hpp = jax.random.normal(subkey, (N, N))
+    hpp = hpp - hpp.T
+    hpp = hpp.at[jnp.triu_indices(N, k + 1)].set(0.0)
+    hpp = hpp.at[jnp.tril_indices(N, -k - 1)].set(0.0)
+
+    key, subkey = jax.random.split(key)
+    hxp = jax.random.normal(subkey, (N, N))
+    hxp = hxp.at[jnp.triu_indices(N, k + 1)].set(0.0)
+    hxp = hxp.at[jnp.tril_indices(N, -k - 1)].set(0.0)
+
+    h = jnp.block([[hxx, hxp],
+                  [-hxp.T, hpp]])
+
+    return h
+
 def random_normal_hamiltonian_majorana(N: int, key: jnp.array):
     """
     Parameters
@@ -226,16 +259,22 @@ class PrimalParams():
     Class to store parameters required to define the primal problem.
     """
 
-    def __init__(self, N: int, d: int, theta: jnp.array,
+    def __init__(self, N: int, d: int, local_d: int,
                  key: jnp.array,
-                 init_state_desc: str = "all zero"):
+                 init_state_desc: str = "all zero", k: int = 1):
         """
         d: depth of circuit
         init_state_desc: description of the initial state wanted
+
+        Assuming (d - local_d) is even
         """
         self.N = N
         self.d = d
-        self.theta = theta
+        self.local_d = local_d
+        self.k = k
+
+        assert((d - local_d)%2 == 0)
+
         self.generate_layer_hamiltonians(key)
         # self.generate_target_hamiltonian(key)
         self.generate_parent_hamiltonian()
@@ -244,9 +283,14 @@ class PrimalParams():
     def generate_layer_hamiltonians(self, key: jnp.array):
         self.layer_hamiltonians = []
 
-        for i in range(self.d):
+        for i in range(self.local_d):
+            random_local_h, key = random_k_local_normal_hamiltonian_majorana(self.N, self.k, key)
+            self.layer_hamiltonians.append(random_local_h/self.N)
+
+        for i in range((self.d - self.local_d)//2):
             random_h, key = random_normal_hamiltonian_majorana(self.N, key)
             self.layer_hamiltonians.append(random_h/self.N)
+            self.layer_hamiltonians.append(-random_h/self.N)
 
         self.key_after_ham_gen = key
 
@@ -262,8 +306,7 @@ class PrimalParams():
         h_parent = d_parent
 
         for i in range(self.d):
-            h_parent = unitary_on_fghamiltonian(h_parent,
-                                     self.theta[i] * self.layer_hamiltonians[i])
+            h_parent = unitary_on_fghamiltonian(h_parent, self.layer_hamiltonians[i])
         self.h_parent = h_parent
 
     def generate_init_state(self, init_state_desc: str = "all zero"):
@@ -278,9 +321,7 @@ def energy_after_circuit(params: PrimalParams):
     Gamma_mjr = params.Gamma_mjr_init
 
     for i in range(params.d):
-        Gamma_mjr = weighted_unitary_on_fgstate(Gamma_mjr,
-                                                params.layer_hamiltonians[i],
-                                                params.theta[i])
+        Gamma_mjr = unitary_on_fgstate(Gamma_mjr, params.layer_hamiltonians[i])
 
     return jnp.real(energy(Gamma_mjr, params.h_parent))
 
@@ -328,7 +369,7 @@ def noise_on_fgstate_mc_sample(Gamma_mjr: jnp.array, p: float, key: jnp.array):
     # print('gamma = ', gamma)
 
     key, subkey = jax.random.split(key)
-    mc_probs = jax.random.uniform(key, shape = (N,))
+    mc_probs = jax.random.uniform(subkey, shape = (N,))
 
     # print(mc_probs)
 
