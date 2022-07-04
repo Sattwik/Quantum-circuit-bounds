@@ -316,12 +316,12 @@ def primal_clean_circuit_full(circ_params: gaussian.PrimalParams):
     psi = psi_init
     for i in range(d):
         H_layer_full = full_op_from_majorana(np.array(circ_params.layer_hamiltonians[i]))
-        U_layer_full = (-1j * float(circ_params.theta[i]) * H_layer_full).expm()
+        U_layer_full = (-1j * H_layer_full).expm()
         psi = U_layer_full * psi
 
-    H_target_full = full_op_from_majorana(np.array(circ_params.h_parent))
+    H_parent_full = full_op_from_majorana(np.array(circ_params.h_parent))
 
-    return psi, H_target_full * psi, qutip.expect(H_target_full, psi)
+    return psi, H_parent_full * psi, qutip.expect(H_parent_full, psi)
 
 def primal_noisy_circuit_full(dual_params: gaussian.DualParams):
 
@@ -334,14 +334,14 @@ def primal_noisy_circuit_full(dual_params: gaussian.DualParams):
     rho = rho_init
     for i in range(d):
         H_layer_full = full_op_from_majorana(np.array(dual_params.circ_params.layer_hamiltonians[i]))
-        U_layer_full = (-1j * float(dual_params.theta_opt[i]) * H_layer_full).expm()
+        U_layer_full = (-1j * H_layer_full).expm()
         rho = U_layer_full * rho * U_layer_full.dag()
 
         rho = noise_on_full_op(rho, p, N)
 
-    H_target_full = full_op_from_majorana(np.array(dual_params.circ_params.h_target))
+    H_parent_full = full_op_from_majorana(np.array(dual_params.circ_params.h_parent))
 
-    return (H_target_full * rho).tr()
+    return (H_parent_full * rho).tr()
 
 def full_noisy_dual_layer(h_layer: np.array, sigma_layer: np.array, p: float):
     N = h_layer.shape[0]//2
@@ -356,9 +356,8 @@ def full_noisy_dual_layer(h_layer: np.array, sigma_layer: np.array, p: float):
 def dual_full(dual_vars: jnp.array, dual_params: gaussian.DualParams):
     N = dual_params.circ_params.N
     d = dual_params.circ_params.d
-    h_target = dual_params.circ_params.h_target
+    h_parent = dual_params.circ_params.h_parent
     layer_hamiltonians = dual_params.circ_params.layer_hamiltonians
-    theta_opt = np.array(dual_params.theta_opt)
     p = dual_params.p
     rho_init = qutip.tensor([diagonal_2x2_dm(0) for n in range(N)])
 
@@ -370,18 +369,18 @@ def dual_full(dual_vars: jnp.array, dual_params: gaussian.DualParams):
     # log Tr exp terms
     for i in range(d):
         if i == d-1:
-            hi = np.array(h_target) + sigmas[:,:,i]
+            hi = np.array(h_parent) + sigmas[:,:,i]
             hi = full_op_from_majorana(hi)
         else:
             hi = full_op_from_majorana(sigmas[:,:,i]) - \
-                 full_noisy_dual_layer(theta_opt[i+1] * np.array(layer_hamiltonians[i+1]),
+                 full_noisy_dual_layer(np.array(layer_hamiltonians[i+1]),
                                   sigmas[:,:,i+1], p)
 
         cost += -lambdas[i] * np.log((-hi/lambdas[i]).expm().tr())
 
     # init. state term
     epsilon_1_dag_sigma1 = \
-    full_noisy_dual_layer(theta_opt[0] * np.array(layer_hamiltonians[0]), sigmas[:,:,0], p)
+    full_noisy_dual_layer(np.array(layer_hamiltonians[0]), sigmas[:,:,0], p)
 
     cost += -(rho_init * epsilon_1_dag_sigma1).tr()
 
@@ -394,12 +393,11 @@ def dual_full(dual_vars: jnp.array, dual_params: gaussian.DualParams):
 
     cost += np.dot(lambdas, entropy_bounds)
 
-    return -dual_params.scale * np.real(cost)
+    return -np.real(cost)
 
-def test_circuit_parent_hamiltonian(N: int, d: int, key: jnp.array):
+def test_circuit_parent_hamiltonian(N: int, d: int, local_d: int, key: jnp.array):
 
-    theta_init = jax.random.uniform(key, shape = (d,), minval = 0.0, maxval = 1.0)
-    circ_params = gaussian.PrimalParams(N, d, theta_init, key)
+    circ_params = gaussian.PrimalParams(N, d, local_d, key)
     key, subkey = jax.random.split(circ_params.key_after_ham_gen)
 
     e_circ = gaussian.energy_after_circuit(circ_params)
@@ -408,8 +406,15 @@ def test_circuit_parent_hamiltonian(N: int, d: int, key: jnp.array):
 
     return key, np.abs(e_circ - e_psi), (e_psi * psi - h_times_psi).norm()
 
-
-
+# def test_circuit_parent_hamiltonian_local(N: int, d: int, local_d: int, key: jnp.array):
+#
+#     circ_params = gaussian.PrimalParams(N, d, local_d, key)
+#     key, subkey = jax.random.split(circ_params.key_after_ham_gen)
+#
+#     e_circ = gaussian.energy_after_circuit(circ_params)
+#     e_circ_local = gaussian.energy_after_circuit_local(circ_params)
+#
+#     return key, np.abs(e_circ - e_circ_local), jnp.linalg.norm(circ_params.h_parent - circ_params.h_parent_local)
 
 
 # def full_state_from_corr(Gamma_mjr: np.array):
