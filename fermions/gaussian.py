@@ -32,7 +32,7 @@ def unjaxify_grad(func):
     return wrap
 
 def optimize(vars_init: np.array, params, obj_fun: Callable, grad_fun: Callable,
-             num_iters: int = 50, bounds = None, opt_method: str = "L-BFGS-B"):
+             num_iters: int = 500, bounds = None, opt_method: str = "L-BFGS-B"):
 
     opt_args = (params,)
 
@@ -42,10 +42,7 @@ def optimize(vars_init: np.array, params, obj_fun: Callable, grad_fun: Callable,
         obj_eval = unjaxify_obj(obj_fun)(x, opt_args[0])
         obj_over_opti.append(obj_eval)
 
-    if bounds is not None:
-        bnds = bounds
-    else:
-        bnds = scipy.optimize.Bounds(lb = -np.inf, ub = np.inf)
+    bnds = bounds
 
     if opt_method == "L-BFGS-B":
         opt_result = scipy.optimize.minimize(
@@ -78,6 +75,30 @@ def optimize(vars_init: np.array, params, obj_fun: Callable, grad_fun: Callable,
                                 callback = callback_func)
 
     return np.array(obj_over_opti), opt_result
+
+def adam_optimize(obj_fun: Callable, grad_fun: Callable,
+                  vars_init: jnp.array, params,
+                  alpha: float, num_steps: int):
+
+    init, update, get_params = optimizers.adam(alpha)
+
+    def step(t, opt_state):
+        value = obj_fun(get_params(opt_state), params)
+        grads = grad_fun(get_params(opt_state), params)
+        opt_state = update(t, grads, opt_state)
+        return value, opt_state
+
+    opt_state = init(vars_init)
+    value_array = jnp.zeros(num_steps)
+
+    for t in range(num_steps):
+        # if t%(num_steps//10) == 0:
+        #     print("Step :", t)
+        print("Step :", t)
+        value, opt_state = step(t, opt_state)
+        value_array = value_array.at[t].set(value)
+
+    return value_array, get_params(opt_state)
 
 #--------------------------------------------------#
 #-------------------- FGS tools -------------------#
@@ -546,29 +567,6 @@ def fd_dual_grad(dual_vars: jnp.array, dual_params: DualParams):
 
     return dual_grad
 
-def adam_optimize_dual(dual_vars_init: jnp.array, dual_params: DualParams,
-                           alpha: float, num_steps: int):
-
-    init, update, get_params = optimizers.adam(alpha)
-
-    def step(t, opt_state):
-        value = dual_obj(get_params(opt_state), dual_params)
-        grads = dual_grad(get_params(opt_state), dual_params)
-        opt_state = update(t, grads, opt_state)
-        return value, opt_state
-
-    opt_state = init(dual_vars_init)
-    value_array = jnp.zeros(num_steps)
-
-    for t in range(num_steps):
-        # if t%(num_steps//10) == 0:
-        #     print("Step :", t)
-        print("Step :", t)
-        value, opt_state = step(t, opt_state)
-        value_array = value_array.at[t].set(value)
-
-    return value_array, get_params(opt_state)
-
 @jit
 def trace_fgstate(parent_h: jnp.array):
     """
@@ -641,6 +639,34 @@ def noise_on_fghamiltonian(s: jnp.array, p: float):
 
     return s_prime
 
+#--------------------------------------------------#
+#------------ No-channel dual methods -------------#
+#--------------------------------------------------#
+
+@partial(jit, static_argnums = (1,))
+def dual_obj_no_channel(dual_vars: jnp.array, dual_params: DualParams):
+    N = dual_params.circ_params.N
+    d = dual_params.circ_params.d
+    h_parent = dual_params.circ_params.h_parent
+    p = dual_params.p
+
+    q = 1 - p
+    q_powers = jnp.array([q**i for i in range(d)])
+    entropy_bounds = N * p * jnp.log(2) * \
+             jnp.array([jnp.sum(q_powers.at[:i+1].get()) for i in range(d)])
+    Sd = entropy_bounds.at[-1].get()
+
+    a = dual_vars.at[0].get()
+    lmbda = jnp.log(1 + jnp.exp(a))
+
+    cost = -lmbda * jnp.log(trace_fgstate(-h_parent/lmbda)) + lmbda * Sd
+
+    return -jnp.real(cost)
+
+@partial(jit, static_argnums = (1,))
+def dual_grad_no_channel(dual_vars: jnp.array, dual_params: DualParams):
+    return grad(dual_obj_no_channel, argnums = 0)(dual_vars, dual_params)
+
 # @partial(jit, static_argnums = (1,2))
 # def unvec_and_process_dual_vars(dual_vars: jnp.array, d: int, N: int):
 #     utri_indices = jnp.triu_indices(2*N, 1)
@@ -656,7 +682,7 @@ def noise_on_fghamiltonian(s: jnp.array, p: float):
 #     init_args = (sigmas, sigma_vars, utri_indices, ltri_indices, zeros_2N)
 #     sigmas, _, _, _, _ = jax.lax.fori_loop(0, d, unvec_layer_i, init_args)
 #
-#     return lambdas, sigmas 
+#     return lambdas, sigmas
 
 # def unvec_layer_i(i: int, args: Tuple):
 #     sigmas, sigma_vars, utri_indices, ltri_indices, zeros_2N = args
