@@ -30,9 +30,10 @@ key = jax.random.PRNGKey(seed)
 
 N = 25
 d = N
-local_d = 5
+local_d = 7
+k = 1
 
-circ_params = gaussian.PrimalParams(N, d, local_d, key)
+circ_params = gaussian.PrimalParams(N, d, local_d, key, k = k)
 key, subkey = jax.random.split(circ_params.key_after_ham_gen)
 
 w_parent, v_parent = jnp.linalg.eig(1j * circ_params.h_parent)
@@ -47,19 +48,23 @@ print(colorama.Fore.GREEN + "circ energy = ", final_energy)
 print(colorama.Style.RESET_ALL)
 
 p = 0.001
-dual_params = gaussian.DualParams(circ_params, p)
+k_dual = 1
+dual_params = gaussian.DualParams(circ_params, p, k_dual)
 
 key, subkey = jax.random.split(key)
 dual_vars_init = jax.random.uniform(key, shape = (dual_params.total_num_dual_vars,))/N
+# dual_vars_init = jnp.arange(0, dual_params.total_num_dual_vars)
 
-obj_init_fori = gaussian.dual_obj(dual_vars_init, dual_params)
-print(colorama.Fore.GREEN + "new dual = ", obj_init_fori)
+# lambdas, sigmas = gaussian.unvec_and_process_dual_vars(dual_vars_init, dual_params)
+
+# obj_init_fori = gaussian.dual_obj(dual_vars_init, dual_params)
+# print(colorama.Fore.GREEN + "new dual = ", obj_init_fori)
 # obj_init_full = fermion_test_utils.dual_full(dual_vars_init, dual_params)
 # print("full dual = ", obj_init_full)
-print(colorama.Style.RESET_ALL)
+# print(colorama.Style.RESET_ALL)
 
 alpha = 0.01
-num_steps = 500
+num_steps = 750
 dual_obj_over_opti_adam, dual_opt_result_adam = \
     gaussian.adam_optimize_dual(dual_vars_init, dual_params,
                                alpha, num_steps)

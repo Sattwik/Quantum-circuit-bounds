@@ -279,9 +279,9 @@ class PrimalParams():
             self.layer_hamiltonians.append(random_local_h/self.N)
 
         for i in range((self.d - self.local_d)//2):
-            random_h, key = random_normal_hamiltonian_majorana(self.N, key)
-            self.layer_hamiltonians.append(random_h/self.N)
-            self.layer_hamiltonians.append(-random_h/self.N)
+            random_local_h, key = random_k_local_normal_hamiltonian_majorana(self.N, self.k, key)
+            self.layer_hamiltonians.append(random_local_h/self.N)
+            self.layer_hamiltonians.append(-random_local_h/self.N)
 
         self.layer_hamiltonians = jnp.array(self.layer_hamiltonians)
         self.key_after_ham_gen = key
@@ -358,42 +358,97 @@ def noise_on_fgstate_mc_sample(Gamma_mjr: jnp.array, p: float, key: jnp.array):
 #--------------------------------------------------#
 
 class DualParams():
-    def __init__(self, circ_params: PrimalParams, p: float):
+    def __init__(self, circ_params: PrimalParams, p: float, k_dual: int):
         self.circ_params = circ_params
         self.p = p
+        self.k_dual = k_dual
+
+        block_upper_indices_to_zero = jnp.triu_indices(self.circ_params.N, self.k_dual + 1)
+        block_lower_indices_to_zero = jnp.tril_indices(self.circ_params.N, -self.k_dual - 1)
+
+        ones_N = jnp.ones((self.circ_params.N, self.circ_params.N))
+        upper_ones_N = jnp.triu(ones_N, 1)
+        lower_ones_N = jnp.tril(ones_N, -1)
+
+        block_upper_band = upper_ones_N.at[block_upper_indices_to_zero].set(0.0)
+        block_lower_band = lower_ones_N.at[block_lower_indices_to_zero].set(0.0)
+        block_band = ones_N.at[block_upper_indices_to_zero].set(0.0)
+        block_band = block_band.at[block_lower_indices_to_zero].set(0.0)
+
+        self.block_upper_band_indices = jnp.where(block_upper_band == 1)
+        self.block_lower_band_indices = jnp.where(block_lower_band == 1)
+        self.block_band_indices = jnp.where(block_band == 1)
+
+        num_vars_xx = self.block_upper_band_indices[0].shape[0]
+        num_vars_pp = num_vars_xx
+        num_vars_xp = self.block_band_indices[0].shape[0]
+
+        num_sigma_vars_layer = num_vars_xx + num_vars_pp + num_vars_xp
 
         self.total_num_dual_vars = self.circ_params.d + \
-        (2*self.circ_params.N - 1) * self.circ_params.N * self.circ_params.d
+        self.circ_params.d * num_sigma_vars_layer
+
+        # self.total_num_dual_vars = self.circ_params.d + \
+        # (2*self.circ_params.N - 1) * self.circ_params.N * self.circ_params.d
 
 def unvec_layer_i(i: int, args: Tuple):
-    sigmas, sigma_vars, utri_indices, ltri_indices, zeros_2N = args
+    sigmas, sigma_vars, \
+    block_upper_band_indices, block_lower_band_indices, block_band_indices, \
+    zeros_N = args
 
-    N = zeros_2N.shape[0]//2
-    num_sigma_vars_layer = (2*N - 1) * N
-    l = num_sigma_vars_layer
+    # number of variables in blocks of the full sigma dual var
+    l_xx = block_upper_band_indices[0].shape[0]
+    l_pp = l_xx
+    l_xp = block_band_indices[0].shape[0]
 
-    sigma_layer = zeros_2N
+    # total_num_vars
+    l = l_xp + l_xx + l_pp
+
+    # slicing the input dual vars vector
     sigma_slice = jax.lax.dynamic_slice_in_dim(sigma_vars, i * l, l)
-    sigma_layer = sigma_layer.at[utri_indices].set(sigma_slice)
-    sigma_layer = sigma_layer.at[ltri_indices].set(-sigma_slice)
+    sigma_slice_xx = sigma_slice.at[:l_xx].get()
+    sigma_slice_pp = sigma_slice.at[l_xx : l_xx + l_pp].get()
+    sigma_slice_xp = sigma_slice.at[l_xx + l_pp:].get()
+
+    # making block matrices
+    sigma_layer_xx = zeros_N.at[block_upper_band_indices].set(sigma_slice_xx)
+    sigma_layer_xx = sigma_layer_xx.at[block_lower_band_indices].set(-sigma_slice_xx)
+
+    sigma_layer_pp = zeros_N.at[block_upper_band_indices].set(sigma_slice_pp)
+    sigma_layer_pp = sigma_layer_pp.at[block_lower_band_indices].set(-sigma_slice_pp)
+
+    sigma_layer_xp = zeros_N.at[block_band_indices].set(sigma_slice_xp)
+
+    # putting blocks together
+    sigma_layer = jnp.block([[sigma_layer_xx, sigma_layer_xp],
+                             [-sigma_layer_xp.T, sigma_layer_pp]])
+
+    # putting layer var into composite structure
     sigmas = sigmas.at[:,:,i].set(sigma_layer)
 
-    return (sigmas, sigma_vars, utri_indices, ltri_indices, zeros_2N)
+    return (sigmas, sigma_vars,
+            block_upper_band_indices, block_lower_band_indices,
+            block_band_indices, zeros_N)
 
-@partial(jit, static_argnums = (1,2))
-def unvec_and_process_dual_vars(dual_vars: jnp.array, d: int, N: int):
-    utri_indices = jnp.triu_indices(2*N, 1)
-    ltri_indices = (utri_indices[1], utri_indices[0])
+@partial(jit, static_argnums = (1,))
+def unvec_and_process_dual_vars(dual_vars: jnp.array, dual_params: DualParams):
+    N = dual_params.circ_params.N
+    d = dual_params.circ_params.d
+    block_upper_band_indices = dual_params.block_upper_band_indices
+    block_lower_band_indices = dual_params.block_lower_band_indices
+    block_band_indices = dual_params.block_band_indices
 
     sigmas = jnp.zeros((2 * N, 2 * N, d))
-    zeros_2N = jnp.zeros((2*N, 2*N))
+    zeros_N = jnp.zeros((N, N))
 
     a_vars = dual_vars.at[:d].get()
     lambdas = jnp.log(1 + jnp.exp(a_vars))
 
     sigma_vars = dual_vars.at[d:].get()
-    init_args = (sigmas, sigma_vars, utri_indices, ltri_indices, zeros_2N)
-    sigmas, _, _, _, _ = jax.lax.fori_loop(0, d, unvec_layer_i, init_args)
+    init_args = (sigmas, sigma_vars,
+                 block_upper_band_indices, block_lower_band_indices,
+                 block_band_indices, zeros_N)
+    sigmas, _, _, _, _, _ = jax.lax.fori_loop(0, d, unvec_layer_i, init_args)
 
     return lambdas, sigmas
 
@@ -430,7 +485,7 @@ def dual_obj(dual_vars: jnp.array, dual_params: DualParams):
     p = dual_params.p
     Gamma_mjr_init = dual_params.circ_params.Gamma_mjr_init
 
-    lambdas, sigmas = unvec_and_process_dual_vars(dual_vars, d, N)
+    lambdas, sigmas = unvec_and_process_dual_vars(dual_vars, dual_params)
 
     cost = 0
     # log Tr exp terms
@@ -585,6 +640,38 @@ def noise_on_fghamiltonian(s: jnp.array, p: float):
     s_prime, _ = jax.lax.fori_loop(0, N, noise_on_fghamiltonian_at_index, init_args)
 
     return s_prime
+
+# @partial(jit, static_argnums = (1,2))
+# def unvec_and_process_dual_vars(dual_vars: jnp.array, d: int, N: int):
+#     utri_indices = jnp.triu_indices(2*N, 1)
+#     ltri_indices = (utri_indices[1], utri_indices[0])
+#
+#     sigmas = jnp.zeros((2 * N, 2 * N, d))
+#     zeros_2N = jnp.zeros((2*N, 2*N))
+#
+#     a_vars = dual_vars.at[:d].get()
+#     lambdas = jnp.log(1 + jnp.exp(a_vars))
+#
+#     sigma_vars = dual_vars.at[d:].get()
+#     init_args = (sigmas, sigma_vars, utri_indices, ltri_indices, zeros_2N)
+#     sigmas, _, _, _, _ = jax.lax.fori_loop(0, d, unvec_layer_i, init_args)
+#
+#     return lambdas, sigmas 
+
+# def unvec_layer_i(i: int, args: Tuple):
+#     sigmas, sigma_vars, utri_indices, ltri_indices, zeros_2N = args
+#
+#     N = zeros_2N.shape[0]//2
+#     num_sigma_vars_layer = (2*N - 1) * N
+#     l = num_sigma_vars_layer
+#
+#     sigma_layer = zeros_2N
+#     sigma_slice = jax.lax.dynamic_slice_in_dim(sigma_vars, i * l, l)
+#     sigma_layer = sigma_layer.at[utri_indices].set(sigma_slice)
+#     sigma_layer = sigma_layer.at[ltri_indices].set(-sigma_slice)
+#     sigmas = sigmas.at[:,:,i].set(sigma_layer)
+#
+#     return (sigmas, sigma_vars, utri_indices, ltri_indices, zeros_2N)
 
 # @partial(jit, static_argnums = (1,2))
 # def unvec_and_process_dual_vars(dual_vars: jnp.array, d: int, N: int):

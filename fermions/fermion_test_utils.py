@@ -361,7 +361,7 @@ def dual_full(dual_vars: jnp.array, dual_params: gaussian.DualParams):
     p = dual_params.p
     rho_init = qutip.tensor([diagonal_2x2_dm(0) for n in range(N)])
 
-    lambdas, sigmas = gaussian.unvec_and_process_dual_vars(dual_vars, d, N)
+    lambdas, sigmas = gaussian.unvec_and_process_dual_vars(dual_vars, dual_params)
     lambdas = np.array(lambdas)
     sigmas = np.array(sigmas)
 
