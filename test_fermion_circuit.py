@@ -47,7 +47,7 @@ final_energy = gaussian.energy_after_circuit(circ_params)
 print(colorama.Fore.GREEN + "circ energy = ", final_energy)
 print(colorama.Style.RESET_ALL)
 
-p = 0.99
+p = 0.001
 k_dual = 1
 dual_params = gaussian.DualParams(circ_params, p, k_dual)
 
@@ -89,23 +89,23 @@ else:
     print(colorama.Fore.RED + "False")
 print(colorama.Style.RESET_ALL)
 
-noisy_sol = fermion_test_utils.primal_noisy_circuit_full(dual_params)
-print(colorama.Fore.GREEN + "noisy sol = ", noisy_sol)
-print(colorama.Fore.GREEN + "noisy bound <= noisy sol? ")
-if noisy_bound <= float(np.real(noisy_sol)):
-    print(colorama.Fore.GREEN + "True")
-else:
-    print(colorama.Fore.RED + "False")
-print(colorama.Style.RESET_ALL)
+# noisy_sol = fermion_test_utils.primal_noisy_circuit_full(dual_params)
+# print(colorama.Fore.GREEN + "noisy sol = ", noisy_sol)
+# print(colorama.Fore.GREEN + "noisy bound <= noisy sol? ")
+# if noisy_bound <= float(np.real(noisy_sol)):
+#     print(colorama.Fore.GREEN + "True")
+# else:
+#     print(colorama.Fore.RED + "False")
+# print(colorama.Style.RESET_ALL)
 
 # noisy_bound_full = -fermion_test_utils.dual_full(jnp.array(dual_opt_result), dual_params)
-noisy_bound_full = -fermion_test_utils.dual_full(jnp.array(dual_opt_result.x), dual_params)
-print(colorama.Fore.GREEN + "noisy bound full = ", noisy_bound_full)
-print(colorama.Fore.GREEN + "noisy bound - noisy bound full = ", noisy_bound - noisy_bound_full)
-print(colorama.Style.RESET_ALL)
+# noisy_bound_full = -fermion_test_utils.dual_full(jnp.array(dual_opt_result.x), dual_params)
+# print(colorama.Fore.GREEN + "noisy bound full = ", noisy_bound_full)
+# print(colorama.Fore.GREEN + "noisy bound - noisy bound full = ", noisy_bound - noisy_bound_full)
+# print(colorama.Style.RESET_ALL)
 
 # alpha = 0.01
-num_steps = int(1e3)
+num_steps = int(5e3)
 dual_vars_init_nc = jnp.array([0.0])
 # dual_obj_over_opti_nc, dual_opt_result_nc = \
 #     gaussian.adam_optimize(gaussian.dual_obj_no_channel, gaussian.dual_grad_no_channel,

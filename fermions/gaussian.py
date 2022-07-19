@@ -497,6 +497,18 @@ def dual_free_energy_ith_term(i: int, args: Tuple):
 
     return (lambdas, sigmas, layer_hamiltonians, p, cost)
 
+def dual_free_energy_ith_term_1q(i: int, args: Tuple):
+
+    lambdas, sigmas, layer_hamiltonians, p, cost = args
+
+    hi = sigmas.at[:,:,i].get() - \
+         noisy_dual_layer(layer_hamiltonians.at[i+1, :, :].get(),
+                          sigmas.at[:,:,i+1].get(), p)
+
+    cost += -lambdas.at[i].get() * jnp.log(trace_fgstate_1q(-hi/lambdas.at[i].get()))
+
+    return (lambdas, sigmas, layer_hamiltonians, p, cost)
+
 @partial(jit, static_argnums = (1,))
 def dual_obj(dual_vars: jnp.array, dual_params: DualParams):
     N = dual_params.circ_params.N
@@ -536,9 +548,57 @@ def dual_obj(dual_vars: jnp.array, dual_params: DualParams):
 
     return -jnp.real(cost)
 
+def binary_entropy(p: float):
+    return -p * jnp.log(p) -(1-p) * jnp.log(1-p)
+
+@partial(jit, static_argnums = (1,))
+def dual_obj_1q_test(dual_vars: jnp.array, dual_params: DualParams):
+    N = dual_params.circ_params.N
+    d = dual_params.circ_params.d
+    h_parent = dual_params.circ_params.h_parent
+    layer_hamiltonians = dual_params.circ_params.layer_hamiltonians
+    p = dual_params.p
+    Gamma_mjr_init = dual_params.circ_params.Gamma_mjr_init
+
+    lambdas, sigmas = unvec_and_process_dual_vars(dual_vars, dual_params)
+
+    cost = 0
+    # log Tr exp terms
+
+    # first d - 1 layers
+    init_args = (lambdas, sigmas, layer_hamiltonians, p, cost)
+    _, _, _, _, cost = jax.lax.fori_loop(0, d - 1, dual_free_energy_ith_term_1q, init_args)
+
+    # last layer
+    hi = h_parent + sigmas.at[:,:,d-1].get()
+    cost += -lambdas.at[d-1].get() * jnp.log(trace_fgstate_1q(-hi/lambdas[d-1]))
+
+    # init. state term
+    epsilon_1_dag_sigma1 = \
+    noisy_dual_layer(layer_hamiltonians.at[0, :, :].get(), sigmas.at[:,:,0].get(), p)
+
+    cost += -energy(Gamma_mjr_init, epsilon_1_dag_sigma1)
+
+    # entropy term
+    q = 1 - p
+    q_powers = jnp.array([q**i for i in range(d)])
+
+    entropy_bounds = N * p * jnp.log(2) * \
+             jnp.array([jnp.sum(q_powers.at[:i+1].get()) for i in range(d)])
+
+    entropy_bounds = jnp.ones(entropy_bounds.shape) * binary_entropy(p/2)
+
+    cost += jnp.dot(lambdas, entropy_bounds)
+
+    return -jnp.real(cost)
+
 @partial(jit, static_argnums = (1,))
 def dual_grad(dual_vars: jnp.array, dual_params: DualParams):
     return grad(dual_obj, argnums = 0)(dual_vars, dual_params)
+
+@partial(jit, static_argnums = (1,))
+def dual_grad_1q_test(dual_vars: jnp.array, dual_params: DualParams):
+    return grad(dual_obj_1q_test, argnums = 0)(dual_vars, dual_params)
 
 def optimize_dual(dual_vars_init: jnp.array, dual_params: DualParams,
                   bnds: scipy.optimize.Bounds = None):
@@ -584,6 +644,22 @@ def trace_fgstate(parent_h: jnp.array):
     positive_eigs = w[N:]
 
     return jnp.prod(jnp.exp(positive_eigs) + jnp.exp(-positive_eigs))
+
+@jit
+def trace_fgstate_1q(parent_h: jnp.array):
+    """
+    Parameters
+    ----------
+    parent_h: Parent Hamiltonian of the f.g.s (Majorana rep.)
+
+    Returns
+    -------
+    Trace of f.g.s.
+    """
+    w, v = jnp.linalg.eigh(1j * parent_h)
+
+    # positive_eigs = w[N:]
+    return jnp.sum(jnp.exp(w))
 
 @jit
 def unitary_on_fghamiltonian(s: jnp.array, h: jnp.array):
@@ -666,6 +742,31 @@ def dual_obj_no_channel(dual_vars: jnp.array, dual_params: DualParams):
 @partial(jit, static_argnums = (1,))
 def dual_grad_no_channel(dual_vars: jnp.array, dual_params: DualParams):
     return grad(dual_obj_no_channel, argnums = 0)(dual_vars, dual_params)
+
+@partial(jit, static_argnums = (1,))
+def dual_obj_no_channel_1q_test(dual_vars: jnp.array, dual_params: DualParams):
+    N = dual_params.circ_params.N
+    d = dual_params.circ_params.d
+    h_parent = dual_params.circ_params.h_parent
+    p = dual_params.p
+
+    q = 1 - p
+    q_powers = jnp.array([q**i for i in range(d)])
+    entropy_bounds = N * p * jnp.log(2) * \
+             jnp.array([jnp.sum(q_powers.at[:i+1].get()) for i in range(d)])
+    entropy_bounds = jnp.ones(entropy_bounds.shape) * binary_entropy(p/2)
+    Sd = entropy_bounds.at[-1].get()
+
+    a = dual_vars.at[0].get()
+    lmbda = jnp.log(1 + jnp.exp(a))
+
+    cost = -lmbda * jnp.log(trace_fgstate_1q(-h_parent/lmbda)) + lmbda * Sd
+
+    return -jnp.real(cost)
+
+@partial(jit, static_argnums = (1,))
+def dual_grad_no_channel_1q_test(dual_vars: jnp.array, dual_params: DualParams):
+    return grad(dual_obj_no_channel_1q_test, argnums = 0)(dual_vars, dual_params)
 
 # @partial(jit, static_argnums = (1,2))
 # def unvec_and_process_dual_vars(dual_vars: jnp.array, d: int, N: int):
