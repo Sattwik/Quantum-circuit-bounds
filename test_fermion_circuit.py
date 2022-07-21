@@ -26,15 +26,18 @@ colorama.init()
 
 rng = np.random.default_rng()
 seed = rng.integers(low=0, high=100, size=1)[0]
+seed = 69
 key = jax.random.PRNGKey(seed)
 
-N = 6
-d = N
-local_d = 2
+N = 1
+d = 2
+local_d = d
 k = 1
 
 circ_params = gaussian.PrimalParams(N, d, local_d, key, k = k)
 key, subkey = jax.random.split(circ_params.key_after_ham_gen)
+
+# circ_params.layer_hamiltonians = jnp.zeros(circ_params.layer_hamiltonians.shape)
 
 w_parent, v_parent = jnp.linalg.eig(1j * circ_params.h_parent)
 w_parent = np.real(w_parent)
@@ -47,9 +50,10 @@ final_energy = gaussian.energy_after_circuit(circ_params)
 print(colorama.Fore.GREEN + "circ energy = ", final_energy)
 print(colorama.Style.RESET_ALL)
 
-p = 0.001
+p = 1.0
 k_dual = 1
-dual_params = gaussian.DualParams(circ_params, p, k_dual)
+lambda_lower_bounds = 0.1 * jnp.ones(d)
+dual_params = gaussian.DualParams(circ_params, p, k_dual, lambda_lower_bounds)
 
 key, subkey = jax.random.split(key)
 dual_vars_init = jax.random.uniform(key, shape = (dual_params.total_num_dual_vars,))/N
@@ -77,8 +81,8 @@ dual_obj_over_opti, dual_opt_result = \
                       num_iters = num_steps)
 noisy_bound = -gaussian.dual_obj(jnp.array(dual_opt_result.x), dual_params)
 
-plt.plot(-dual_obj_over_opti)
-plt.show()
+# plt.plot(-dual_obj_over_opti)
+# plt.show()
 
 print(colorama.Fore.GREEN + "noisy bound = ", noisy_bound)
 print(colorama.Fore.GREEN + "noisy bound <= clean sol? ")
@@ -119,8 +123,8 @@ dual_obj_over_opti_nc, dual_opt_result_nc = \
                       num_iters = num_steps)
 noisy_bound_nc = -gaussian.dual_obj_no_channel(jnp.array(dual_opt_result_nc.x), dual_params)
 
-plt.plot(-dual_obj_over_opti_nc)
-plt.show()
+# plt.plot(-dual_obj_over_opti_nc)
+# plt.show()
 
 print(colorama.Fore.GREEN + "noisy bound nc = ", noisy_bound_nc)
 print(colorama.Fore.GREEN + "noisy bound nc <= noisy bound? ")

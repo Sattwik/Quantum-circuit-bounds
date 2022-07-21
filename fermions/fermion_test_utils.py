@@ -126,19 +126,22 @@ def ptrace_n_replace(rho: qutip.Qobj, idx: int, N: int) -> qutip.Qobj:
     """
     # move mode to the very end (right)
     for j in range(idx, N - 1):
+        # print('here')
         fswap = fswap_gate(j, N)
         rho = fswap * rho * fswap.dag()
 
     # trace out and replace
     a_end = list_as(N)[N - 1]
     ad_end = list_ads(N)[N - 1]
-
     zero_end = qutip.tensor([qutip.qeye(2)] * (N - 1) + [qutip.basis(2,0)])
 
     tr_idx_rho = zero_end.dag() * rho * zero_end + \
                  zero_end.dag() * a_end * rho * ad_end * zero_end
 
-    tr_idx_rho = qutip.tensor([tr_idx_rho, qutip.qeye(2)/2.0])
+    if N == 1:
+        tr_idx_rho = tr_idx_rho * qutip.qeye(2)/2.0
+    else:
+        tr_idx_rho = qutip.tensor([tr_idx_rho, qutip.qeye(2)/2.0])
 
     # swap back
     for j in range(N - 2, idx - 1, -1):
@@ -370,11 +373,24 @@ def dual_full(dual_vars: jnp.array, dual_params: gaussian.DualParams):
     for i in range(d):
         if i == d-1:
             hi = np.array(h_parent) + sigmas[:,:,i]
+
+            # print('Parent Hamiltonian = ', h_parent)
+            # print('Sigma[' + str(i) + ']= ', sigmas[:,:,i])
+
             hi = full_op_from_majorana(hi)
+
+            # print('Full hd = ', hi)
         else:
+            # print('Sigma[' + str(i) + ']= ', sigmas[:,:,i])
+            # print('Sigma[' + str(i + 1) + ']= ', sigmas[:,:,i + 1])
+            # print('Layer H[' + str(i + 1) + ']= ', np.array(layer_hamiltonians[i+1]))
+
             hi = full_op_from_majorana(sigmas[:,:,i]) - \
                  full_noisy_dual_layer(np.array(layer_hamiltonians[i+1]),
                                   sigmas[:,:,i+1], p)
+
+            # print('Epsilondagsigma[' + str(i) + '] = ', full_noisy_dual_layer(np.array(layer_hamiltonians[i+1]), sigmas[:,:,i+1], p))
+            # print('Full h[' + str(i) + '] = ', hi)
 
         cost += -lambdas[i] * np.log((-hi/lambdas[i]).expm().tr())
 
