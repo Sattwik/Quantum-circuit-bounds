@@ -20,11 +20,11 @@ from fermions import gaussian, fermion_test_utils
 #----------------------------------- TESTS ------------------------------------#
 #------------------------------------------------------------------------------#
 
-N = 8
-d = 8
-local_d = 4
-seed = 69
-
+N = 5
+d = 1
+local_d = 1
+rng = np.random.default_rng()
+seed = rng.integers(low=0, high=100, size=1)[0]
 key = jax.random.PRNGKey(seed)
 
 s, key = gaussian.random_normal_hamiltonian_majorana(N, key)
@@ -42,9 +42,20 @@ print("Noise on hamiltonian test = ", fermion_test_utils.test_noise_on_hamiltoni
 print("Covariance def. test = ", fermion_test_utils.test_covariance_def(np.array(Gamma_mjr), np.array(f), np.array(O), N))
 print("Unitary on fgs test = ", fermion_test_utils.test_unitary_on_fgstate(np.array(Gamma_mjr), np.array(f), np.array(O), np.array(V), np.array(h)))
 print("Corr major from parenth test = ", fermion_test_utils.test_corr_major_from_parenth(np.array(h), N))
-# print("Noise on fgstate test = ", fermion_test_utils.test_noise_on_fgstate(np.array(s), np.array(h), N, 1.0, key))
+# print("Noise on fgstate test = ", fermion_test_utils.test_noise_on_fgstate(np.array(s), np.array(h), N, 0.5, key))
 key, energy_diff, norm_diff = fermion_test_utils.test_circuit_parent_hamiltonian(N, d, local_d, key)
 print("Parent Hamiltonian circuit test = ", energy_diff, norm_diff)
+
+for k in range(N):
+    print('Tracing k = ' + str(k) + ' mode out test = ', fermion_test_utils.test_single_mode_trace_out(np.array(h), k, N))
+
+print("Avg formulation noise on fgstate test = ", fermion_test_utils.test_avg_formulation_noise_on_fgstate(np.array(s), np.array(h), N, 0.5))
+
+# num_samples = 100
+# mc_probs = fermion_test_utils.test_random_num_generation_jax(key, N, num_samples)
+#
+# num_mc_samples_list = np.arange(10, 1000, 10)
+# test_exp, test_exp_gaussian = fermion_test_utils.test_mc_convergence_noise_fgs(np.array(s), np.array(h), N, 0.5, num_mc_samples_list, key)
 
 # key, energy_diff, norm_diff = fermion_test_utils.test_circuit_parent_hamiltonian_local(N, d, local_d, key)
 # print("Local parent Hamiltonian circuit test = ", energy_diff, norm_diff)

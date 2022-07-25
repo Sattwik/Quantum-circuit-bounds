@@ -13,6 +13,7 @@ import jax.numpy as jnp
 import jax.scipy.linalg
 from jax import jit, grad, vmap, value_and_grad
 from jax.example_libraries import optimizers
+import matplotlib.pyplot as plt
 
 from fermions import gaussian
 
@@ -299,11 +300,14 @@ def test_noise_on_fgstate(parent_h: np.array, test_h: np.array, N: int, p: float
 
     Gamma_mjr = gaussian.corr_major_from_parenth(jnp.array(parent_h))
 
-    num_mc_samples = 100
+    num_mc_samples = 5000
     test_exp_gaussian = 0
     for mc_num in range(int(num_mc_samples)):
+        # print('sample num = ', mc_num)
         Gamma_mjr_noisy, key = \
-                    gaussian.noise_on_fgstate_mc_sample(Gamma_mjr, p, N, key)
+                    gaussian.noise_on_fgstate_mc_sample(Gamma_mjr, p, key)
+
+        # print(Gamma_mjr_noisy)
 
         test_exp_gaussian += gaussian.energy(Gamma_mjr_noisy, test_h)/num_mc_samples
 
@@ -421,6 +425,88 @@ def test_circuit_parent_hamiltonian(N: int, d: int, local_d: int, key: jnp.array
     psi, h_times_psi, e_psi = primal_clean_circuit_full(circ_params)
 
     return key, np.abs(e_circ - e_psi), (e_psi * psi - h_times_psi).norm()
+
+def test_single_mode_trace_out(parent_h: np.array, k: int, N: int):
+
+    rho = (-full_op_from_majorana(parent_h)).expm()
+    rho = rho/rho.tr()
+    rho_noisy = ptrace_n_replace(rho, k, N)
+    Gamma_mjr_noisy_exact = np.zeros((2*N, 2*N), dtype = complex)
+    x_list = [x(N, n) for n in range(0, N)]
+    p_list = [p(N, n) for n in range(0, N)]
+    r_list = x_list + p_list
+
+    for i in range(2*N):
+        for j in range(2*N):
+            Gamma_mjr_noisy_exact[i,j] = (rho_noisy * r_list[i] * r_list[j]).tr()
+
+    Gamma_mjr = gaussian.corr_major_from_parenth(jnp.array(parent_h))
+    Gamma_mjr_noisy = gaussian.noise_on_kth_mode(Gamma_mjr, k)
+    Gamma_mjr_noisy = np.array(Gamma_mjr_noisy)
+
+    return np.linalg.norm(Gamma_mjr_noisy_exact - Gamma_mjr_noisy) #, Gamma_mjr_noisy_exact, Gamma_mjr_noisy
+
+def gen_sample(key, N):
+    key, subkey = jax.random.split(key)
+    mc_probs = jax.random.uniform(subkey, shape = (N,))
+
+    return mc_probs, key
+
+def test_random_num_generation_jax(key: jnp.array, N, num_sample: int = 100):
+
+    mc_probs_list = []
+
+    for mc_num in range(int(num_sample)):
+        mc_probs, key = gen_sample(key, N)
+        mc_probs_list.append(mc_probs)
+
+    return np.array(mc_probs_list)
+
+
+
+def test_mc_convergence_noise_fgs(parent_h: np.array,
+                    test_h: np.array, N: int, p: float, num_mc_samples_list: int,
+                    key: jnp.array):
+    rho = (-full_op_from_majorana(parent_h)).expm()
+    rho = rho/rho.tr()
+
+    rho_noisy = noise_on_full_op(rho, p, N)
+    test_exp = (rho_noisy * full_op_from_majorana(test_h)).tr()
+
+    Gamma_mjr = gaussian.corr_major_from_parenth(jnp.array(parent_h))
+
+    test_exp_gaussian_list = []
+
+    for num_mc_samples in num_mc_samples_list:
+        test_exp_gaussian = 0
+
+        print(num_mc_samples)
+
+        for mc_num in range(int(num_mc_samples)):
+            # print('sample num = ', mc_num)
+            Gamma_mjr_noisy, key = \
+                        gaussian.noise_on_fgstate_mc_sample(Gamma_mjr, p, key)
+
+            # print(Gamma_mjr_noisy)
+
+            test_exp_gaussian += gaussian.energy(Gamma_mjr_noisy, test_h)/num_mc_samples
+
+        test_exp_gaussian_list.append(test_exp_gaussian)
+
+    return test_exp, test_exp_gaussian_list
+
+def test_avg_formulation_noise_on_fgstate(parent_h: np.array, test_h: np.array, N: int, p: float):
+    rho = (-full_op_from_majorana(parent_h)).expm()
+    rho = rho/rho.tr()
+
+    rho_noisy = noise_on_full_op(rho, p, N)
+    test_exp = (rho_noisy * full_op_from_majorana(test_h)).tr()
+
+    Gamma_mjr = gaussian.corr_major_from_parenth(jnp.array(parent_h))
+    Gamma_mjr_noisy = gaussian.average_Gamma_mjr_noisy(Gamma_mjr, p)
+    test_exp_gaussian = gaussian.energy(Gamma_mjr_noisy, test_h)
+
+    return np.abs(test_exp - test_exp_gaussian), test_exp, test_exp_gaussian
 
 # def test_circuit_parent_hamiltonian_local(N: int, d: int, local_d: int, key: jnp.array):
 #

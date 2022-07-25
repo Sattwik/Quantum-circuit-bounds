@@ -335,6 +335,37 @@ def energy_after_circuit(params: PrimalParams):
 
     return jnp.real(energy(Gamma_mjr, params.h_parent))
 
+def noise_on_kth_mode(Gamma_mjr: jnp.array, k: int):
+
+    N = Gamma_mjr.shape[0]//2
+    gamma = covariance_from_corr_major(Gamma_mjr)
+    gamma_noisy = gamma
+
+    gamma_noisy = gamma_noisy.at[k, :].set(jnp.zeros(2 * N))
+    gamma_noisy = gamma_noisy.at[:, k].set(jnp.zeros(2 * N))
+    gamma_noisy = gamma_noisy.at[k + N, :].set(jnp.zeros(2 * N))
+    gamma_noisy = gamma_noisy.at[:, k + N].set(jnp.zeros(2 * N))
+
+    Gamma_mjr_noisy = corr_major_from_covariance(gamma_noisy)
+
+    return Gamma_mjr_noisy
+
+def average_Gamma_mjr_noisy(Gamma_mjr: jnp.array, p: float):
+    N = Gamma_mjr.shape[0]//2
+    gamma = covariance_from_corr_major(Gamma_mjr)
+    gamma_noisy = gamma
+
+    for k in range(N):
+        gamma_replaced = gamma_noisy.at[k, :].set(jnp.zeros(2 * N))
+        gamma_replaced = gamma_replaced.at[:, k].set(jnp.zeros(2 * N))
+        gamma_replaced = gamma_replaced.at[k + N, :].set(jnp.zeros(2 * N))
+        gamma_replaced = gamma_replaced.at[:, k + N].set(jnp.zeros(2 * N))
+
+        gamma_noisy = p * gamma_replaced + (1 - p) * gamma_noisy
+
+    Gamma_mjr_noisy = corr_major_from_covariance(gamma_noisy)
+    return Gamma_mjr_noisy
+
 def noise_on_fgstate_mc_sample(Gamma_mjr: jnp.array, p: float, key: jnp.array):
     """
     Parameters
@@ -349,20 +380,24 @@ def noise_on_fgstate_mc_sample(Gamma_mjr: jnp.array, p: float, key: jnp.array):
     (on every mode).
     """
     N = Gamma_mjr.shape[0]//2
-    gamma = covariance_from_corr_major(Gamma_mjr, N)
+    gamma = covariance_from_corr_major(Gamma_mjr)
 
     # print('gamma = ', gamma)
 
     key, subkey = jax.random.split(key)
+
+    # print('subkey = ', subkey)
+
     mc_probs = jax.random.uniform(subkey, shape = (N,))
+
+    # print(mc_probs)
 
     # print(mc_probs)
 
     gamma_noisy = gamma
 
     for k in range(N):
-        if mc_probs[k] <= p:
-            # print('k = ', k)
+        if mc_probs.at[k].get() <= p:
             gamma_noisy = gamma_noisy.at[k, :].set(jnp.zeros(2 * N))
             gamma_noisy = gamma_noisy.at[:, k].set(jnp.zeros(2 * N))
             gamma_noisy = gamma_noisy.at[k + N, :].set(jnp.zeros(2 * N))
@@ -370,7 +405,7 @@ def noise_on_fgstate_mc_sample(Gamma_mjr: jnp.array, p: float, key: jnp.array):
 
     # print('gamma_noisy = ', gamma_noisy)
 
-    Gamma_mjr_noisy = corr_major_from_covariance(gamma_noisy, N)
+    Gamma_mjr_noisy = corr_major_from_covariance(gamma_noisy)
 
     return Gamma_mjr_noisy, key
 
