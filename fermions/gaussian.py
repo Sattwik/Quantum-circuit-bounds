@@ -335,79 +335,101 @@ def energy_after_circuit(params: PrimalParams):
 
     return jnp.real(energy(Gamma_mjr, params.h_parent))
 
-def noise_on_kth_mode(Gamma_mjr: jnp.array, k: int):
-
-    N = Gamma_mjr.shape[0]//2
-    gamma = covariance_from_corr_major(Gamma_mjr)
-    gamma_noisy = gamma
-
-    gamma_noisy = gamma_noisy.at[k, :].set(jnp.zeros(2 * N))
-    gamma_noisy = gamma_noisy.at[:, k].set(jnp.zeros(2 * N))
-    gamma_noisy = gamma_noisy.at[k + N, :].set(jnp.zeros(2 * N))
-    gamma_noisy = gamma_noisy.at[:, k + N].set(jnp.zeros(2 * N))
-
-    Gamma_mjr_noisy = corr_major_from_covariance(gamma_noisy)
-
-    return Gamma_mjr_noisy
-
-def average_Gamma_mjr_noisy(Gamma_mjr: jnp.array, p: float):
-    N = Gamma_mjr.shape[0]//2
-    gamma = covariance_from_corr_major(Gamma_mjr)
-    gamma_noisy = gamma
-
-    for k in range(N):
-        gamma_replaced = gamma_noisy.at[k, :].set(jnp.zeros(2 * N))
-        gamma_replaced = gamma_replaced.at[:, k].set(jnp.zeros(2 * N))
-        gamma_replaced = gamma_replaced.at[k + N, :].set(jnp.zeros(2 * N))
-        gamma_replaced = gamma_replaced.at[:, k + N].set(jnp.zeros(2 * N))
-
-        gamma_noisy = p * gamma_replaced + (1 - p) * gamma_noisy
-
-    Gamma_mjr_noisy = corr_major_from_covariance(gamma_noisy)
-    return Gamma_mjr_noisy
-
-def noise_on_fgstate_mc_sample(Gamma_mjr: jnp.array, p: float, key: jnp.array):
-    """
-    Parameters
-    ----------
-    Gamma_mjr: Correlation matrix (Majorana rep.)
-    p: noise probability
-    key: to generate random mc sample
-
-    Returns
-    -------
-    Correlation matrix (Majorana rep.) of f.g.s. after one MC sampling of noise
-    (on every mode).
-    """
+def noise_on_kth_mode(k: int, args: Tuple):
+    Gamma_mjr, p = args
     N = Gamma_mjr.shape[0]//2
     gamma = covariance_from_corr_major(Gamma_mjr)
 
-    # print('gamma = ', gamma)
+    gamma_replaced = gamma.at[k, :].set(jnp.zeros(2 * N))
+    gamma_replaced = gamma_replaced.at[:, k].set(jnp.zeros(2 * N))
+    gamma_replaced = gamma_replaced.at[k + N, :].set(jnp.zeros(2 * N))
+    gamma_replaced = gamma_replaced.at[:, k + N].set(jnp.zeros(2 * N))
 
-    key, subkey = jax.random.split(key)
-
-    # print('subkey = ', subkey)
-
-    mc_probs = jax.random.uniform(subkey, shape = (N,))
-
-    # print(mc_probs)
-
-    # print(mc_probs)
-
-    gamma_noisy = gamma
-
-    for k in range(N):
-        if mc_probs.at[k].get() <= p:
-            gamma_noisy = gamma_noisy.at[k, :].set(jnp.zeros(2 * N))
-            gamma_noisy = gamma_noisy.at[:, k].set(jnp.zeros(2 * N))
-            gamma_noisy = gamma_noisy.at[k + N, :].set(jnp.zeros(2 * N))
-            gamma_noisy = gamma_noisy.at[:, k + N].set(jnp.zeros(2 * N))
-
-    # print('gamma_noisy = ', gamma_noisy)
-
+    gamma_noisy = p * gamma_replaced + (1 - p) * gamma
     Gamma_mjr_noisy = corr_major_from_covariance(gamma_noisy)
 
-    return Gamma_mjr_noisy, key
+    return (Gamma_mjr_noisy, p)
+
+def noisy_primal_ith_layer(i: int, args: Tuple):
+    Gamma_mjr, layer_hamiltonians, N, p = args
+    Gamma_mjr = unitary_on_fgstate(Gamma_mjr, layer_hamiltonians.at[i, :, :].get())
+    init_args = (Gamma_mjr, p)
+    Gamma_mjr, _ = jax.lax.fori_loop(0, N, noise_on_kth_mode, init_args)
+    return (Gamma_mjr, layer_hamiltonians, N, p)
+
+def noisy_primal(params:PrimalParams, p: float):
+    Gamma_mjr = params.Gamma_mjr_init
+    layer_hamiltonians = params.layer_hamiltonians
+    N = params.N
+    init_args = (Gamma_mjr, layer_hamiltonians, N, p)
+    Gamma_mjr, _, _, _ = jax.lax.fori_loop(0, params.d, noisy_primal_ith_layer, init_args)
+
+    return jnp.real(energy(Gamma_mjr, params.h_parent))
+
+# for i in range(params.d):
+#     Gamma_mjr = unitary_on_fgstate(Gamma_mjr, params.layer_hamiltonians.at[i, :, :].get())
+#     init_args = (Gamma_mjr, p)
+#     Gamma_mjr, _ = jax.lax.fori_loop(0, params.N, noise_on_kth_mode, init_args)
+
+
+# def average_Gamma_mjr_noisy(Gamma_mjr: jnp.array, p: float):
+#     N = Gamma_mjr.shape[0]//2
+#     gamma = covariance_from_corr_major(Gamma_mjr)
+#     gamma_noisy = gamma
+#
+#     for k in range(N):
+#         gamma_replaced = gamma_noisy.at[k, :].set(jnp.zeros(2 * N))
+#         gamma_replaced = gamma_replaced.at[:, k].set(jnp.zeros(2 * N))
+#         gamma_replaced = gamma_replaced.at[k + N, :].set(jnp.zeros(2 * N))
+#         gamma_replaced = gamma_replaced.at[:, k + N].set(jnp.zeros(2 * N))
+#
+#         gamma_noisy = p * gamma_replaced + (1 - p) * gamma_noisy
+#
+#     Gamma_mjr_noisy = corr_major_from_covariance(gamma_noisy)
+#     return Gamma_mjr_noisy
+#
+# def noise_on_fgstate_mc_sample(Gamma_mjr: jnp.array, p: float, key: jnp.array):
+#     """
+#     Parameters
+#     ----------
+#     Gamma_mjr: Correlation matrix (Majorana rep.)
+#     p: noise probability
+#     key: to generate random mc sample
+#
+#     Returns
+#     -------
+#     Correlation matrix (Majorana rep.) of f.g.s. after one MC sampling of noise
+#     (on every mode).
+#     """
+#     N = Gamma_mjr.shape[0]//2
+#     gamma = covariance_from_corr_major(Gamma_mjr)
+#
+#     # print('gamma = ', gamma)
+#
+#     key, subkey = jax.random.split(key)
+#
+#     # print('subkey = ', subkey)
+#
+#     mc_probs = jax.random.uniform(subkey, shape = (N,))
+#
+#     # print(mc_probs)
+#
+#     # print(mc_probs)
+#
+#     gamma_noisy = gamma
+#
+#     for k in range(N):
+#         if mc_probs.at[k].get() <= p:
+#             gamma_noisy = gamma_noisy.at[k, :].set(jnp.zeros(2 * N))
+#             gamma_noisy = gamma_noisy.at[:, k].set(jnp.zeros(2 * N))
+#             gamma_noisy = gamma_noisy.at[k + N, :].set(jnp.zeros(2 * N))
+#             gamma_noisy = gamma_noisy.at[:, k + N].set(jnp.zeros(2 * N))
+#
+#     # print('gamma_noisy = ', gamma_noisy)
+#
+#     Gamma_mjr_noisy = corr_major_from_covariance(gamma_noisy)
+#
+#     return Gamma_mjr_noisy, key
 
 #--------------------------------------------------#
 #------------------ Dual methods ------------------#
