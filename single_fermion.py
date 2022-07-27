@@ -33,7 +33,7 @@ key = jax.random.PRNGKey(int(cliargs.seed))
 N = int(cliargs.N)
 
 print('N = ', N)
-print('seed = ', seed)
+print('seed = ', cliargs.seed)
 
 if N%2 == 0:
     d = N - 1
