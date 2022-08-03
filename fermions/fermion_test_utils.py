@@ -508,6 +508,16 @@ def test_avg_formulation_noise_on_fgstate(parent_h: np.array, test_h: np.array, 
 
     return np.abs(test_exp - test_exp_gaussian), test_exp, test_exp_gaussian
 
+def test_entropy_parent(h_parent: np.array, lmbda: float):
+    beta = 1/lmbda
+    energies = full_op_from_majorana(h_parent).eigenenergies()
+    entropy_full = np.log(np.sum(np.exp(-beta * energies))) \
+                   + beta * np.sum(energies * np.exp(-beta * energies))/np.sum(np.exp(-beta * energies))
+
+    entropy = gaussian.entropy_parent(jnp.array([lmbda]), jnp.array(h_parent))
+
+    return np.abs(entropy - entropy_full), entropy, entropy_full
+
 # def test_circuit_parent_hamiltonian_local(N: int, d: int, local_d: int, key: jnp.array):
 #
 #     circ_params = gaussian.PrimalParams(N, d, local_d, key)

@@ -46,10 +46,13 @@ print("Corr major from parenth test = ", fermion_test_utils.test_corr_major_from
 key, energy_diff, norm_diff = fermion_test_utils.test_circuit_parent_hamiltonian(N, d, local_d, key)
 print("Parent Hamiltonian circuit test = ", energy_diff, norm_diff)
 
-for k in range(N):
-    print('Tracing k = ' + str(k) + ' mode out test = ', fermion_test_utils.test_single_mode_trace_out(np.array(h), k, N))
+# for k in range(N):
+#     print('Tracing k = ' + str(k) + ' mode out test = ', fermion_test_utils.test_single_mode_trace_out(np.array(h), k, N))
+#
+# print("Avg formulation noise on fgstate test = ", fermion_test_utils.test_avg_formulation_noise_on_fgstate(np.array(s), np.array(h), N, 0.5))
 
-print("Avg formulation noise on fgstate test = ", fermion_test_utils.test_avg_formulation_noise_on_fgstate(np.array(s), np.array(h), N, 0.5))
+lmbda = 0.1
+print("Entropy test = ", fermion_test_utils.test_entropy_parent(np.array(h), lmbda))
 
 # num_samples = 100
 # mc_probs = fermion_test_utils.test_random_num_generation_jax(key, N, num_samples)

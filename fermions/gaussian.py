@@ -229,7 +229,6 @@ def corr_major_from_parenth(h: jnp.array):
     Gamma_mjr = jnp.matmul(jnp.matmul(v, w_Gamma_mjr), v.conj().T)
     return Gamma_mjr
 
-
 #--------------------------------------------------#
 #----------------- Primal methods -----------------#
 #--------------------------------------------------#
@@ -365,6 +364,15 @@ def noisy_primal(params:PrimalParams, p: float):
     Gamma_mjr, _, _, _ = jax.lax.fori_loop(0, params.d, noisy_primal_ith_layer, init_args)
 
     return jnp.real(energy(Gamma_mjr, params.h_parent))
+
+def entropy_parent(lmbda: jnp.array, h_parent: jnp.array):
+    beta = 1/lmbda.at[0].get()
+    Gamma_mjr = corr_major_from_parenth(h_parent * beta)
+
+    entropy = jnp.log(trace_fgstate(-h_parent * beta)) \
+            + beta * energy(Gamma_mjr, h_parent)
+
+    return entropy
 
 # for i in range(params.d):
 #     Gamma_mjr = unitary_on_fgstate(Gamma_mjr, params.layer_hamiltonians.at[i, :, :].get())
