@@ -51,7 +51,7 @@ print("clean sol = ", clean_sol)
 
 p = float(cliargs.p)
 k_dual = int(cliargs.k_dual)
-lambda_lower_bounds = 0.1 * jnp.ones(d)
+lambda_lower_bounds = 0.0 * jnp.ones(d)
 dual_params = gaussian.DualParams(circ_params, p, k_dual, lambda_lower_bounds)
 
 key, subkey = jax.random.split(key)
