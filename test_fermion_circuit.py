@@ -24,11 +24,12 @@ from fermions import gaussian, fermion_test_utils
 
 colorama.init()
 
-N = 6
+N = 20
 if N%2 == 0:
     d = N - 1
 else:
     d = N
+# d = 2
 local_d = 1
 k = 1
 
@@ -125,12 +126,14 @@ noisy_bound_nc = -gaussian.dual_obj_no_channel(jnp.array(dual_opt_result_nc.x), 
 #                           num_iters = num_steps, bounds = bnds)
 #     noisy_bound_nc_direct = -gaussian.dual_obj_no_channel_direct_lambda(jnp.array(dual_opt_result_nc_direct.x), dual_params)
 #
-#     # lmbda_range = jnp.linspace(5e-4, 1e6, 1e3)
-#     # lmbda_range = jnp.reshape(lmbda_range, (1000, 1))
-#     # dual_grad_nc_array = vmap(gaussian.dual_grad_no_channel_direct_lambda, in_axes = [0, None])(lmbda_range, dual_params)
-#     #
-#     # zero_index = jnp.argmin(jnp.abs(dual_grad_nc_array))
-#     # lmbda_grad = lmbda_range.at[zero_index].get()
+# a_range = jnp.linspace(-4, 5, 1000)
+# lmbda_range = jnp.log(1 + jnp.exp(a_range))
+# a_range = jnp.reshape(a_range, (1000, 1))
+# dual_grad_nc_array = vmap(gaussian.dual_grad_no_channel, in_axes = [0, None])(a_range, dual_params)
+# dual_obj_nc_array = vmap(gaussian.dual_obj_no_channel, in_axes = [0, None])(a_range, dual_params)
+#
+# zero_index = jnp.argmin(jnp.abs(dual_grad_nc_array))
+# lmbda_grad = lmbda_range.at[zero_index].get()
 #
 #     # plt.plot(-dual_obj_over_opti_nc)
 #     # plt.show()
@@ -171,22 +174,50 @@ dual_vars_init = jax.random.uniform(key, shape = (dual_params.total_num_dual_var
 # print("full dual = ", obj_init_full)
 # print(colorama.Style.RESET_ALL)
 
-# alpha = 0.01
+alpha = 0.01
 num_steps = int(5e3)
-# dual_obj_over_opti, dual_opt_result = \
+
+#phase 1
+# dual_obj_over_opti_adam, dual_opt_result_adam = \
 #     gaussian.adam_optimize(gaussian.dual_obj, gaussian.dual_grad,
 #                            dual_vars_init, dual_params,
 #                            alpha, num_steps)
-# noisy_bound = -gaussian.dual_obj(jnp.array(dual_opt_result), dual_params)
+# noisy_bound_adam_p1 = -gaussian.dual_obj(jnp.array(dual_opt_result_adam), dual_params)
 
-dual_obj_over_opti, dual_opt_result = \
+#phase 2
+# alpha = 0.001
+# dual_vars_init = jnp.array(dual_opt_result_adam)
+# dual_obj_over_opti_adam, dual_opt_result_adam = \
+#     gaussian.adam_optimize(gaussian.dual_obj, gaussian.dual_grad,
+#                            dual_vars_init, dual_params,
+#                            alpha, num_steps)
+# noisy_bound_adam_p2 = -gaussian.dual_obj(jnp.array(dual_opt_result_adam), dual_params)
+
+# phase 1
+dual_obj_over_opti_phase1, dual_opt_result_phase1 = \
     gaussian.optimize(dual_vars_init, dual_params,
                       gaussian.dual_obj, gaussian.dual_grad,
-                      num_iters = num_steps)
-noisy_bound = -gaussian.dual_obj(jnp.array(dual_opt_result.x), dual_params)
+                      num_iters = num_steps, opt_method = "BFGS")
+noisy_bound = -gaussian.dual_obj(jnp.array(dual_opt_result_phase1.x), dual_params)
 
-plt.plot(-dual_obj_over_opti)
+print("noisy bound after 5e3 steps = ", noisy_bound)
+
+# phase 2
+dual_vars_init = jnp.array(dual_opt_result_phase1.x)
+dual_obj_over_opti_phase2, dual_opt_result_phase2 = \
+    gaussian.optimize(dual_vars_init, dual_params,
+                      gaussian.dual_obj, gaussian.dual_grad,
+                      num_iters = num_steps, opt_method = "BFGS")
+noisy_bound = -gaussian.dual_obj(jnp.array(dual_opt_result_phase2.x), dual_params)
+
+print("noisy bound after 10e3 steps = ", noisy_bound)
+
+plt.plot(-dual_obj_over_opti_phase1)
 plt.show()
+
+plt.plot(-dual_obj_over_opti_phase2)
+plt.show()
+
 
 # dual_vars_init_direct = dual_vars_init
 # dual_vars_init_direct = \
@@ -205,10 +236,10 @@ plt.show()
 #                       num_iters = num_steps, bounds = bnds)
 # noisy_bound_direct = -gaussian.dual_obj_direct_lambda(jnp.array(dual_opt_result_direct.x), dual_params)
 
-dual_vars_opt_result = jnp.array(dual_opt_result.x)
-dual_vars_opt_result = dual_vars_opt_result.at[:d].set(jnp.log(1 + jnp.exp(dual_vars_opt_result.at[:d].get())))
-
-noisy_bound_direct = -gaussian.dual_obj_direct_lambda(dual_vars_opt_result, dual_params)
+# dual_vars_opt_result = jnp.array(dual_opt_result.x)
+# dual_vars_opt_result = dual_vars_opt_result.at[:d].set(jnp.log(1 + jnp.exp(dual_vars_opt_result.at[:d].get())))
+#
+# noisy_bound_direct = -gaussian.dual_obj_direct_lambda(dual_vars_opt_result, dual_params)
 
 print(colorama.Fore.GREEN + "noisy bound = ", noisy_bound)
 print(colorama.Fore.GREEN + "noisy bound nc = ", noisy_bound_nc)
@@ -242,10 +273,10 @@ print("lambdas = ", lambda_lower_bounds + dual_vars_opt_result[:d])
 # print(colorama.Style.RESET_ALL)
 #
 # noisy_bound_full = -fermion_test_utils.dual_full(jnp.array(dual_opt_result), dual_params)
-noisy_bound_full = -fermion_test_utils.dual_full(jnp.array(dual_opt_result.x), dual_params)
-print(colorama.Fore.GREEN + "noisy bound full = ", noisy_bound_full)
-print(colorama.Fore.GREEN + "noisy bound - noisy bound full = ", noisy_bound - noisy_bound_full)
-print(colorama.Style.RESET_ALL)
+# noisy_bound_full = -fermion_test_utils.dual_full(jnp.array(dual_opt_result.x), dual_params)
+# print(colorama.Fore.GREEN + "noisy bound full = ", noisy_bound_full)
+# print(colorama.Fore.GREEN + "noisy bound - noisy bound full = ", noisy_bound - noisy_bound_full)
+# print(colorama.Style.RESET_ALL)
 
 
 #-------------------- old stuff -----------------------#
@@ -300,12 +331,13 @@ print(colorama.Style.RESET_ALL)
 
 # #
 
-# lambdas, sigmas = gaussian.unvec_and_process_dual_vars(jnp.array(dual_opt_result.x), dual_params)
-# layer_hamiltonians = dual_params.circ_params.layer_hamiltonians
-# hi = sigmas.at[:,:,i].get() - \
-#      gaussian.noisy_dual_layer(layer_hamiltonians.at[i+1, :, :].get(),
-#                       sigmas.at[:,:,i+1].get(), p)
-# gaussian.trace_fgstate(-hi/lambdas.at[i].get())
+lambdas, sigmas = gaussian.unvec_and_process_dual_vars(jnp.array(dual_opt_result.x), dual_params)
+layer_hamiltonians = dual_params.circ_params.layer_hamiltonians
+h_parent = dual_params.circ_params.h_parent
+hi = sigmas.at[:,:,i].get() - \
+     gaussian.noisy_dual_layer(layer_hamiltonians.at[i+1, :, :].get(),
+                      sigmas.at[:,:,i+1].get(), p)
+gaussian.trace_fgstate(-hi/lambdas.at[i].get())
 
 
 colorama.deinit()

@@ -24,9 +24,14 @@ CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
                   '#f781bf', '#a65628', '#984ea3',
                   '#999999', '#e41a1c', '#dede00']
 
+# lambda_bounds = 0.1
 data_path = "./../vqa_data/0727/20220727-125505/"
 
-N_list = [10,15,20,25,30]
+# lambda_bounds = 0
+data_path = "./../vqa_data/0804/20220804-183936/"
+
+# N_list = [10,15,20,25,30]
+N_list = [10,15,20,25]
 p_list = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 
 num_k_duals = 2
