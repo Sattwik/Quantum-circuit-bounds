@@ -52,8 +52,8 @@ def optimize(vars_init: np.array, params, obj_fun: Callable, grad_fun: Callable,
                                 jac = unjaxify_grad(grad_fun),
                                 options={'disp': None,
                                 'maxcor': 10,
-                                'ftol': 2.220446049250313e-12,
-                                'gtol': 1e-12,
+                                'ftol': 2.220446049250313e-09,
+                                'gtol': 1e-05,
                                 'eps': 1e-08,
                                 'maxfun': 15000,
                                 'maxiter': num_iters,
@@ -445,11 +445,12 @@ def entropy_parent(lmbda: jnp.array, h_parent: jnp.array):
 
 class DualParams():
     def __init__(self, circ_params: PrimalParams, p: float, k_dual: int,
-                 lambda_lower_bounds: jnp.array):
+                 lambda_lower_bounds: jnp.array, scale: float = 1):
         self.circ_params = circ_params
         self.p = p
         self.k_dual = k_dual
         self.lambda_lower_bounds = lambda_lower_bounds
+        self.scale = scale
 
         block_upper_indices_to_zero = jnp.triu_indices(self.circ_params.N, self.k_dual + 1)
         block_lower_indices_to_zero = jnp.tril_indices(self.circ_params.N, -self.k_dual - 1)

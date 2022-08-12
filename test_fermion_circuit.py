@@ -24,7 +24,7 @@ from fermions import gaussian, fermion_test_utils
 
 colorama.init()
 
-N = 20
+N = 30
 if N%2 == 0:
     d = N - 1
 else:
@@ -64,7 +64,7 @@ print(colorama.Style.RESET_ALL)
 #---------------------------------- NOISY SOL ---------------------------------#
 #------------------------------------------------------------------------------#
 
-p = 0.0
+p = 0.05
 
 # noisy_sol_full = fermion_test_utils.primal_noisy_circuit_full(dual_params)
 noisy_sol = gaussian.noisy_primal(circ_params, p)
@@ -197,25 +197,38 @@ num_steps = int(5e3)
 dual_obj_over_opti_phase1, dual_opt_result_phase1 = \
     gaussian.optimize(dual_vars_init, dual_params,
                       gaussian.dual_obj, gaussian.dual_grad,
-                      num_iters = num_steps, opt_method = "BFGS")
+                      num_iters = num_steps)
 noisy_bound = -gaussian.dual_obj(jnp.array(dual_opt_result_phase1.x), dual_params)
 
-print("noisy bound after 5e3 steps = ", noisy_bound)
+print("noisy bound after phase 1 = ", noisy_bound)
 
 # phase 2
 dual_vars_init = jnp.array(dual_opt_result_phase1.x)
 dual_obj_over_opti_phase2, dual_opt_result_phase2 = \
     gaussian.optimize(dual_vars_init, dual_params,
                       gaussian.dual_obj, gaussian.dual_grad,
-                      num_iters = num_steps, opt_method = "BFGS")
+                      num_iters = num_steps)
 noisy_bound = -gaussian.dual_obj(jnp.array(dual_opt_result_phase2.x), dual_params)
 
-print("noisy bound after 10e3 steps = ", noisy_bound)
+print("noisy bound after phase 2 = ", noisy_bound)
+
+# phase 3
+dual_vars_init = jnp.array(dual_opt_result_phase2.x)
+dual_obj_over_opti_phase3, dual_opt_result_phase3 = \
+    gaussian.optimize(dual_vars_init, dual_params,
+                      gaussian.dual_obj, gaussian.dual_grad,
+                      num_iters = num_steps)
+noisy_bound = -gaussian.dual_obj(jnp.array(dual_opt_result_phase3.x), dual_params)
+
+print("noisy bound after phase 3 = ", noisy_bound)
 
 plt.plot(-dual_obj_over_opti_phase1)
 plt.show()
 
 plt.plot(-dual_obj_over_opti_phase2)
+plt.show()
+
+plt.plot(-dual_obj_over_opti_phase3)
 plt.show()
 
 
