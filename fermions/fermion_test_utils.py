@@ -518,6 +518,13 @@ def test_entropy_parent(h_parent: np.array, lmbda: float):
 
     return np.abs(entropy - entropy_full), entropy, entropy_full
 
+def test_log_trace(h: jnp.array):
+
+    trace_direct = gaussian.trace_fgstate(h)
+    log_trace_direct = gaussian.log_trace_fgstate(h)
+
+    return jnp.log(trace_direct) - log_trace_direct
+
 # def test_circuit_parent_hamiltonian_local(N: int, d: int, local_d: int, key: jnp.array):
 #
 #     circ_params = gaussian.PrimalParams(N, d, local_d, key)

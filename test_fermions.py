@@ -54,6 +54,8 @@ print("Parent Hamiltonian circuit test = ", energy_diff, norm_diff)
 lmbda = 0.1
 print("Entropy test = ", fermion_test_utils.test_entropy_parent(np.array(h), lmbda))
 
+print("log_trace test = ", fermion_test_utils.test_log_trace(h))
+
 # num_samples = 100
 # mc_probs = fermion_test_utils.test_random_num_generation_jax(key, N, num_samples)
 #

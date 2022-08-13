@@ -36,7 +36,7 @@ k = 1
 rng = np.random.default_rng()
 # seed = rng.integers(low=0, high=100, size=1)[0]
 # seed = 69
-seed = N + 0
+seed = N + 2
 key = jax.random.PRNGKey(seed)
 
 circ_params = gaussian.PrimalParams(N, d, local_d, key, k = k)
@@ -64,7 +64,7 @@ print(colorama.Style.RESET_ALL)
 #---------------------------------- NOISY SOL ---------------------------------#
 #------------------------------------------------------------------------------#
 
-p = 0.05
+p = 0.2
 
 # noisy_sol_full = fermion_test_utils.primal_noisy_circuit_full(dual_params)
 noisy_sol = gaussian.noisy_primal(circ_params, p)
@@ -194,43 +194,47 @@ num_steps = int(5e3)
 # noisy_bound_adam_p2 = -gaussian.dual_obj(jnp.array(dual_opt_result_adam), dual_params)
 
 # phase 1
-dual_obj_over_opti_phase1, dual_opt_result_phase1 = \
-    gaussian.optimize(dual_vars_init, dual_params,
-                      gaussian.dual_obj, gaussian.dual_grad,
-                      num_iters = num_steps)
-noisy_bound = -gaussian.dual_obj(jnp.array(dual_opt_result_phase1.x), dual_params)
+# dual_obj_over_opti_phase1, dual_opt_result_phase1 = \
+#     gaussian.optimize(dual_vars_init, dual_params,
+#                       gaussian.dual_obj, gaussian.dual_grad,
+#                       num_iters = num_steps)
+# noisy_bound = -gaussian.dual_obj(jnp.array(dual_opt_result_phase1.x), dual_params)
+#
+# print("noisy bound after phase 1 = ", noisy_bound)
+#
+# # phase 2
+# dual_vars_init_phase2 = jnp.array(dual_opt_result_phase1.x)
+# dual_obj_over_opti_phase2, dual_opt_result_phase2 = \
+#     gaussian.optimize(dual_vars_init_phase2, dual_params,
+#                       gaussian.dual_obj, gaussian.dual_grad,
+#                       num_iters = num_steps)
+# noisy_bound = -gaussian.dual_obj(jnp.array(dual_opt_result_phase2.x), dual_params)
+#
+# print("noisy bound after phase 2 = ", noisy_bound)
+#
+# plt.plot(-dual_obj_over_opti_phase1)
+# plt.show()
+#
+# plt.plot(-dual_obj_over_opti_phase2)
+# plt.show()
 
-print("noisy bound after phase 1 = ", noisy_bound)
+dual_obj_init = gaussian.dual_obj(dual_vars_init, dual_params)
+dual_obj_log_init = gaussian.dual_obj_log(dual_vars_init, dual_params)
 
-# phase 2
-dual_vars_init = jnp.array(dual_opt_result_phase1.x)
-dual_obj_over_opti_phase2, dual_opt_result_phase2 = \
-    gaussian.optimize(dual_vars_init, dual_params,
-                      gaussian.dual_obj, gaussian.dual_grad,
-                      num_iters = num_steps)
-noisy_bound = -gaussian.dual_obj(jnp.array(dual_opt_result_phase2.x), dual_params)
+dual_grad_init = gaussian.dual_grad(dual_vars_init, dual_params)
+dual_grad_log_init = gaussian.dual_grad_log(dual_vars_init, dual_params)
 
-print("noisy bound after phase 2 = ", noisy_bound)
+print('value diff = ', dual_obj_init - dual_obj_log_init)
+print('grad diff = ', jnp.linalg.norm(dual_grad_init - dual_grad_log_init))
 
-# phase 3
-dual_vars_init = jnp.array(dual_opt_result_phase2.x)
-dual_obj_over_opti_phase3, dual_opt_result_phase3 = \
-    gaussian.optimize(dual_vars_init, dual_params,
-                      gaussian.dual_obj, gaussian.dual_grad,
-                      num_iters = num_steps)
-noisy_bound = -gaussian.dual_obj(jnp.array(dual_opt_result_phase3.x), dual_params)
-
-print("noisy bound after phase 3 = ", noisy_bound)
-
-plt.plot(-dual_obj_over_opti_phase1)
-plt.show()
-
-plt.plot(-dual_obj_over_opti_phase2)
-plt.show()
-
-plt.plot(-dual_obj_over_opti_phase3)
-plt.show()
-
+# dual_obj_over_opti_log, dual_opt_result_log = \
+#     gaussian.optimize(dual_vars_init, dual_params,
+#                       gaussian.dual_obj_log, gaussian.dual_grad_log,
+#                       num_iters = num_steps)
+# noisy_bound_log = -gaussian.dual_obj(jnp.array(dual_opt_result_log.x), dual_params)
+#
+# plt.plot(-dual_obj_over_opti_log)
+# plt.show()
 
 # dual_vars_init_direct = dual_vars_init
 # dual_vars_init_direct = \
