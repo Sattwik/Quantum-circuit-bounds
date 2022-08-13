@@ -10,7 +10,7 @@ from datetime import datetime
 from datetime import date
 
 def sweep_fermion(N_list, p_list):
-    max_threads = 5
+    max_threads = 9
 
     # Setting up directory to save
     today = date.today()
