@@ -32,7 +32,8 @@ def sweep_fermion(N_list, p_list):
             seed_list = N + np.array(range(5))
             for seed in seed_list:
                 for p in p_list:
-                    for k_dual in [1, N]:
+                    # for k_dual in [1, N]:
+                    for k_dual in [1]:
                         executor.submit(submit_simulation,
                         str(N), str(seed), str(p), str(k_dual), result_save_path)
 
@@ -64,11 +65,11 @@ def submit_simulation(N, seed, p, k_dual, result_save_path):
 # p_list = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 
 # physically relevant noises
-N_list = [10,15,20,25,30]
-p_list = np.linspace(0.05, 0.2, 11)
+# N_list = [10,15,20,25,30]
+# p_list = np.linspace(0.05, 0.2, 11)
 
 # for approx ratio vs. N
-# N_list = np.linspace(10,50,11)
-# p_list = [0.05, 0.1, 0.2]
+N_list = np.linspace(10,50,11)
+p_list = [0.05, 0.1, 0.2]
 
 sweep_fermion(N_list, p_list)
