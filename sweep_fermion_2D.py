@@ -45,7 +45,7 @@ def submit_simulation(N, seed, p, k_dual, result_save_path):
     print('Submitting simulation with N: ', N, ', seed: ', seed,
           ", p: ", p, ", k_dual: ", k_dual)
 
-    params = ['python', 'single_fermion.py',
+    params = ['python', 'single_fermion_2D.py',
               '--N', N,
               '--seed', seed,
               '--p', p,
@@ -55,7 +55,7 @@ def submit_simulation(N, seed, p, k_dual, result_save_path):
     if not os.path.exists(result_save_path):
         os.makedirs(result_save_path)
 
-    fname = "fermion1D-N-" + str(N) + "-seed-" + seed + "-p-" + str(p) + "-kdual-" + \
+    fname = "fermion2D-N-" + str(N) + "-seed-" + seed + "-p-" + str(p) + "-kdual-" + \
                      str(k_dual) + ".txt"
     with open(os.path.join(result_save_path, fname), "w+") as f_for_stdout:
         subprocess.run(params, stdout = f_for_stdout, stderr = subprocess.STDOUT)
@@ -69,7 +69,7 @@ def submit_simulation(N, seed, p, k_dual, result_save_path):
 # p_list = np.linspace(0.05, 0.2, 11)
 
 # for approx ratio vs. N
-N_list = np.linspace(10,50,11, dtype = int)
+N_list = [3,4,5,6,7,8]
 p_list = [0.05, 0.1, 0.2]
 
 sweep_fermion(N_list, p_list)

@@ -20,7 +20,7 @@ from fermions import gaussian, fermion_test_utils
 #----------------------------------- TESTS ------------------------------------#
 #------------------------------------------------------------------------------#
 
-N = 5
+N = 4
 d = 1
 local_d = 1
 rng = np.random.default_rng()
@@ -55,6 +55,24 @@ lmbda = 0.1
 print("Entropy test = ", fermion_test_utils.test_entropy_parent(np.array(h), lmbda))
 
 print("log_trace test = ", fermion_test_utils.test_log_trace(h))
+print("gamma mjr product test = ", fermion_test_utils.test_gamma_mjr_product(h, s))
+
+I = jnp.identity(N, dtype = complex)
+
+Gamma_mjr_0 = 0.5 * jnp.block(
+[[I      , 1j * I],
+ [-1j * I, I     ]])
+
+gamma = gaussian.covariance_from_corr_major(Gamma_mjr_0)
+
+k = 1
+
+gamma_replaced = gamma.at[k, :].set(jnp.zeros(2 * N))
+gamma_replaced = gamma_replaced.at[:, k].set(jnp.zeros(2 * N))
+gamma_replaced = gamma_replaced.at[k + N, :].set(jnp.zeros(2 * N))
+gamma_replaced = gamma_replaced.at[:, k + N].set(jnp.zeros(2 * N))
+Gamma_mjr_noisy = gaussian.corr_major_from_covariance(gamma_replaced)
+
 
 # num_samples = 100
 # mc_probs = fermion_test_utils.test_random_num_generation_jax(key, N, num_samples)

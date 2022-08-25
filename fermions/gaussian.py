@@ -229,6 +229,28 @@ def corr_major_from_parenth(h: jnp.array):
     Gamma_mjr = jnp.matmul(jnp.matmul(v, w_Gamma_mjr), v.conj().T)
     return Gamma_mjr
 
+def corr_major_product(Gamma_mjr_1: jnp.array, Gamma_mjr_2: jnp.array):
+
+    """
+    Return the correlation matrix of the product of f.g.ses corresponding to
+    the input correlation mats.
+    """
+    N = Gamma_mjr_1.shape[0]//2
+
+    gamma_1 = covariance_from_corr_major(Gamma_mjr_1)
+    gamma_2 = covariance_from_corr_major(Gamma_mjr_2)
+    I = jnp.identity(2 * N, dtype = complex)
+
+    denom = I - jnp.matmul(gamma_2, gamma_1)
+
+    gamma = I - jnp.matmul(jnp.matmul((I - 1j * gamma_1),
+                                       jnp.linalg.inv(denom)),
+                           (I - 1j * gamma_2))
+
+    Gamma_mjr = corr_major_from_covariance(gamma)
+
+    return Gamma_mjr
+
 #--------------------------------------------------#
 #----------------- Primal methods -----------------#
 #--------------------------------------------------#

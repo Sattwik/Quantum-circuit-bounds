@@ -14,7 +14,6 @@ import jax.scipy.linalg
 from jax import jit, grad, vmap, value_and_grad
 from jax.example_libraries import optimizers
 
-
 #--------------------------------------------------#
 #--------------- Optimization tools ---------------#
 #--------------------------------------------------#
@@ -114,96 +113,88 @@ def k_neighbors(k: int, M: int, N: int):
     neighbors_list = []
 
     for s in range(M * N):
-        i = s//N
-        j = s%N
+        i_0 = s//N
+        j_0 = s%N
 
-        neighbors_of_s = []
+        neighbors_of_s = [s]
 
-        for i_r in range(i, i + k + 1):
-            for j_r in range(j, j +)
+        for i in range(i_0 - k, i_0 + k + 1):
+            for j in range(j_0 - k, j_0 + k + 1):
+                if (np.abs(i - i_0) + np.abs(j - j_0) <= k) and \
+                   0 <= i < M and \
+                   0 <= j < N and \
+                   s != N * i + j:
+                    neighbors_of_s.append(N * i + j)
 
+        neighbors_list.append(neighbors_of_s)
 
+    return neighbors_list
 
+def upper_tri_indices_to_fill(k: int, M: int, N: int):
+    neighbors_list = k_neighbors(k, M, N)
+
+    row_indices = []
+    col_indices = []
+
+    for neighbors in neighbors_list:
+        s_0 = neighbors[0]
+
+        for s in neighbors[1:]:
+            if s > s_0:
+                row_indices.append(s_0)
+                col_indices.append(s)
+
+            # row_indices.append(s)
+            # col_indices.append(s_0)
+
+    return (jnp.array(row_indices), jnp.array(col_indices))
 
 #--------------------------------------------------#
 #-------------------- FGS tools -------------------#
 #--------------------------------------------------#
 
-def random_k_local_normal_hamiltonian_majorana(N: int, k: int, key: jnp.array):
+def random_2D_k_local_normal_hamiltonian_majorana(M: int, N: int, k: int, key: jnp.array):
     """
     Parameters
     ----------
-    N: number of fermionic modes
-    k < N: range of interactions
+    M, N: size of lattice
+    k < N: range of interactions (Manhattan distance)
 
     Returns
     -------
-    A random k-local f.g.h. (2N x 2N) in Majorana representation
+    A random k-local f.g.h. (2MN x 2MN) in Majorana representation
     """
+    utri_indices = upper_tri_indices_to_fill(k, M, N)
+    utri_rows, utri_cols = utri_indices
+    ltri_indices = (utri_cols, utri_rows)
+    diag_indices = jnp.diag_indices(M * N)
+
+    num_utri_elements = len(utri_indices[0])
+    num_diag_elements = M * N
+
+    hxx = jnp.zeros((M*N, M*N))
     key, subkey = jax.random.split(key)
-    hxx = jax.random.normal(subkey, (N, N))
+    hxx = hxx.at[utri_indices].set(jax.random.normal(subkey, (num_utri_elements,)))
     hxx = hxx - hxx.T
-    hxx = hxx.at[jnp.triu_indices(N, k + 1)].set(0.0)
-    hxx = hxx.at[jnp.tril_indices(N, -k - 1)].set(0.0)
 
+    hpp = jnp.zeros((M*N, M*N))
     key, subkey = jax.random.split(key)
-    hpp = jax.random.normal(subkey, (N, N))
+    hpp = hpp.at[utri_indices].set(jax.random.normal(subkey, (num_utri_elements,)))
     hpp = hpp - hpp.T
-    hpp = hpp.at[jnp.triu_indices(N, k + 1)].set(0.0)
-    hpp = hpp.at[jnp.tril_indices(N, -k - 1)].set(0.0)
 
+    hxp = jnp.zeros((M*N, M*N))
     key, subkey = jax.random.split(key)
-    hxp = jax.random.normal(subkey, (N, N))
-    hxp = hxp.at[jnp.triu_indices(N, k + 1)].set(0.0)
-    hxp = hxp.at[jnp.tril_indices(N, -k - 1)].set(0.0)
+    hxp = hxp.at[utri_indices].set(jax.random.normal(subkey, (num_utri_elements,)))
+    key, subkey = jax.random.split(key)
+    hxp = hxp.at[ltri_indices].set(jax.random.normal(subkey, (num_utri_elements,)))
+    key, subkey = jax.random.split(key)
+    hxp = hxp.at[diag_indices].set(jax.random.normal(subkey, (num_diag_elements,)))
 
     h = jnp.block([[hxx, hxp],
                   [-hxp.T, hpp]])
 
     return h, key
 
-def random_normal_hamiltonian_majorana(N: int, key: jnp.array):
-    """
-    Parameters
-    ----------
-    N: number of fermionic modes
-
-    Returns
-    -------
-    A random f.g.h. (2N x 2N) in Majorana representation
-    """
-
-    key, subkey = jax.random.split(key)
-    h = jax.random.normal(subkey, (2*N, 2*N))
-
-    return h - h.T, key
-
-def random_normal_corr_majorana(N: int, Ome: jnp.array, key: jnp.array):
-    """
-    Parameters
-    ----------
-    N: number of fermionic modes
-
-    Returns
-    -------
-    Correlation matrix (2N x 2N) in Majorana representation of a random f.g.s.
-    """
-    # generate occupation probabilities
-    key, subkey = jax.random.split(key)
-    f = jax.random.uniform(subkey, (N,))
-
-    F = jnp.diag(jnp.concatenate((f, 1.0-f)))
-
-    key, subkey = jax.random.split(key)
-    random_symm_mat = jax.random.normal(subkey, (2*N, 2*N))
-
-    random_symm_mat = random_symm_mat + random_symm_mat.conj().T
-
-    _, O = jnp.linalg.eigh(random_symm_mat)
-
-    V = jnp.matmul(O.T, Ome)
-
-    return jnp.matmul(V, jnp.matmul(F, V.conj().T)), f, V, O, key
 
 def Omega(N: int) -> jnp.array:
     return jnp.sqrt(1/2) * jnp.block(
@@ -296,7 +287,7 @@ class PrimalParams():
     Class to store parameters required to define the primal problem.
     """
 
-    def __init__(self, N: int, d: int, local_d: int,
+    def __init__(self, M: int, N: int, d: int, local_d: int,
                  key: jnp.array,
                  init_state_desc: str = "all zero", k: int = 1):
         """
@@ -305,6 +296,7 @@ class PrimalParams():
 
         Assuming (d - local_d) is even
         """
+        self.M = M
         self.N = N
         self.d = d
         self.local_d = local_d
@@ -320,21 +312,22 @@ class PrimalParams():
         self.layer_hamiltonians = []
 
         for i in range(self.local_d):
-            random_local_h, key = random_k_local_normal_hamiltonian_majorana(self.N, self.k, key)
-            self.layer_hamiltonians.append(random_local_h/self.N)
+            random_local_h, key = \
+            random_2D_k_local_normal_hamiltonian_majorana(self.M, self.N, self.k, key)
+            self.layer_hamiltonians.append(random_local_h/self.M/self.N)
 
         for i in range((self.d - self.local_d)//2):
-            random_local_h, key = random_k_local_normal_hamiltonian_majorana(self.N, self.k, key)
-            self.layer_hamiltonians.append(random_local_h/self.N)
-            self.layer_hamiltonians.append(-random_local_h/self.N)
+            random_local_h, key = \
+            random_2D_k_local_normal_hamiltonian_majorana(self.M, self.N, self.k, key)
+            self.layer_hamiltonians.append(random_local_h/self.M/self.N)
+            self.layer_hamiltonians.append(-random_local_h/self.M/self.N)
 
         self.layer_hamiltonians = jnp.array(self.layer_hamiltonians)
         self.key_after_ham_gen = key
 
     def generate_parent_hamiltonian(self):
-        Ome = Omega(self.N)
-        # epsilon = jnp.arange(start = self.N, stop = 0, step = -1)
-        epsilon = jnp.linspace(start = 1, stop = 0, num = self.N)
+        Ome = Omega(self.M * self.N)
+        epsilon = jnp.linspace(start = 1, stop = 0, num = self.M * self.N)
         D = jnp.diag(jnp.concatenate((-epsilon, epsilon)))
         d_parent = -1j * jnp.matmul(Ome, jnp.matmul(D, Ome.conj().T))
         h_parent = d_parent
@@ -345,7 +338,7 @@ class PrimalParams():
 
     def generate_init_state(self, init_state_desc: str = "all zero"):
         if init_state_desc == "all zero":
-            I = jnp.identity(self.N, dtype = complex)
+            I = jnp.identity(self.M * self.N, dtype = complex)
 
             self.Gamma_mjr_init = 0.5 * jnp.block(
             [[I      , 1j * I],
@@ -361,13 +354,13 @@ def energy_after_circuit(params: PrimalParams):
 
 def noise_on_kth_mode(k: int, args: Tuple):
     Gamma_mjr, p = args
-    N = Gamma_mjr.shape[0]//2
+    MN = Gamma_mjr.shape[0]//2
     gamma = covariance_from_corr_major(Gamma_mjr)
 
-    gamma_replaced = gamma.at[k, :].set(jnp.zeros(2 * N))
-    gamma_replaced = gamma_replaced.at[:, k].set(jnp.zeros(2 * N))
-    gamma_replaced = gamma_replaced.at[k + N, :].set(jnp.zeros(2 * N))
-    gamma_replaced = gamma_replaced.at[:, k + N].set(jnp.zeros(2 * N))
+    gamma_replaced = gamma.at[k, :].set(jnp.zeros(2 * MN))
+    gamma_replaced = gamma_replaced.at[:, k].set(jnp.zeros(2 * MN))
+    gamma_replaced = gamma_replaced.at[k + MN, :].set(jnp.zeros(2 * MN))
+    gamma_replaced = gamma_replaced.at[:, k + MN].set(jnp.zeros(2 * MN))
 
     gamma_noisy = p * gamma_replaced + (1 - p) * gamma
     Gamma_mjr_noisy = corr_major_from_covariance(gamma_noisy)
@@ -375,94 +368,21 @@ def noise_on_kth_mode(k: int, args: Tuple):
     return (Gamma_mjr_noisy, p)
 
 def noisy_primal_ith_layer(i: int, args: Tuple):
-    Gamma_mjr, layer_hamiltonians, N, p = args
+    Gamma_mjr, layer_hamiltonians, MN, p = args
     Gamma_mjr = unitary_on_fgstate(Gamma_mjr, layer_hamiltonians.at[i, :, :].get())
     init_args = (Gamma_mjr, p)
-    Gamma_mjr, _ = jax.lax.fori_loop(0, N, noise_on_kth_mode, init_args)
-    return (Gamma_mjr, layer_hamiltonians, N, p)
+    Gamma_mjr, _ = jax.lax.fori_loop(0, MN, noise_on_kth_mode, init_args)
+    return (Gamma_mjr, layer_hamiltonians, MN, p)
 
 def noisy_primal(params:PrimalParams, p: float):
     Gamma_mjr = params.Gamma_mjr_init
     layer_hamiltonians = params.layer_hamiltonians
+    M = params.M
     N = params.N
-    init_args = (Gamma_mjr, layer_hamiltonians, N, p)
+    init_args = (Gamma_mjr, layer_hamiltonians, M * N, p)
     Gamma_mjr, _, _, _ = jax.lax.fori_loop(0, params.d, noisy_primal_ith_layer, init_args)
 
     return jnp.real(energy(Gamma_mjr, params.h_parent))
-
-def entropy_parent(lmbda: jnp.array, h_parent: jnp.array):
-    beta = 1/lmbda.at[0].get()
-    Gamma_mjr = corr_major_from_parenth(h_parent * beta)
-
-    entropy = jnp.log(trace_fgstate(-h_parent * beta)) \
-            + beta * energy(Gamma_mjr, h_parent)
-
-    return entropy
-
-# for i in range(params.d):
-#     Gamma_mjr = unitary_on_fgstate(Gamma_mjr, params.layer_hamiltonians.at[i, :, :].get())
-#     init_args = (Gamma_mjr, p)
-#     Gamma_mjr, _ = jax.lax.fori_loop(0, params.N, noise_on_kth_mode, init_args)
-
-
-# def average_Gamma_mjr_noisy(Gamma_mjr: jnp.array, p: float):
-#     N = Gamma_mjr.shape[0]//2
-#     gamma = covariance_from_corr_major(Gamma_mjr)
-#     gamma_noisy = gamma
-#
-#     for k in range(N):
-#         gamma_replaced = gamma_noisy.at[k, :].set(jnp.zeros(2 * N))
-#         gamma_replaced = gamma_replaced.at[:, k].set(jnp.zeros(2 * N))
-#         gamma_replaced = gamma_replaced.at[k + N, :].set(jnp.zeros(2 * N))
-#         gamma_replaced = gamma_replaced.at[:, k + N].set(jnp.zeros(2 * N))
-#
-#         gamma_noisy = p * gamma_replaced + (1 - p) * gamma_noisy
-#
-#     Gamma_mjr_noisy = corr_major_from_covariance(gamma_noisy)
-#     return Gamma_mjr_noisy
-#
-# def noise_on_fgstate_mc_sample(Gamma_mjr: jnp.array, p: float, key: jnp.array):
-#     """
-#     Parameters
-#     ----------
-#     Gamma_mjr: Correlation matrix (Majorana rep.)
-#     p: noise probability
-#     key: to generate random mc sample
-#
-#     Returns
-#     -------
-#     Correlation matrix (Majorana rep.) of f.g.s. after one MC sampling of noise
-#     (on every mode).
-#     """
-#     N = Gamma_mjr.shape[0]//2
-#     gamma = covariance_from_corr_major(Gamma_mjr)
-#
-#     # print('gamma = ', gamma)
-#
-#     key, subkey = jax.random.split(key)
-#
-#     # print('subkey = ', subkey)
-#
-#     mc_probs = jax.random.uniform(subkey, shape = (N,))
-#
-#     # print(mc_probs)
-#
-#     # print(mc_probs)
-#
-#     gamma_noisy = gamma
-#
-#     for k in range(N):
-#         if mc_probs.at[k].get() <= p:
-#             gamma_noisy = gamma_noisy.at[k, :].set(jnp.zeros(2 * N))
-#             gamma_noisy = gamma_noisy.at[:, k].set(jnp.zeros(2 * N))
-#             gamma_noisy = gamma_noisy.at[k + N, :].set(jnp.zeros(2 * N))
-#             gamma_noisy = gamma_noisy.at[:, k + N].set(jnp.zeros(2 * N))
-#
-#     # print('gamma_noisy = ', gamma_noisy)
-#
-#     Gamma_mjr_noisy = corr_major_from_covariance(gamma_noisy)
-#
-#     return Gamma_mjr_noisy, key
 
 #--------------------------------------------------#
 #------------------ Dual methods ------------------#
@@ -477,43 +397,41 @@ class DualParams():
         self.lambda_lower_bounds = lambda_lower_bounds
         self.scale = scale
 
-        block_upper_indices_to_zero = jnp.triu_indices(self.circ_params.N, self.k_dual + 1)
-        block_lower_indices_to_zero = jnp.tril_indices(self.circ_params.N, -self.k_dual - 1)
+        self.block_utri_indices = \
+        upper_tri_indices_to_fill(self.k_dual, circ_params.M, circ_params.N)
+        utri_rows, utri_cols = self.block_utri_indices
+        self.block_ltri_indices = (utri_cols, utri_rows)
+        self.block_diag_indices = jnp.diag_indices(circ_params.M * circ_params.N)
 
-        ones_N = jnp.ones((self.circ_params.N, self.circ_params.N))
-        upper_ones_N = jnp.triu(ones_N, 1)
-        lower_ones_N = jnp.tril(ones_N, -1)
+        ltri_rows, ltri_cols = self.block_ltri_indices
+        diag_rows, diag_cols = self.block_diag_indices
 
-        block_upper_band = upper_ones_N.at[block_upper_indices_to_zero].set(0.0)
-        block_lower_band = lower_ones_N.at[block_lower_indices_to_zero].set(0.0)
-        block_band = ones_N.at[block_upper_indices_to_zero].set(0.0)
-        block_band = block_band.at[block_lower_indices_to_zero].set(0.0)
+        xp_rows = jnp.concatenate((utri_rows, ltri_rows, diag_rows))
+        xp_cols = jnp.concatenate((utri_cols, ltri_cols, diag_cols))
 
-        self.block_upper_band_indices = jnp.where(block_upper_band == 1)
-        self.block_lower_band_indices = jnp.where(block_lower_band == 1)
-        self.block_band_indices = jnp.where(block_band == 1)
+        self.xp_indices = (xp_rows, xp_cols)
 
-        num_vars_xx = self.block_upper_band_indices[0].shape[0]
-        num_vars_pp = num_vars_xx
-        num_vars_xp = self.block_band_indices[0].shape[0]
+        self.num_utri_elements = len(self.block_utri_indices[0])
+        self.num_diag_elements = circ_params.M * circ_params.N
 
-        num_sigma_vars_layer = num_vars_xx + num_vars_pp + num_vars_xp
+        self.num_vars_xx = self.num_utri_elements
+        self.num_vars_pp = self.num_vars_xx
+        self.num_vars_xp = 2 * self.num_utri_elements + self.num_diag_elements
+
+        self.num_sigma_vars_layer = self.num_vars_xx + self.num_vars_pp + self.num_vars_xp
 
         self.total_num_dual_vars = self.circ_params.d + \
-        self.circ_params.d * num_sigma_vars_layer
-
-        # self.total_num_dual_vars = self.circ_params.d + \
-        # (2*self.circ_params.N - 1) * self.circ_params.N * self.circ_params.d
+        self.circ_params.d * self.num_sigma_vars_layer
 
 def unvec_layer_i(i: int, args: Tuple):
     sigmas, sigma_vars, \
-    block_upper_band_indices, block_lower_band_indices, block_band_indices, \
-    zeros_N = args
+    block_utri_indices, block_ltri_indices, block_diag_indices, xp_indices, \
+    zeros_MN = args
 
     # number of variables in blocks of the full sigma dual var
-    l_xx = block_upper_band_indices[0].shape[0]
+    l_xx = block_utri_indices[0].shape[0]
     l_pp = l_xx
-    l_xp = block_band_indices[0].shape[0]
+    l_xp = xp_indices[0].shape[0]
 
     # total_num_vars
     l = l_xp + l_xx + l_pp
@@ -525,13 +443,13 @@ def unvec_layer_i(i: int, args: Tuple):
     sigma_slice_xp = sigma_slice.at[l_xx + l_pp:].get()
 
     # making block matrices
-    sigma_layer_xx = zeros_N.at[block_upper_band_indices].set(sigma_slice_xx)
-    sigma_layer_xx = sigma_layer_xx.at[block_lower_band_indices].set(-sigma_slice_xx)
+    sigma_layer_xx = zeros_MN.at[block_utri_indices].set(sigma_slice_xx)
+    sigma_layer_xx = sigma_layer_xx.at[block_ltri_indices].set(-sigma_slice_xx)
 
-    sigma_layer_pp = zeros_N.at[block_upper_band_indices].set(sigma_slice_pp)
-    sigma_layer_pp = sigma_layer_pp.at[block_lower_band_indices].set(-sigma_slice_pp)
+    sigma_layer_pp = zeros_MN.at[block_utri_indices].set(sigma_slice_pp)
+    sigma_layer_pp = sigma_layer_pp.at[block_ltri_indices].set(-sigma_slice_pp)
 
-    sigma_layer_xp = zeros_N.at[block_band_indices].set(sigma_slice_xp)
+    sigma_layer_xp = zeros_MN.at[xp_indices].set(sigma_slice_xp)
 
     # putting blocks together
     sigma_layer = jnp.block([[sigma_layer_xx, sigma_layer_xp],
@@ -541,56 +459,39 @@ def unvec_layer_i(i: int, args: Tuple):
     sigmas = sigmas.at[:,:,i].set(sigma_layer)
 
     return (sigmas, sigma_vars,
-            block_upper_band_indices, block_lower_band_indices,
-            block_band_indices, zeros_N)
+            block_utri_indices, block_ltri_indices,
+            block_diag_indices, xp_indices,
+            zeros_MN)
 
 @partial(jit, static_argnums = (1,))
 def unvec_and_process_dual_vars(dual_vars: jnp.array, dual_params: DualParams):
+    M = dual_params.circ_params.M
     N = dual_params.circ_params.N
     d = dual_params.circ_params.d
-    block_upper_band_indices = dual_params.block_upper_band_indices
-    block_lower_band_indices = dual_params.block_lower_band_indices
-    block_band_indices = dual_params.block_band_indices
+    MN = M*N
 
-    sigmas = jnp.zeros((2 * N, 2 * N, d))
-    zeros_N = jnp.zeros((N, N))
+    block_utri_indices = dual_params.block_utri_indices
+    block_ltri_indices = dual_params.block_ltri_indices
+    block_diag_indices = dual_params.block_diag_indices
+    xp_indices = dual_params.xp_indices
+    num_sigma_vars_layer = dual_params.num_sigma_vars_layer
+
+    sigmas = jnp.zeros((2 * MN, 2 * MN, d))
+    zeros_MN = jnp.zeros((MN, MN))
 
     a_vars = dual_vars.at[:d].get()
     lambdas = dual_params.lambda_lower_bounds + jnp.log(1 + jnp.exp(a_vars))
-    # lambdas = jnp.ones(a_vars.shape) + jnp.log(1 + jnp.exp(a_vars))
 
     sigma_vars = dual_vars.at[d:].get()
     init_args = (sigmas, sigma_vars,
-                 block_upper_band_indices, block_lower_band_indices,
-                 block_band_indices, zeros_N)
-    sigmas, _, _, _, _, _ = jax.lax.fori_loop(0, d, unvec_layer_i, init_args)
+                 block_utri_indices, block_ltri_indices,
+                 block_diag_indices, xp_indices,
+                 zeros_MN)
+    sigmas, _, _, _, _, _, _ = jax.lax.fori_loop(0, d, unvec_layer_i, init_args)
 
     return lambdas, sigmas
 
-# @partial(jit, static_argnums = (1,))
-# def unvec_and_process_dual_vars_direct_lambda(dual_vars: jnp.array, dual_params: DualParams):
-#     N = dual_params.circ_params.N
-#     d = dual_params.circ_params.d
-#     block_upper_band_indices = dual_params.block_upper_band_indices
-#     block_lower_band_indices = dual_params.block_lower_band_indices
-#     block_band_indices = dual_params.block_band_indices
-#
-#     sigmas = jnp.zeros((2 * N, 2 * N, d))
-#     zeros_N = jnp.zeros((N, N))
-#
-#     lambdas = dual_vars.at[:d].get()
-#     # lambdas = dual_params.lambda_lower_bounds + jnp.log(1 + jnp.exp(a_vars))
-#     # lambdas = jnp.ones(a_vars.shape) + jnp.log(1 + jnp.exp(a_vars))
-#
-#     sigma_vars = dual_vars.at[d:].get()
-#     init_args = (sigmas, sigma_vars,
-#                  block_upper_band_indices, block_lower_band_indices,
-#                  block_band_indices, zeros_N)
-#     sigmas, _, _, _, _, _ = jax.lax.fori_loop(0, d, unvec_layer_i, init_args)
-#
-#     return lambdas, sigmas
-
-# @partial(jit, static_argnums = (2,))
+# # @partial(jit, static_argnums = (2,))
 @jit
 def noisy_dual_layer(h_layer: jnp.array, sigma_layer: jnp.array, p: float):
     """
@@ -601,18 +502,6 @@ def noisy_dual_layer(h_layer: jnp.array, sigma_layer: jnp.array, p: float):
     sigma = unitary_on_fghamiltonian(sigma, -h_layer) # -ve because dual
 
     return sigma
-
-# def dual_free_energy_ith_term(i: int, args: Tuple):
-#
-#     lambdas, sigmas, layer_hamiltonians, p, cost = args
-#
-#     hi = sigmas.at[:,:,i].get() - \
-#          noisy_dual_layer(layer_hamiltonians.at[i+1, :, :].get(),
-#                           sigmas.at[:,:,i+1].get(), p)
-#
-#     cost += -lambdas.at[i].get() * jnp.log(trace_fgstate(-hi/lambdas.at[i].get()))
-#
-#     return (lambdas, sigmas, layer_hamiltonians, p, cost)
 
 def dual_free_energy_ith_term(i: int, args: Tuple):
 
@@ -626,65 +515,9 @@ def dual_free_energy_ith_term(i: int, args: Tuple):
 
     return (lambdas, sigmas, layer_hamiltonians, p, cost)
 
-# def dual_free_energy_ith_term_1q(i: int, args: Tuple):
-#
-#     lambdas, sigmas, layer_hamiltonians, p, cost = args
-#
-#     hi = sigmas.at[:,:,i].get() - \
-#          noisy_dual_layer(layer_hamiltonians.at[i+1, :, :].get(),
-#                           sigmas.at[:,:,i+1].get(), p)
-#
-#     cost += -lambdas.at[i].get() * jnp.log(trace_fgstate_1q(-hi/lambdas.at[i].get()))
-#
-#     return (lambdas, sigmas, layer_hamiltonians, p, cost)
-
-# @partial(jit, static_argnums = (1,))
-# def dual_obj(dual_vars: jnp.array, dual_params: DualParams):
-#     N = dual_params.circ_params.N
-#     d = dual_params.circ_params.d
-#     h_parent = dual_params.circ_params.h_parent
-#     layer_hamiltonians = dual_params.circ_params.layer_hamiltonians
-#     p = dual_params.p
-#     Gamma_mjr_init = dual_params.circ_params.Gamma_mjr_init
-#
-#     # !!
-#     lambdas, sigmas = unvec_and_process_dual_vars(dual_vars, dual_params)
-#
-#     cost = 0
-#     # log Tr exp terms
-#
-#     # first d - 1 layers
-#     # !!
-#     init_args = (lambdas, sigmas, layer_hamiltonians, p, cost)
-#     _, _, _, _, cost = jax.lax.fori_loop(0, d - 1, dual_free_energy_ith_term, init_args)
-#
-#     # last layer
-#     # !!
-#     hi = h_parent + sigmas.at[:,:,d-1].get()
-#     cost += -lambdas.at[d-1].get() * jnp.log(trace_fgstate(-hi/lambdas[d-1]))
-#
-#     # init. state term
-#     # !!
-#     epsilon_1_dag_sigma1 = \
-#     noisy_dual_layer(layer_hamiltonians.at[0, :, :].get(), sigmas.at[:,:,0].get(), p)
-#
-#     cost += -energy(Gamma_mjr_init, epsilon_1_dag_sigma1)
-#
-#     # entropy term
-#     # !!
-#     q = 1 - p
-#     q_powers = jnp.array([q**i for i in range(d)])
-#
-#     entropy_bounds = N * p * jnp.log(2) * \
-#              jnp.array([jnp.sum(q_powers.at[:i+1].get()) for i in range(d)])
-#
-#     # !!
-#     cost += jnp.dot(lambdas, entropy_bounds)
-#
-#     return -jnp.real(cost)
-
 @partial(jit, static_argnums = (1,))
 def dual_obj(dual_vars: jnp.array, dual_params: DualParams):
+    M = dual_params.circ_params.M
     N = dual_params.circ_params.N
     d = dual_params.circ_params.d
     h_parent = dual_params.circ_params.h_parent
@@ -692,210 +525,39 @@ def dual_obj(dual_vars: jnp.array, dual_params: DualParams):
     p = dual_params.p
     Gamma_mjr_init = dual_params.circ_params.Gamma_mjr_init
 
-    # !!
     lambdas, sigmas = unvec_and_process_dual_vars(dual_vars, dual_params)
 
     cost = 0
     # log Tr exp terms
 
     # first d - 1 layers
-    # !!
     init_args = (lambdas, sigmas, layer_hamiltonians, p, cost)
     _, _, _, _, cost = jax.lax.fori_loop(0, d - 1, dual_free_energy_ith_term, init_args)
 
     # last layer
-    # !!
     hi = h_parent + sigmas.at[:,:,d-1].get()
     cost += -lambdas.at[d-1].get() * log_trace_fgstate(-hi/lambdas[d-1])
 
     # init. state term
-    # !!
     epsilon_1_dag_sigma1 = \
     noisy_dual_layer(layer_hamiltonians.at[0, :, :].get(), sigmas.at[:,:,0].get(), p)
 
     cost += -energy(Gamma_mjr_init, epsilon_1_dag_sigma1)
 
     # entropy term
-    # !!
     q = 1 - p
     q_powers = jnp.array([q**i for i in range(d)])
 
-    entropy_bounds = N * p * jnp.log(2) * \
+    entropy_bounds = M * N * p * jnp.log(2) * \
              jnp.array([jnp.sum(q_powers.at[:i+1].get()) for i in range(d)])
 
-    # !!
     cost += jnp.dot(lambdas, entropy_bounds)
 
     return -jnp.real(cost)
 
-# @partial(jit, static_argnums = (1,))
-# def dual_obj_direct_lambda(dual_vars: jnp.array, dual_params: DualParams):
-#     N = dual_params.circ_params.N
-#     d = dual_params.circ_params.d
-#     h_parent = dual_params.circ_params.h_parent
-#     layer_hamiltonians = dual_params.circ_params.layer_hamiltonians
-#     p = dual_params.p
-#     Gamma_mjr_init = dual_params.circ_params.Gamma_mjr_init
-#
-#     # !!
-#     lambdas, sigmas = unvec_and_process_dual_vars_direct_lambda(dual_vars, dual_params)
-#
-#     cost = 0
-#     # log Tr exp terms
-#
-#     # first d - 1 layers
-#     # !!
-#     init_args = (lambdas, sigmas, layer_hamiltonians, p, cost)
-#     _, _, _, _, cost = jax.lax.fori_loop(0, d - 1, dual_free_energy_ith_term, init_args)
-#
-#     # last layer
-#     # !!
-#     hi = h_parent + sigmas.at[:,:,d-1].get()
-#     cost += -lambdas.at[d-1].get() * jnp.log(trace_fgstate(-hi/lambdas[d-1]))
-#
-#     # init. state term
-#     # !!
-#     epsilon_1_dag_sigma1 = \
-#     noisy_dual_layer(layer_hamiltonians.at[0, :, :].get(), sigmas.at[:,:,0].get(), p)
-#
-#     cost += -energy(Gamma_mjr_init, epsilon_1_dag_sigma1)
-#
-#     # entropy term
-#     # !!
-#     q = 1 - p
-#     q_powers = jnp.array([q**i for i in range(d)])
-#
-#     entropy_bounds = N * p * jnp.log(2) * \
-#              jnp.array([jnp.sum(q_powers.at[:i+1].get()) for i in range(d)])
-#
-#     # !!
-#     cost += jnp.dot(lambdas, entropy_bounds)
-#
-#     return -jnp.real(cost)
-
-# def binary_entropy(p: float):
-#     return -p * jnp.log(p) -(1-p) * jnp.log(1-p)
-#
-# @partial(jit, static_argnums = (1,))
-# def dual_obj_1q_test(dual_vars: jnp.array, dual_params: DualParams):
-#     N = dual_params.circ_params.N
-#     d = dual_params.circ_params.d
-#     h_parent = dual_params.circ_params.h_parent
-#     layer_hamiltonians = dual_params.circ_params.layer_hamiltonians
-#     p = dual_params.p
-#     Gamma_mjr_init = dual_params.circ_params.Gamma_mjr_init
-#
-#     lambdas, sigmas = unvec_and_process_dual_vars(dual_vars, dual_params)
-#
-#     cost = 0
-#     # log Tr exp terms
-#
-#     # first d - 1 layers
-#     init_args = (lambdas, sigmas, layer_hamiltonians, p, cost)
-#     _, _, _, _, cost = jax.lax.fori_loop(0, d - 1, dual_free_energy_ith_term_1q, init_args)
-#
-#     # last layer
-#     hi = h_parent + sigmas.at[:,:,d-1].get()
-#     cost += -lambdas.at[d-1].get() * jnp.log(trace_fgstate_1q(-hi/lambdas[d-1]))
-#
-#     # init. state term
-#     epsilon_1_dag_sigma1 = \
-#     noisy_dual_layer(layer_hamiltonians.at[0, :, :].get(), sigmas.at[:,:,0].get(), p)
-#
-#     cost += -energy(Gamma_mjr_init, epsilon_1_dag_sigma1)
-#
-#     # entropy term
-#     q = 1 - p
-#     q_powers = jnp.array([q**i for i in range(d)])
-#
-#     entropy_bounds = N * p * jnp.log(2) * \
-#              jnp.array([jnp.sum(q_powers.at[:i+1].get()) for i in range(d)])
-#
-#     entropy_bounds = jnp.ones(entropy_bounds.shape) * binary_entropy(p/2)
-#
-#     cost += jnp.dot(lambdas, entropy_bounds)
-#
-#     return -jnp.real(cost)
-
 @partial(jit, static_argnums = (1,))
 def dual_grad(dual_vars: jnp.array, dual_params: DualParams):
     return grad(dual_obj, argnums = 0)(dual_vars, dual_params)
-
-# @partial(jit, static_argnums = (1,))
-# def dual_grad_direct_lambda(dual_vars: jnp.array, dual_params: DualParams):
-#     return grad(dual_obj_direct_lambda, argnums = 0)(dual_vars, dual_params)
-
-# @partial(jit, static_argnums = (1,))
-# def dual_grad_1q_test(dual_vars: jnp.array, dual_params: DualParams):
-    # return grad(dual_obj_1q_test, argnums = 0)(dual_vars, dual_params)
-
-def optimize_dual(dual_vars_init: jnp.array, dual_params: DualParams,
-                  bnds: scipy.optimize.Bounds = None):
-
-    return optimize(np.array(dual_vars_init),
-                    dual_params, dual_obj, dual_grad,
-                    num_iters = 250, bounds = bnds)
-
-# @partial(jit, static_argnums = (2,))
-def fd_dual_grad_at_index(dual_vars: jnp.array, i: int, dual_params: DualParams):
-    delta = 1e-7
-    dual_vars_plus = dual_vars.at[i].add(delta)
-    dual_obj_plus = dual_obj(dual_vars_plus, dual_params)
-
-    dual_vars_minus = dual_vars.at[i].add(-delta)
-    dual_obj_minus = dual_obj(dual_vars_minus, dual_params)
-
-    return (dual_obj_plus - dual_obj_minus)/(2 * delta)
-
-def fd_dual_grad(dual_vars: jnp.array, dual_params: DualParams):
-    dual_grad = jnp.zeros((len(dual_vars),))
-
-    for i in range(len(dual_vars)):
-        print(i)
-        dual_grad = dual_grad.at[i].set(fd_dual_grad_at_index(dual_vars, i, dual_params))
-
-    return dual_grad
-
-# def fd_dual_grad_at_index_direct_lambda(dual_vars: jnp.array, i: int, dual_params: DualParams):
-#     delta = 1e-7
-#     dual_vars_plus = dual_vars.at[i].add(delta)
-#     dual_obj_plus = dual_obj_direct_lambda(dual_vars_plus, dual_params)
-#
-#     dual_vars_minus = dual_vars.at[i].add(-delta)
-#     dual_obj_minus = dual_obj_direct_lambda(dual_vars_minus, dual_params)
-#
-#     return (dual_obj_plus - dual_obj_minus)/(2 * delta)
-#
-# def fd_dual_grad_direct_lambda(dual_vars: jnp.array, dual_params: DualParams):
-#     dual_grad = jnp.zeros((len(dual_vars),))
-#
-#     for i in range(len(dual_vars)):
-#         print(i)
-#         dual_grad = dual_grad.at[i].set(fd_dual_grad_at_index_direct_lambda(dual_vars, i, dual_params))
-#
-#     return dual_grad
-
-@jit
-def trace_fgstate(parent_h: jnp.array):
-    """
-    Parameters
-    ----------
-    parent_h: Parent Hamiltonian of the f.g.s (Majorana rep.)
-
-    Returns
-    -------
-    Trace of f.g.s.
-    """
-    N = parent_h.shape[0]//2
-    w, v = jnp.linalg.eigh(1j * parent_h)
-
-    # print(w)
-
-    positive_eigs = w[N:]
-
-    # print(positive_eigs)
-
-    return jnp.prod(jnp.exp(positive_eigs) + jnp.exp(-positive_eigs))
 
 @jit
 def log_trace_fgstate(parent_h: jnp.array):
@@ -923,22 +585,6 @@ def log_trace_fgstate(parent_h: jnp.array):
     log_trace = N * eps_max + log_trace_of_shifted
 
     return log_trace
-
-# @jit
-# def trace_fgstate_1q(parent_h: jnp.array):
-#     """
-#     Parameters
-#     ----------
-#     parent_h: Parent Hamiltonian of the f.g.s (Majorana rep.)
-#
-#     Returns
-#     -------
-#     Trace of f.g.s.
-#     """
-#     w, v = jnp.linalg.eigh(1j * parent_h)
-#
-#     # positive_eigs = w[N:]
-#     return jnp.sum(jnp.exp(w))
 
 @jit
 def unitary_on_fghamiltonian(s: jnp.array, h: jnp.array):
@@ -1000,6 +646,7 @@ def noise_on_fghamiltonian(s: jnp.array, p: float):
 
 @partial(jit, static_argnums = (1,))
 def dual_obj_no_channel(dual_vars: jnp.array, dual_params: DualParams):
+    M = dual_params.circ_params.M
     N = dual_params.circ_params.N
     d = dual_params.circ_params.d
     h_parent = dual_params.circ_params.h_parent
@@ -1007,7 +654,7 @@ def dual_obj_no_channel(dual_vars: jnp.array, dual_params: DualParams):
 
     q = 1 - p
     q_powers = jnp.array([q**i for i in range(d)])
-    entropy_bounds = N * p * jnp.log(2) * \
+    entropy_bounds = M * N * p * jnp.log(2) * \
              jnp.array([jnp.sum(q_powers.at[:i+1].get()) for i in range(d)])
     Sd = entropy_bounds.at[-1].get()
 
@@ -1019,238 +666,10 @@ def dual_obj_no_channel(dual_vars: jnp.array, dual_params: DualParams):
     cost = -lmbda * log_trace_fgstate(-h_parent/lmbda) + lmbda * Sd
 
     cost += jnp.dot(dual_params.lambda_lower_bounds.at[:-1].get(),
-                    entropy_bounds.at[:-1].get() - N * np.log(2))
+                    entropy_bounds.at[:-1].get() - M * N * np.log(2))
 
     return -jnp.real(cost)
 
 @partial(jit, static_argnums = (1,))
 def dual_grad_no_channel(dual_vars: jnp.array, dual_params: DualParams):
     return grad(dual_obj_no_channel, argnums = 0)(dual_vars, dual_params)
-
-# @partial(jit, static_argnums = (1,))
-# def dual_obj_no_channel_direct_lambda(dual_vars: jnp.array, dual_params: DualParams):
-#     N = dual_params.circ_params.N
-#     d = dual_params.circ_params.d
-#     h_parent = dual_params.circ_params.h_parent
-#     p = dual_params.p
-#
-#     q = 1 - p
-#     q_powers = jnp.array([q**i for i in range(d)])
-#     entropy_bounds = N * p * jnp.log(2) * \
-#              jnp.array([jnp.sum(q_powers.at[:i+1].get()) for i in range(d)])
-#     Sd = entropy_bounds.at[-1].get()
-#
-#     lmbda = dual_vars.at[0].get()
-#     # lmbda = dual_params.lambda_lower_bounds.at[-1].get() + jnp.log(1 + jnp.exp(a))
-#     # lmbda = 1 + jnp.log(1 + jnp.exp(a))
-#
-#     cost = -lmbda * jnp.log(trace_fgstate(-h_parent/lmbda)) + lmbda * Sd
-#
-#     cost += jnp.dot(dual_params.lambda_lower_bounds.at[:-1].get(),
-#                     entropy_bounds.at[:-1].get() - N * np.log(2))
-#
-#     return -jnp.real(cost)
-#
-# @partial(jit, static_argnums = (1,))
-# def dual_grad_no_channel_direct_lambda(dual_vars: jnp.array, dual_params: DualParams):
-#     return grad(dual_obj_no_channel_direct_lambda, argnums = 0)(dual_vars, dual_params)
-
-# @partial(jit, static_argnums = (1,))
-# def dual_obj_no_channel_1q_test(dual_vars: jnp.array, dual_params: DualParams):
-#     N = dual_params.circ_params.N
-#     d = dual_params.circ_params.d
-#     h_parent = dual_params.circ_params.h_parent
-#     p = dual_params.p
-#
-#     q = 1 - p
-#     q_powers = jnp.array([q**i for i in range(d)])
-#     entropy_bounds = N * p * jnp.log(2) * \
-#              jnp.array([jnp.sum(q_powers.at[:i+1].get()) for i in range(d)])
-#     entropy_bounds = jnp.ones(entropy_bounds.shape) * binary_entropy(p/2)
-#     Sd = entropy_bounds.at[-1].get()
-#
-#     a = dual_vars.at[0].get()
-#     lmbda = jnp.log(1 + jnp.exp(a))
-#
-#     cost = -lmbda * jnp.log(trace_fgstate_1q(-h_parent/lmbda)) + lmbda * Sd
-#
-#     return -jnp.real(cost)
-#
-# @partial(jit, static_argnums = (1,))
-# def dual_grad_no_channel_1q_test(dual_vars: jnp.array, dual_params: DualParams):
-#     return grad(dual_obj_no_channel_1q_test, argnums = 0)(dual_vars, dual_params)
-
-# @partial(jit, static_argnums = (1,2))
-# def unvec_and_process_dual_vars(dual_vars: jnp.array, d: int, N: int):
-#     utri_indices = jnp.triu_indices(2*N, 1)
-#     ltri_indices = (utri_indices[1], utri_indices[0])
-#
-#     sigmas = jnp.zeros((2 * N, 2 * N, d))
-#     zeros_2N = jnp.zeros((2*N, 2*N))
-#
-#     a_vars = dual_vars.at[:d].get()
-#     lambdas = jnp.log(1 + jnp.exp(a_vars))
-#
-#     sigma_vars = dual_vars.at[d:].get()
-#     init_args = (sigmas, sigma_vars, utri_indices, ltri_indices, zeros_2N)
-#     sigmas, _, _, _, _ = jax.lax.fori_loop(0, d, unvec_layer_i, init_args)
-#
-#     return lambdas, sigmas
-
-# def unvec_layer_i(i: int, args: Tuple):
-#     sigmas, sigma_vars, utri_indices, ltri_indices, zeros_2N = args
-#
-#     N = zeros_2N.shape[0]//2
-#     num_sigma_vars_layer = (2*N - 1) * N
-#     l = num_sigma_vars_layer
-#
-#     sigma_layer = zeros_2N
-#     sigma_slice = jax.lax.dynamic_slice_in_dim(sigma_vars, i * l, l)
-#     sigma_layer = sigma_layer.at[utri_indices].set(sigma_slice)
-#     sigma_layer = sigma_layer.at[ltri_indices].set(-sigma_slice)
-#     sigmas = sigmas.at[:,:,i].set(sigma_layer)
-#
-#     return (sigmas, sigma_vars, utri_indices, ltri_indices, zeros_2N)
-
-# @partial(jit, static_argnums = (1,2))
-# def unvec_and_process_dual_vars(dual_vars: jnp.array, d: int, N: int):
-#     utri_indices = jnp.triu_indices(2*N, 1)
-#     ltri_indices = (utri_indices[1], utri_indices[0])
-#
-#     sigmas = jnp.zeros((2 * N, 2 * N, d))
-#     zeros_2N = jnp.zeros((2*N, 2*N))
-#
-#     a_vars = dual_vars.at[:d].get()
-#     lambdas = jnp.log(1 + jnp.exp(a_vars))
-#
-#     dual_vars_split = jnp.split(dual_vars.at[d:].get(), d)
-#     for i in range(d):
-#         sigma_layer = jnp.zeros((2*N, 2*N))
-#         sigma_layer = sigma_layer.at[utri_indices].set(dual_vars_split[i])
-#         sigma_layer = sigma_layer.at[ltri_indices].set(-dual_vars_split[i])
-#         sigmas = sigmas.at[:,:,i].set(sigma_layer)
-#
-#     return lambdas, sigmas
-
-# @partial(jit, static_argnums = (1,))
-# def dual_obj(dual_vars: jnp.array, dual_params: DualParams):
-#     N = dual_params.circ_params.N
-#     d = dual_params.circ_params.d
-#     h_parent = dual_params.circ_params.h_parent
-#     layer_hamiltonians = dual_params.circ_params.layer_hamiltonians
-#     p = dual_params.p
-#     Gamma_mjr_init = dual_params.circ_params.Gamma_mjr_init
-#
-#     lambdas, sigmas = unvec_and_process_dual_vars(dual_vars, d, N)
-#
-#     cost = 0
-#     # log Tr exp terms
-#     for i in range(d):
-#         if i == d-1:
-#             hi = h_parent + sigmas.at[:,:,i].get()
-#         else:
-#             hi = sigmas.at[:,:,i].get() - \
-#                  noisy_dual_layer(layer_hamiltonians[i+1],
-#                                   sigmas.at[:,:,i+1].get(), p)
-#
-#         cost += -lambdas[i] * jnp.log(trace_fgstate(-hi/lambdas[i]))
-#
-#     # init. state term
-#     epsilon_1_dag_sigma1 = \
-#     noisy_dual_layer(layer_hamiltonians[0], sigmas.at[:,:,0].get(), p)
-#
-#     cost += -energy(Gamma_mjr_init, epsilon_1_dag_sigma1)
-#
-#     # entropy term
-#     q = 1 - p
-#     q_powers = jnp.array([q**i for i in range(d)])
-#
-#     entropy_bounds = N * p * jnp.log(2) * \
-#              jnp.array([jnp.sum(q_powers.at[:i+1].get()) for i in range(d)])
-#
-#     cost += jnp.dot(lambdas, entropy_bounds)
-#
-#     return -jnp.real(cost)
-
-
-# for k in range(N):
-#     s_prime_zeroed_out = s_prime.at[k, :].set(jnp.zeros(2 * N))
-#     s_prime_zeroed_out = s_prime_zeroed_out.at[:, k].set(jnp.zeros(2 * N))
-#     s_prime_zeroed_out = s_prime_zeroed_out.at[k + N, :].set(jnp.zeros(2 * N))
-#     s_prime_zeroed_out = s_prime_zeroed_out.at[:, k + N].set(jnp.zeros(2 * N))
-#
-#     s_prime = (1 - p) * s_prime + p * (s_prime_zeroed_out)
-
-
-# def noise_on_fgstate_mc_realisation(Gamma_mjr: jnp.array, key: jnp.array,
-#                                     p: float, N: int):
-#     """
-#     Parameters
-#     ----------
-#     Gamma_mjr: Correlation matrix (Majorana rep.)
-#     key: to generate random mc samples
-#     p: noise probability
-#     N: number of fermionic modes
-#
-#     Returns
-#     -------
-#     Correlation matrix (Majorana rep.) of f.g.s. after MC sim. of noise
-#     """
-#
-#     s_prime = s
-#
-#     for k in range(N):
-#         s_prime_zeroed_out = s_prime.at[k, :].set(jnp.zeros(2 * N))
-#         s_prime_zeroed_out = s_prime_zeroed_out.at[:, k].set(jnp.zeros(2 * N))
-#         s_prime_zeroed_out = s_prime_zeroed_out.at[k + N, :].set(jnp.zeros(2 * N))
-#         s_prime_zeroed_out = s_prime_zeroed_out.at[:, k + N].set(jnp.zeros(2 * N))
-#
-#         s_prime = (1 - p) * s_prime + p * (s_prime_zeroed_out)
-#
-#     return s_prime
-
-# @partial(jit, static_argnums = (1,))
-# def circ_obj(theta: jnp.array, params: PrimalParams):
-#     Gamma_mjr = params.Gamma_mjr_init
-#
-#     for i in range(params.d):
-#         Gamma_mjr = weighted_unitary_on_fgstate(Gamma_mjr,
-#                                                 params.layer_hamiltonians[i],
-#                                                 theta[i])
-#
-#     return jnp.real(energy(Gamma_mjr, params.h_target))
-#
-# @partial(jit, static_argnums = (1,))
-# def circ_grad(theta: jnp.array, params: PrimalParams):
-#     return grad(circ_obj, argnums = 0)(theta, params)
-#
-# def optimize_circuit(theta_init: jnp.array, params: PrimalParams):
-#     bounds = scipy.optimize.Bounds(lb = 0.0, ub = 2 * np.pi)
-#
-#     return optimize(np.array(theta_init),
-#                     params, circ_obj, circ_grad,
-#                     num_iters = 50, bounds = bounds)
-
-# @jit
-# def weighted_unitary_on_fgstate(Gamma_mjr: jnp.array, h: jnp.array, theta: float):
-#     """
-#     Parameters
-#     ----------
-#     Gamma_mjr: Correlation matrix of f.g.s. (majorana rep.)
-#     h: Generator of Gaussian unitary in majorana rep..
-#        Gaussian unitary = e^{-iH} where H = i r^{\dagger} h r.
-#
-#     Returns
-#     -------
-#     Gamma_mjr_prime: Correlation matrix of f.g.s. after unitary.
-#     """
-#     w, v = jnp.linalg.eig(2 * h)
-#
-#     exp_p2h = jnp.matmul(jnp.matmul(v, jnp.diag(jnp.exp(theta * w))), jnp.conj(jnp.transpose(v)))
-#     exp_m2h = jnp.matmul(jnp.matmul(v, jnp.diag(jnp.exp(-theta * w))), jnp.conj(jnp.transpose(v)))
-#
-#     return jnp.matmul(jnp.matmul(exp_p2h, Gamma_mjr), exp_m2h)
-
-# def generate_target_hamiltonian(self, key: jnp.array):
-#     h_target, key = random_normal_hamiltonian_majorana(self.N, key)
-#     self.h_target = h_target/self.N

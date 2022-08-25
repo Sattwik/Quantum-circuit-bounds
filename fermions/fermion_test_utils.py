@@ -525,6 +525,34 @@ def test_log_trace(h: jnp.array):
 
     return jnp.log(trace_direct) - log_trace_direct
 
+def test_gamma_mjr_product(h1: jnp.array, h2: jnp.array):
+
+    N = int(h1.shape[0]//2)
+
+    rho1 = (-full_op_from_majorana(np.array(h1))).expm()
+    rho1 = rho1/rho1.tr()
+
+    rho2 = (-full_op_from_majorana(np.array(h2))).expm()
+    rho2 = rho2/rho2.tr()
+
+    rho = rho1 * rho2
+    rho = rho/rho.tr()
+
+    Gamma_mjr_exact = np.zeros((2*N, 2*N), dtype = complex)
+    x_list = [x(N, n) for n in range(0, N)]
+    p_list = [p(N, n) for n in range(0, N)]
+    r_list = x_list + p_list
+
+    for i in range(2*N):
+        for j in range(2*N):
+            Gamma_mjr_exact[i,j] = (rho * r_list[i] * r_list[j]).tr()
+
+    Gamma_mjr_1 = gaussian.corr_major_from_parenth(h1)
+    Gamma_mjr_2 = gaussian.corr_major_from_parenth(h2)
+    Gamma_mjr = gaussian.corr_major_product(Gamma_mjr_1, Gamma_mjr_2)
+
+    return np.linalg.norm(Gamma_mjr_exact - Gamma_mjr_exact), Gamma_mjr, Gamma_mjr_exact
+
 # def test_circuit_parent_hamiltonian_local(N: int, d: int, local_d: int, key: jnp.array):
 #
 #     circ_params = gaussian.PrimalParams(N, d, local_d, key)

@@ -30,11 +30,23 @@ data_path = "./../vqa_data/0727/20220727-125505/"
 # lambda_bounds = 0
 data_path = "./../vqa_data/0804/20220804-183936/"
 
-# N_list = [10,15,20,25,30]
-N_list = [10,15,20,25]
-p_list = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+# lambda_bounds = 0, smarter log
+data_path = "./../vqa_data/0813/20220813-114830/"
 
-num_k_duals = 2
+# approx ratios vs N for p = 5%-20%
+data_path = "./../vqa_data/0814/20220814-052449/"
+
+# N_list = [10,15,20,25,30]
+# N_list = [10,15,20,25]
+# p_list = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+
+# N_list = [10,15,20,25,30]
+# p_list = np.linspace(0.05, 0.2, 11)
+
+N_list = np.linspace(10,50,11, dtype = int)
+p_list = [0.05, 0.1, 0.2]
+
+num_k_duals = 1
 num_N = len(N_list)
 num_p = len(p_list)
 num_seeds = 5
@@ -47,7 +59,8 @@ noisy_bound_nc_list = np.zeros((num_N, num_seeds, num_p, num_k_duals), dtype = f
 for i_N, N in enumerate(N_list):
     for i_seed, seed in enumerate(N + np.array(range(num_seeds))):
         for i_p, p in enumerate(p_list):
-            for i_k, k_dual in enumerate([1, N]):
+            # for i_k, k_dual in enumerate([1, N]):
+            for i_k, k_dual in enumerate([1]):
                 fname = "fermion1D-N-" + str(N) + "-seed-" + str(seed) + \
                         "-p-" + str(p) + "-kdual-" + \
                         str(k_dual) + ".pkl"
@@ -70,85 +83,91 @@ approx_ratio_noisy_bound_nc = noisy_bound_nc_list/clean_sol_list
 
 # ---- Plotting the approximation ratios ----- #
 
+# vs p
 
-for i_N, N in enumerate(N_list):
+# for i_N, N in enumerate(N_list):
+#     fig = plt.figure()
+#     ax = fig.add_subplot(111)
+#
+#     mean_approx_noisy_sol = np.mean(approx_ratio_noisy_sol[i_N, :, :, 1], axis = 0)
+#     std_approx_noisy_sol = np.std(approx_ratio_noisy_sol[i_N, :, :, 1], axis = 0)
+#
+#     ax.plot(p_list, mean_approx_noisy_sol, marker = '^', color = CB_color_cycle[3], label = r'Primal')
+#     ax.fill_between(p_list,
+#                     (mean_approx_noisy_sol - std_approx_noisy_sol),
+#                     (mean_approx_noisy_sol + std_approx_noisy_sol),
+#                     color = CB_color_cycle[3], alpha = 0.1)
+#
+#     mean_approx_noisy_bound_nc = np.mean(approx_ratio_noisy_bound_nc[i_N, :, :, 1], axis = 0)
+#     std_approx_noisy_bound_nc = np.std(approx_ratio_noisy_bound_nc[i_N, :, :, 1], axis = 0)
+#
+#     ax.plot(p_list, mean_approx_noisy_bound_nc, marker = 'D', color = CB_color_cycle[5], label = r'Dual (NC)')
+#     ax.fill_between(p_list,
+#                     (mean_approx_noisy_bound_nc - std_approx_noisy_bound_nc),
+#                     (mean_approx_noisy_bound_nc + std_approx_noisy_bound_nc),
+#                     color = CB_color_cycle[5], alpha = 0.1)
+#
+#     for i_k, k_dual in enumerate([1, N]):
+#         mean_approx_noisy_bound = np.mean(approx_ratio_noisy_bound[i_N, :, :, i_k], axis = 0)
+#         std_approx_noisy_bound = np.std(approx_ratio_noisy_bound[i_N, :, :, i_k], axis = 0)
+#
+#         ax.plot(p_list, mean_approx_noisy_bound, marker = '.', color = CB_color_cycle[i_k], label = r'Dual (k = ' + str(k_dual) + ')')
+#         ax.fill_between(p_list,
+#                         (mean_approx_noisy_bound - std_approx_noisy_bound),
+#                         (mean_approx_noisy_bound + std_approx_noisy_bound),
+#                         color = CB_color_cycle[i_k], alpha = 0.1)
+#
+#
+#     ax.set_ylabel('Approx. ratio')
+#     ax.set_xlabel(r'$p$')
+#     ax.legend()
+#     plt.tight_layout()
+#
+#     figname = "approx_ratios_" + str(N) + ".pdf"
+#     plt.savefig(os.path.join(data_path, figname), format = 'pdf')
+
+# vs N
+
+
+
+for i_p, p in enumerate(p_list):
     fig = plt.figure()
     ax = fig.add_subplot(111)
 
-    mean_approx_noisy_sol = np.mean(approx_ratio_noisy_sol[i_N, :, :, 1], axis = 0)
-    std_approx_noisy_sol = np.std(approx_ratio_noisy_sol[i_N, :, :, 1], axis = 0)
+    mean_approx_noisy_sol = np.mean(approx_ratio_noisy_sol[:, :, i_p, 0], axis = 1)
+    std_approx_noisy_sol = np.std(approx_ratio_noisy_sol[:, :, i_p, 0], axis = 1)
 
-    ax.plot(p_list, mean_approx_noisy_sol, marker = '^', color = CB_color_cycle[3], label = r'Primal')
-    ax.fill_between(p_list,
+    ax.plot(N_list, mean_approx_noisy_sol, marker = '^', color = CB_color_cycle[3], label = r'Primal')
+    ax.fill_between(N_list,
                     (mean_approx_noisy_sol - std_approx_noisy_sol),
                     (mean_approx_noisy_sol + std_approx_noisy_sol),
                     color = CB_color_cycle[3], alpha = 0.1)
 
-    mean_approx_noisy_bound_nc = np.mean(approx_ratio_noisy_bound_nc[i_N, :, :, 1], axis = 0)
-    std_approx_noisy_bound_nc = np.std(approx_ratio_noisy_bound_nc[i_N, :, :, 1], axis = 0)
+    mean_approx_noisy_bound_nc = np.mean(approx_ratio_noisy_bound_nc[:, :, i_p, 0], axis = 1)
+    std_approx_noisy_bound_nc = np.std(approx_ratio_noisy_bound_nc[:, :, i_p, 0], axis = 1)
 
-    ax.plot(p_list, mean_approx_noisy_bound_nc, marker = 'D', color = CB_color_cycle[5], label = r'Dual (NC)')
-    ax.fill_between(p_list,
+    ax.plot(N_list, mean_approx_noisy_bound_nc, marker = 'D', color = CB_color_cycle[5], label = r'Dual (NC)')
+    ax.fill_between(N_list,
                     (mean_approx_noisy_bound_nc - std_approx_noisy_bound_nc),
                     (mean_approx_noisy_bound_nc + std_approx_noisy_bound_nc),
                     color = CB_color_cycle[5], alpha = 0.1)
 
-    for i_k, k_dual in enumerate([1, N]):
-        mean_approx_noisy_bound = np.mean(approx_ratio_noisy_bound[i_N, :, :, i_k], axis = 0)
-        std_approx_noisy_bound = np.std(approx_ratio_noisy_bound[i_N, :, :, i_k], axis = 0)
+    for i_k, k_dual in enumerate([1]):
+        mean_approx_noisy_bound = np.mean(approx_ratio_noisy_bound[:, :, i_p, i_k], axis = 1)
+        std_approx_noisy_bound = np.std(approx_ratio_noisy_bound[:, :, i_p, i_k], axis = 1)
 
-        ax.plot(p_list, mean_approx_noisy_bound, marker = '.', color = CB_color_cycle[i_k], label = r'Dual (k = ' + str(k_dual) + ')')
-        ax.fill_between(p_list,
+        ax.plot(N_list, mean_approx_noisy_bound, marker = '.', color = CB_color_cycle[i_k], label = r'Dual (k = ' + str(k_dual) + ')')
+        ax.fill_between(N_list,
                         (mean_approx_noisy_bound - std_approx_noisy_bound),
                         (mean_approx_noisy_bound + std_approx_noisy_bound),
                         color = CB_color_cycle[i_k], alpha = 0.1)
 
 
     ax.set_ylabel('Approx. ratio')
-    ax.set_xlabel(r'$p$')
+    ax.set_xlabel(r'$N$')
     ax.legend()
+    ax.set_yscale('log')
     plt.tight_layout()
 
-    figname = "approx_ratios_" + str(N) + ".pdf"
+    figname = "approx_ratios_" + str(p) + ".pdf"
     plt.savefig(os.path.join(data_path, figname), format = 'pdf')
-
-
-# figname = "solutions.pdf"
-# figname = "approx_ratios_with_nc.pdf"
-# figname = "approx_ratios_with_nc_no_clean.pdf"
-# figname = "approx_ratios_no_nc.pdf"
-
-
-# fig = plt.figure()
-# num_bins = 30
-# ax = fig.add_subplot(411)
-# ax.hist(approx_ratio_clean, label = 'p = 0', alpha = 0.75,
-#         color = CB_color_cycle[0], bins = num_bins)
-# ax.legend(fontsize = 8)
-# ax.set_xlim((0.4, 1))
-# ax.set_ylim((0, 6))
-# ax.axvline(x = mean_approx_clean, ls = '--', c = 'k')
-#
-# subplot_list = [412, 413, 414]
-#
-# for n_noise in range(num_noise_probs):
-#     ax = fig.add_subplot(subplot_list[n_noise])
-#     ax.hist(approx_ratio_noisy[n_noise, :],
-#             label = 'p = ' + str(p_noise_list[n_noise]),
-#             alpha = 0.75, color = CB_color_cycle[n_noise + 1], bins = num_bins)
-#
-#     ax.hist(approx_ratio_noisy_bound[n_noise, :],
-#             label = 'Bound, p = ' + str(p_noise_list[n_noise]),
-#             alpha = 0.75, color = CB_color_cycle[n_noise + 1], bins = num_bins,
-#              hatch='//', edgecolor='k', fill=True)
-#
-#     ax.set_xlim((0.4, 1))
-#     ax.set_ylim((0, 6))
-#     ax.axvline(x = mean_approx_noisy[n_noise], ls = '--', c = 'k', lw = 0.75)
-#     ax.axvline(x = mean_approx_noisy_bound[n_noise], ls = '-.', c = 'k', lw = 0.75)
-#     ax.legend(fontsize = 8)
-#
-# ax.set_xlabel(r'$\alpha$')
-# plt.tight_layout()
-# figname = "solutions_and_bounds.pdf"
-# plt.savefig(os.path.join(data_path, figname), format = 'pdf')
