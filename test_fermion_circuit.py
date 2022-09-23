@@ -15,6 +15,7 @@ from jax import jit, grad, vmap, value_and_grad
 from jax.example_libraries import optimizers
 import matplotlib.pyplot as plt
 import colorama
+from matplotlib import rc
 
 from fermions import gaussian, fermion_test_utils
 
@@ -24,7 +25,7 @@ from fermions import gaussian, fermion_test_utils
 
 colorama.init()
 
-N = 20
+N = 15
 if N%2 == 0:
     d = N - 1
 else:
@@ -64,7 +65,7 @@ print(colorama.Style.RESET_ALL)
 #---------------------------------- NOISY SOL ---------------------------------#
 #------------------------------------------------------------------------------#
 
-p = 0.05
+p = 0.1
 
 # noisy_sol_full = fermion_test_utils.primal_noisy_circuit_full(dual_params)
 noisy_sol = gaussian.noisy_primal(circ_params, p)
@@ -267,7 +268,9 @@ else:
     print(colorama.Fore.RED + "False")
 print(colorama.Style.RESET_ALL)
 
-print("lambdas = ", lambda_lower_bounds + dual_vars_opt_result[:d])
+lambdas, sigmas = gaussian.unvec_and_process_dual_vars(jnp.array(dual_opt_result_phase1.x), dual_params)
+
+print("lambdas = ", lambdas)
 
 
 # plt.plot(-dual_obj_over_opti_direct)
@@ -347,14 +350,14 @@ print("lambdas = ", lambda_lower_bounds + dual_vars_opt_result[:d])
 #
 
 # #
-
-lambdas, sigmas = gaussian.unvec_and_process_dual_vars(jnp.array(dual_opt_result.x), dual_params)
-layer_hamiltonians = dual_params.circ_params.layer_hamiltonians
-h_parent = dual_params.circ_params.h_parent
-hi = sigmas.at[:,:,i].get() - \
-     gaussian.noisy_dual_layer(layer_hamiltonians.at[i+1, :, :].get(),
-                      sigmas.at[:,:,i+1].get(), p)
-gaussian.trace_fgstate(-hi/lambdas.at[i].get())
+#
+# lambdas, sigmas = gaussian.unvec_and_process_dual_vars(jnp.array(dual_opt_result.x), dual_params)
+# layer_hamiltonians = dual_params.circ_params.layer_hamiltonians
+# h_parent = dual_params.circ_params.h_parent
+# hi = sigmas.at[:,:,i].get() - \
+#      gaussian.noisy_dual_layer(layer_hamiltonians.at[i+1, :, :].get(),
+#                       sigmas.at[:,:,i+1].get(), p)
+# gaussian.trace_fgstate(-hi/lambdas.at[i].get())
 
 
 colorama.deinit()

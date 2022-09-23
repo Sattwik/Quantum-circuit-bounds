@@ -295,7 +295,7 @@ class PrimalParams():
 
     def __init__(self, N: int, d: int, local_d: int,
                  key: jnp.array,
-                 init_state_desc: str = "all zero", k: int = 1):
+                 init_state_desc: str = "all zero", k: int = 1, mode: str = 'adjacent'):
         """
         d: depth of circuit
         init_state_desc: description of the initial state wanted
@@ -309,21 +309,30 @@ class PrimalParams():
 
         assert((d - local_d)%2 == 0)
 
-        self.generate_layer_hamiltonians(key)
+        self.generate_layer_hamiltonians(key, mode)
         self.generate_parent_hamiltonian()
         self.generate_init_state(init_state_desc)
 
-    def generate_layer_hamiltonians(self, key: jnp.array):
+    def generate_layer_hamiltonians(self, key: jnp.array, mode = 'adjacent'):
         self.layer_hamiltonians = []
 
         for i in range(self.local_d):
             random_local_h, key = random_k_local_normal_hamiltonian_majorana(self.N, self.k, key)
             self.layer_hamiltonians.append(random_local_h/self.N)
 
-        for i in range((self.d - self.local_d)//2):
-            random_local_h, key = random_k_local_normal_hamiltonian_majorana(self.N, self.k, key)
-            self.layer_hamiltonians.append(random_local_h/self.N)
-            self.layer_hamiltonians.append(-random_local_h/self.N)
+        if mode == 'adjacent':
+            for i in range((self.d - self.local_d)//2):
+                self.layer_hamiltonians.append(random_local_h/self.N)
+                self.layer_hamiltonians.append(-random_local_h/self.N)
+        elif mode == 'block':
+            h_list = []
+            for i in range((self.d - self.local_d)//2):
+                random_local_h, key = random_k_local_normal_hamiltonian_majorana(self.N, self.k, key)
+                self.layer_hamiltonians.append(random_local_h/self.N)
+                h_list.append(random_local_h)
+
+            for i in range((self.d - self.local_d)//2):
+                self.layer_hamiltonians.append(-h_list[::-1][i]/self.N)
 
         self.layer_hamiltonians = jnp.array(self.layer_hamiltonians)
         self.key_after_ham_gen = key

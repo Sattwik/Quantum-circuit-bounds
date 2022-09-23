@@ -40,7 +40,7 @@ rng = np.random.default_rng()
 seed = N + 0
 key = jax.random.PRNGKey(seed)
 
-circ_params = gaussian2D.PrimalParams(M, N, d, local_d, key, k = k)
+circ_params = gaussian2D.PrimalParams(M, N, d, local_d, key, k = k, mode = 'block')
 key, subkey = jax.random.split(circ_params.key_after_ham_gen)
 
 # circ_params.layer_hamiltonians = jnp.zeros(circ_params.layer_hamiltonians.shape)
@@ -65,7 +65,7 @@ print(colorama.Style.RESET_ALL)
 #---------------------------------- NOISY SOL ---------------------------------#
 #------------------------------------------------------------------------------#
 
-p = 0.999
+p = 0.1
 
 # noisy_sol_full = fermion_test_utils.primal_noisy_circuit_full(dual_params)
 noisy_sol = gaussian2D.noisy_primal(circ_params, p)

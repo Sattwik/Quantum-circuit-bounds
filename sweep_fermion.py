@@ -69,7 +69,8 @@ def submit_simulation(N, seed, p, k_dual, result_save_path):
 # p_list = np.linspace(0.05, 0.2, 11)
 
 # for approx ratio vs. N
-N_list = np.linspace(10,50,11, dtype = int)
+# N_list = np.linspace(10,50,11, dtype = int)
+N_list = [30, 40, 50, 60, 70, 80, 90, 100]
 p_list = [0.05, 0.1, 0.2]
 
 sweep_fermion(N_list, p_list)

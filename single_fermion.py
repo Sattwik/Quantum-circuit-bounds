@@ -44,7 +44,7 @@ else:
 local_d = 1
 k = 1
 
-circ_params = gaussian.PrimalParams(N, d, local_d, key, k = k)
+circ_params = gaussian.PrimalParams(N, d, local_d, key, k = k, mode = 'block')
 key, subkey = jax.random.split(circ_params.key_after_ham_gen)
 
 final_energy = gaussian.energy_after_circuit(circ_params)
@@ -94,7 +94,7 @@ data_list = [clean_sol, noisy_sol, noisy_bound, noisy_bound_nc,
              lambda_lower_bounds,
              dual_obj_over_opti, dual_obj_over_opti_nc]
 
-data_file_name = "fermion1D-N-" + str(N) + "-seed-" + cliargs.seed + "-p-" + str(p) + "-kdual-" + \
+data_file_name = "fermion1D-block-N-" + str(N) + "-seed-" + cliargs.seed + "-p-" + str(p) + "-kdual-" + \
                  str(k_dual) + ".pkl"
 
 with open(os.path.join(cliargs.result_save_path, data_file_name), "wb") as f_for_pkl:
