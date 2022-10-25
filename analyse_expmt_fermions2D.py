@@ -27,6 +27,9 @@ CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
 # approx ratios vs N for p = 5%-20%, lambda bounds = 0
 data_path = "./../vqa_data/0825/20220825-025551/"
 
+# approx ratios vs N = 4-14 for p = 5%-20%, lambda bounds = 0
+data_path = "./../vqa_data/0924/20220924-175318/"
+
 # N_list = [10,15,20,25,30]
 # N_list = [10,15,20,25]
 # p_list = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
@@ -35,8 +38,8 @@ data_path = "./../vqa_data/0825/20220825-025551/"
 # p_list = np.linspace(0.05, 0.2, 11)
 
 # N_list = [3,4,5,6,7,8]
-N_list = [4,6,8]
-p_list = [0.05, 0.1, 0.2]
+N_list = [4,6,8,10,12,14]
+p_list = [0.01, 0.05, 0.1, 0.2]
 
 num_k_duals = 1
 num_N = len(N_list)
@@ -53,7 +56,7 @@ for i_N, N in enumerate(N_list):
         for i_p, p in enumerate(p_list):
             # for i_k, k_dual in enumerate([1, N]):
             for i_k, k_dual in enumerate([1]):
-                fname = "fermion2D-N-" + str(N) + "-seed-" + str(seed) + \
+                fname = "fermion2D-block-N-" + str(N) + "-seed-" + str(seed) + \
                         "-p-" + str(p) + "-kdual-" + \
                         str(k_dual) + ".pkl"
                 with open(os.path.join(data_path, fname), 'rb') as result_file:
