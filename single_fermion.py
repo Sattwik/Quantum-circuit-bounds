@@ -35,12 +35,14 @@ N = int(cliargs.N)
 print('N = ', N)
 print('seed = ', cliargs.seed)
 
-if N%2 == 0:
-    d = N - 1
+# if N%2 == 0:
+if (N//2)%2 == 0:
+    d = N//2 - 1
 else:
     d = N
 
-# d = 19
+print('d = ', d)
+
 local_d = 1
 k = 1
 
