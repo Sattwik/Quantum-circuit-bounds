@@ -42,6 +42,12 @@ data_path = "./../vqa_data/0922/20220922-202229/"
 # approx ratios vs N = 32-64 for p = 5%-20%, block arrangement
 data_path = "./../vqa_data/0926/20220926-193132/"
 
+# approx ratios vs N = 32-64 for p = 5%-20%, block arrangement
+data_path = "./../vqa_data/0926/20220926-193132/"
+
+# approx ratios vs N = 32-72 for p = 5%-20%, block arrangement, depth = N/2
+data_path = "./../vqa_data/1024/20221024-191049/"
+
 # N_list = [10,15,20,25,30]
 # N_list = [10,15,20,25]
 # p_list = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
@@ -52,8 +58,8 @@ data_path = "./../vqa_data/0926/20220926-193132/"
 # N_list = np.linspace(10,50,11, dtype = int)
 # p_list = [0.05, 0.1, 0.2]
 
-N_list = [32, 36, 40, 44, 48, 52, 56, 60, 64]
-p_list = [0.01, 0.05, 0.1, 0.2]
+N_list = [32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 72, 72]
+p_list = [0.01, 0.05]
 
 num_k_duals = 1
 num_N = len(N_list)

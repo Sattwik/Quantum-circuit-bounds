@@ -66,7 +66,7 @@ def submit_simulation(N, seed, p, k_dual, result_save_path):
 
 # physically relevant noises
 N_list = [8,10]
-p_list = np.linspace(0.01, 0.2, 20)
+p_list = np.linspace(0.01, 0.2, 11)
 
 # for approx ratio vs. N
 # N_list = [4, 6, 8, 10, 12, 14]
