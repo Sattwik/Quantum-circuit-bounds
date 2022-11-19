@@ -15,14 +15,14 @@ from jax.example_libraries import optimizers
 
 from vqa_bounds import graphs, meta_system
 
-class MaxCut1D(meta_system.System):
+class SumSigma1D(meta_system.System):
 
-    def __init__(self, graph, lattice, d: int, p: float, circ_backend = "qutip"):
-
-        self.graph = graph
-        self.lattice = lattice
+    def __init__(self, lattice,  d: int, p: float, circ_backend = "qutip"):
 
         self.circ_backend = circ_backend
+
+        self.lattice = lattice
+        self.graph = lattice
 
         # preparing the Z operators
         self.site_z_ops = {}
@@ -34,8 +34,7 @@ class MaxCut1D(meta_system.System):
 
         self.num_sites_in_lattice = self.lattice.number_of_nodes() # assuming even
         # layer numbering starts from 1
-        self.site_tuple_list_odd_layer = list(zip(range(1, self.num_sites_in_lattice, 2), range(2, self.num_sites_in_lattice, 2)))
-        self.site_tuple_list_even_layer = list(zip(range(0, self.num_sites_in_lattice, 2), range(1, self.num_sites_in_lattice, 2)))
+        self.site_tuple_list_even_layer = list(zip(range(0, self.N, 2), range(1, self.N, 2)))
 
         self.Z_qutip = qutip.sigmaz()
         self.X_qutip = qutip.sigmax()
@@ -43,6 +42,9 @@ class MaxCut1D(meta_system.System):
         self.I_qutip = qutip.qeye(2)
 
         self.I_tot = qutip.tensor([self.I_qutip] * self.num_sites_in_lattice)
+
+        # the problem Hamiltonian
+        self.H = 0
 
         for site in self.lattice:
 
@@ -56,10 +58,11 @@ class MaxCut1D(meta_system.System):
             self.site_nums[site] = op_num
             op_num += 1
 
-        # the problem Hamiltonian
-        self.H = 0
+            self.H += self.site_z_ops[site]
 
-        for edge in self.graph.edges:
+
+
+        for s in self.graph.edges:
 
             Zj = self.site_z_ops[edge[0]]
             Zk = self.site_z_ops[edge[1]]
@@ -837,8 +840,7 @@ class MaxCut1DNoChannel():
 
     def dual_obj(self, dual_nc_vars: jnp.array):
 
-        # lmbda = jnp.log(1 + jnp.exp(dual_nc_vars[0]))
-        lmbda = jnp.exp(dual_nc_vars[0])
+        lmbda = jnp.log(1 + jnp.exp(dual_nc_vars[0]))
 
         cost = lmbda * self.entropy_bounds[-1]
         Hi = self.H_problem

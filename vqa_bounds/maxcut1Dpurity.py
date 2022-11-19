@@ -10,14 +10,14 @@ import qutip
 import tensornetwork as tn
 tn.set_default_backend("jax")
 import jax.numpy as jnp
-from jax import jit, grad, vmap, value_and_grad
+from jax import jit, grad, vmap, value_and_grad, jvp
 from jax.example_libraries import optimizers
 
 from vqa_bounds import graphs, meta_system
 
-class MaxCut1D(meta_system.System):
+class MaxCut1DPurity(meta_system.System):
 
-    def __init__(self, graph, lattice, d: int, p: float, circ_backend = "qutip"):
+    def __init__(self, graph, lattice, d_purity: int, d_vne: int, p: float, circ_backend = "qutip"):
 
         self.graph = graph
         self.lattice = lattice
@@ -71,7 +71,9 @@ class MaxCut1D(meta_system.System):
 
         # for dual
         self.local_dim = 2
-        self.d = d
+        self.d_purity = d_purity
+        self.d_vne = d_vne
+        self.d = d_purity + d_vne
         self.p = p
         self.psi_init = self.init_state()
         self.psi_init_jax = jnp.array(self.psi_init)
@@ -234,6 +236,8 @@ class MaxCut1D(meta_system.System):
         self.entropy_bounds = self.num_sites_in_lattice * self.p * jnp.log(2) * \
                               jnp.array([jnp.sum(q_powers.at[:i+1].get()) for i in range(self.d)])
 
+        self.purity_bounds = jnp.exp(-self.entropy_bounds)
+
     def mat_2_tensor(self, A: jnp.array):
 
         """
@@ -300,6 +304,10 @@ class MaxCut1D(meta_system.System):
 
         return grad(self.dual_obj)(dual_vars)
 
+    def dual_hessian_prod(self, dual_vars: jnp.array, vec: jnp.array):
+
+        return jvp(grad(self.dual_obj), (dual_vars,), (vec,))[1]
+
     def assemble_vars_into_tensors(self, vars_vec: jnp.array):
 
         vars_diag_list, vars_real_list, vars_imag_list = self.unvectorize_vars(vars_vec)
@@ -321,8 +329,9 @@ class MaxCut1D(meta_system.System):
 
     def unvectorize_vars(self, vars_vec: jnp.array):
 
-        a_vars = vars_vec.at[:self.d].get()
-        self.Lambdas = jnp.log(1 + jnp.exp(a_vars))
+        a_vars = vars_vec.at[:self.d_vne].get()
+        # self.Lambdas = jnp.log(1 + jnp.exp(a_vars))
+        self.Lambdas = jnp.exp(a_vars)
 
         vars_vec_split = jnp.split(vars_vec.at[self.d:].get(), self.d)
         # split the variables into p equal arrays
@@ -349,10 +358,20 @@ class MaxCut1D(meta_system.System):
     def cost(self):
 
         # the entropy term
-        cost = jnp.dot(self.Lambdas, self.entropy_bounds)
+        cost = jnp.dot(self.Lambdas, self.entropy_bounds.at[self.d_purity:].get())
 
         # the effective Hamiltonian term
-        for i in range(self.d):
+        for i in range(self.d_purity):
+            # i corresponds to the layer of the circuit, 0 being the earliest
+            # i.e. i = 0 corresponds to t = 1 in notes
+
+            # construct the effective Hamiltonian for the ith step/layer
+            Hi = self.construct_H(i)
+            Hi_squared = jnp.matmul(Hi, Hi)
+
+            cost += -jnp.sqrt(self.purity_bounds.at[i].get() * jnp.trace(Hi_squared))
+
+        for i in range(self.d_purity, self.d):
 
             # i corresponds to the layer of the circuit, 0 being the earliest
             # i.e. i = 0 corresponds to t = 1 in notes
@@ -681,173 +700,3 @@ class MaxCut1D(meta_system.System):
                                 self.site_z_ops[site] * rho_after_step * self.site_z_ops[site])
 
         return qutip.expect(self.H, rho_after_step)
-
-class MaxCut1DNoChannel():
-    def __init__(self, graph, lattice, d: int, p: float, circ_backend = "qutip"):
-
-        self.graph = graph
-        self.lattice = lattice
-
-        self.circ_backend = circ_backend
-
-        # preparing the Z operators
-        self.site_z_ops = {}
-        self.site_x_ops = {}
-        self.site_y_ops = {}
-
-        self.site_nums = {}
-        op_num = 0
-
-        self.num_sites_in_lattice = self.lattice.number_of_nodes() # assuming even
-        # layer numbering starts from 1
-        self.site_tuple_list_odd_layer = list(zip(range(1, self.num_sites_in_lattice, 2), range(2, self.num_sites_in_lattice, 2)))
-        self.site_tuple_list_even_layer = list(zip(range(0, self.num_sites_in_lattice, 2), range(1, self.num_sites_in_lattice, 2)))
-
-        self.Z_qutip = qutip.sigmaz()
-        self.X_qutip = qutip.sigmax()
-        self.Y_qutip = qutip.sigmay()
-        self.I_qutip = qutip.qeye(2)
-
-        self.I_tot = qutip.tensor([self.I_qutip] * self.num_sites_in_lattice)
-
-        for site in self.lattice:
-
-            self.site_z_ops[site] = qutip.tensor([self.I_qutip] * op_num + [self.Z_qutip] + \
-                                            [self.I_qutip] * (self.num_sites_in_lattice - op_num - 1))
-            self.site_x_ops[site] = qutip.tensor([self.I_qutip] * op_num + [self.X_qutip] + \
-                                            [self.I_qutip] * (self.num_sites_in_lattice - op_num - 1))
-            self.site_y_ops[site] = qutip.tensor([self.I_qutip] * op_num + [self.Y_qutip] + \
-                                            [self.I_qutip] * (self.num_sites_in_lattice - op_num - 1))
-
-            self.site_nums[site] = op_num
-            op_num += 1
-
-        # the problem Hamiltonian
-        self.H = 0
-
-        for edge in self.graph.edges:
-
-            Zj = self.site_z_ops[edge[0]]
-            Zk = self.site_z_ops[edge[1]]
-            wjk = -1
-
-            local_op = wjk/2 * (self.I_tot - Zj * Zk)
-
-            self.H += local_op
-
-        # for dual
-        self.local_dim = 2
-        self.d = d
-        self.p = p
-        self.psi_init = self.init_state()
-        self.psi_init_jax = jnp.array(self.psi_init)
-        self.H_problem = jnp.array(self.H.full())
-
-        self.dim_list = tuple([self.local_dim] * 2 * self.num_sites_in_lattice)
-        self.dim = self.local_dim ** self.num_sites_in_lattice
-
-        self.utri_indices = jnp.triu_indices(self.dim, 1)
-        self.ltri_indices = (self.utri_indices[1], self.utri_indices[0])
-        self.num_tri_elements = self.utri_indices[0].shape[0]
-        self.num_diag_elements = self.dim
-
-        self.total_num_vars = (1 + self.num_diag_elements + 2 * self.num_tri_elements) * self.d
-
-        self.I_jax = jnp.array(self.I_qutip.full())
-        self.X_jax = jnp.array(self.X_qutip.full())
-        self.Y_jax = jnp.array(self.Y_qutip.full())
-        self.Z_jax = jnp.array(self.Z_qutip.full())
-
-        # # constructing initial density operator
-        self.rho_init = jnp.array((self.psi_init * self.psi_init.dag()).full())
-
-        self.init_entropy_bounds()
-
-    def update_opt_circ_params(self, opt_circuit_params: np.array):
-
-        self.opt_gamma = opt_circuit_params[:self.d]
-        self.opt_beta = opt_circuit_params[self.d:]
-
-    def init_state(self):
-
-        psi0 = qutip.basis([2] * self.num_sites_in_lattice)
-        psi0 = qutip.hadamard_transform(N = self.num_sites_in_lattice) * psi0
-
-        return psi0
-
-    def init_entropy_bounds(self):
-
-        q = 1 - self.p
-        q_powers = jnp.array([q**i for i in range(self.d)])
-
-        self.entropy_bounds = self.num_sites_in_lattice * self.p * jnp.log(2) * \
-                              jnp.array([jnp.sum(q_powers.at[:i+1].get()) for i in range(self.d)])
-
-    def mat_2_tensor(self, A: jnp.array):
-
-        """
-        Converts an array A that is indexed as (i1 i2 ... iN)(i1p i2p ... iNp)
-        into a tensor indexed as (i1) (i1p) (i2) (i2p) ... (iN) (iNp). () denote
-        composite indices.
-        """
-
-        # (i1 i2 ... iN)(i1p i2p ... iNp) -> (i1 i2 ... iN i1p i2p ... iNp)
-        T = jnp.ravel(A)
-
-        # (i1 i2 ... iN i1p i2p ... iNp) -> (i1) (i2) ... (iN) (i1p) (i2p) ... (iNp)
-        T = jnp.reshape(T, tuple([self.local_dim] * self.num_sites_in_lattice * 2))
-
-        # (i1) (i2) ... (iN) (i1p) (i2p) ... (iNp) -> (i1) (i1p) ... (iN) (iNp)
-        # [0, N, 1, N + 1, ..., N - 1, 2N - 1]
-        i1 = np.arange(self.num_sites_in_lattice)
-        i2 = self.num_sites_in_lattice + i1
-        i  = np.zeros(2 * self.num_sites_in_lattice, dtype = int)
-        i[::2] = i1
-        i[1::2] = i2
-        # i = i.at[::2].set(i1)
-        # i = i.at[1::2].set(i2)
-
-        T = jnp.transpose(T, tuple(i))
-
-        return T
-
-    def tensor_2_mat(self, T: jnp.array):
-
-        """
-        Converts a tensor T that is indexed as  (i1) (i1p) (i2) (i2p) ... (iN) (iNp)
-        into a matrix indexed as (i1 i2 ... iN)(i1p i2p ... iNp). () denote
-        composite indices.
-        """
-
-        # (i1) (i1p) (i2) (i2p) ... (iN) (iNp) -> (i1) (i2) ... (iN) (i1p) (i2p) ... (iNp)
-        # [0, 2, 4, ..., 2N - 2, 1, 3, ..., 2N - 1]
-        i1 = np.arange(0, 2 * self.num_sites_in_lattice - 1, 2)
-        i2 = np.arange(1, 2 * self.num_sites_in_lattice, 2)
-        i = np.concatenate((i1, i2))
-
-        A = jnp.transpose(T, tuple(i))
-
-        # (i1) (i2) ... (iN) (i1p) (i2p) ... (iNp) -> (i1 i2 ... iN i1p i2p ... iNp)
-        A = jnp.ravel(A)
-
-        # (i1 i2 ... iN i1p i2p ... iNp) -> (i1 i2 ... iN)(i1p i2p ... iNp)
-        A = jnp.reshape(A, (self.dim, self.dim))
-
-        return A
-
-    def dual_obj(self, dual_nc_vars: jnp.array):
-
-        # lmbda = jnp.log(1 + jnp.exp(dual_nc_vars[0]))
-        lmbda = jnp.exp(dual_nc_vars[0])
-
-        cost = lmbda * self.entropy_bounds[-1]
-        Hi = self.H_problem
-        Ei = jnp.linalg.eigvalsh(Hi)
-
-        cost += -lmbda * jnp.log(jnp.sum(jnp.exp(-Ei/lmbda)))
-
-        return -jnp.real(cost)
-
-    def dual_grad(self, dual_nc_vars: jnp.array):
-
-        return grad(self.dual_obj)(dual_nc_vars)
