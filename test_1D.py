@@ -27,9 +27,9 @@ lattice = graphs.define_lattice((m,))
 
 graph = graphs.create_random_connectivity(lattice)
 
-d_purity = 3
+d_purity = 9
 d_vne = 1
-d = 4
+d = d_purity + d_vne
 p = 0.1
 
 sys_obj = maxcut1D.MaxCut1D(graph, lattice, d, p)
@@ -82,8 +82,9 @@ a_nc = dual_opt_result_nc.x[0]
 dual_vars_init_pur = 1e-9 * jnp.ones(sys_obj_pur.total_num_vars)
 dual_vars_init_pur = dual_vars_init_pur.at[0].set(a_nc)
 
+sys_obj_local_pur.a_vars = jnp.array(dual_opt_result_nc.x).at[0].set(a_nc-3)
 dual_vars_init_local_pur = 1e-9 * jnp.ones(sys_obj_local_pur.total_num_vars)
-dual_vars_init_local_pur = dual_vars_init_local_pur.at[0].set(a_nc)
+# dual_vars_init_local_pur = dual_vars_init_local_pur.at[0].set(a_nc)
 
 # dual_vars_init_local_pur_lambda = jnp.zeros(sys_obj_local_pur_lambda.total_num_vars)
 # dual_vars_init_local_pur_lambda = dual_vars_init_local_pur_lambda.at[d-1].set(a_nc)
@@ -106,8 +107,8 @@ dual_vars_init_local_pur = dual_vars_init_local_pur.at[0].set(a_nc)
 # num_iters = 300
 # dual_obj_over_opti_local_pur, dual_opt_result_local_pur = dual_utils.optimize_dual(dual_vars_init_local_pur, sys_obj_local_pur, num_iters, a_bound, sigma_bound, use_bounds = False, opt_method = 'Newton-CG')
 
-num_iters = 5000
-dual_obj_over_opti_pur, dual_opt_result_pur = dual_utils.optimize_dual(dual_vars_init_pur, sys_obj_pur, num_iters, a_bound, sigma_bound, opt_method = 'L-BFGS-B', use_bounds = False)
+# num_iters = 5000
+# dual_obj_over_opti_pur, dual_opt_result_pur = dual_utils.optimize_dual(dual_vars_init_pur, sys_obj_pur, num_iters, a_bound, sigma_bound, opt_method = 'L-BFGS-B', use_bounds = False)
 
 num_iters = 5000
 dual_obj_over_opti_local_pur, dual_opt_result_local_pur = dual_utils.optimize_dual(dual_vars_init_local_pur, sys_obj_local_pur, num_iters, a_bound, sigma_bound, use_bounds = False, opt_method = 'L-BFGS-B')
@@ -123,10 +124,10 @@ dual_obj_over_opti_local_pur, dual_opt_result_local_pur = dual_utils.optimize_du
 # num_iters = int(1e4)
 # dual_obj_over_opti_pur, dual_opt_result_pur = dual_utils.gd_optimize(sys_obj_pur, dual_vars_init_pur, eta, num_iters)
 
-eta = 1e-6
-# # eta = 1.0
-num_iters = int(32e4)
-dual_obj_over_opti_local_pur, dual_opt_result_local_pur = dual_utils.gd_optimize(sys_obj_local_pur, dual_vars_init_local_pur, eta, num_iters)
+# eta = 1e-6
+# # # eta = 1.0
+# num_iters = int(32e4)
+# dual_obj_over_opti_local_pur, dual_opt_result_local_pur = dual_utils.gd_optimize(sys_obj_local_pur, dual_vars_init_local_pur, eta, num_iters)
 
 end = time.time()
 
@@ -140,7 +141,7 @@ noisy_bound_nc = -sys_obj_nc.dual_obj(jnp.array(dual_opt_result_nc.x))
 # noisy_bound_local = -sys_obj_local.dual_obj(jnp.array(dual_opt_result_local.x))
 # noisy_bound_local_pur_lambda = -sys_obj_local_pur_lambda.dual_obj(jnp.array(dual_opt_result_local_pur_lambda.x))
 noisy_bound_local_pur = -sys_obj_local_pur.dual_obj(jnp.array(dual_opt_result_local_pur.x))
-noisy_bound_pur = -sys_obj_pur.dual_obj(jnp.array(dual_opt_result_pur.x))
+# noisy_bound_pur = -sys_obj_pur.dual_obj(jnp.array(dual_opt_result_pur.x))
 
 print("actual_sol = ", actual_sol)
 print("clean_sol = ", clean_sol)
@@ -149,14 +150,14 @@ print("noisy_sol = ", noisy_sol)
 print("noisy_bound_nc = ", noisy_bound_nc)
 # print("noisy_bound_local = ", noisy_bound_local)
 # print("noisy_bound_local_pur_lambda = ", noisy_bound_local_pur_lambda)
-print("noisy_bound_pur = ", noisy_bound_pur)
+# print("noisy_bound_pur = ", noisy_bound_pur)
 print("noisy_bound_local_pur = ", noisy_bound_local_pur)
 
 plt.plot(dual_obj_over_opti_local_pur)
 plt.show()
 
-plt.plot(dual_obj_over_opti_pur)
-plt.show()
+# plt.plot(dual_obj_over_opti_pur)
+# plt.show()
 
 
 

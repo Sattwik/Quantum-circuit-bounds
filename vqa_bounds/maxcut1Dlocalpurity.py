@@ -86,7 +86,9 @@ class MaxCut1DLocalPurity(meta_system.System):
         self.num_vars_odd_layers = (self.d//2) * self.num_vars_local * ((self.num_sites_in_lattice - 2)//2)
         self.num_vars_even_layers = (self.d//2) * self.num_vars_local * self.num_sites_in_lattice//2
 
-        self.total_num_vars = self.d_vne + self.num_vars_odd_layers + self.num_vars_even_layers
+        # self.total_num_vars = self.d_vne + self.num_vars_odd_layers + self.num_vars_even_layers
+
+        self.total_num_vars = self.num_vars_odd_layers + self.num_vars_even_layers
 
         self.num_diag_elements_local = self.local_dim ** 2
         self.utri_indices_local = jnp.triu_indices(self.local_dim ** 2, 1)
@@ -108,6 +110,8 @@ class MaxCut1DLocalPurity(meta_system.System):
         self.rho_init = jnp.array((self.psi_init * self.psi_init.dag()).full())
 
         self.init_entropy_bounds()
+
+        self.a_vars = 0
 
     def update_opt_circ_params(self, opt_circuit_params: np.array):
 
@@ -272,12 +276,15 @@ class MaxCut1DLocalPurity(meta_system.System):
 
     def assemble_vars_into_tensors(self, vars_vec: jnp.array):
 
-        a_vars = vars_vec.at[:self.d_vne].get()
-        # self.Lambdas = jnp.log(1 + jnp.exp(a_vars))
-        self.Lambdas = jnp.exp(a_vars)
+        # a_vars = vars_vec.at[:self.d_vne].get()
+        # # self.Lambdas = jnp.log(1 + jnp.exp(a_vars))
+        # self.Lambdas = jnp.exp(a_vars)
+        #
+        # vars_vec_odd_layers = vars_vec.at[self.d_vne: self.d_vne + self.num_vars_odd_layers].get()
+        # vars_vec_even_layers = vars_vec.at[self.d_vne + self.num_vars_odd_layers:].get()
 
-        vars_vec_odd_layers = vars_vec.at[self.d_vne: self.d_vne + self.num_vars_odd_layers].get()
-        vars_vec_even_layers = vars_vec.at[self.d_vne + self.num_vars_odd_layers:].get()
+        vars_vec_odd_layers = vars_vec.at[:self.num_vars_odd_layers].get()
+        vars_vec_even_layers = vars_vec.at[self.num_vars_odd_layers:].get()
 
         # split the variables into equal arrays corresponding to each layer
         vars_vec_odd_layers_split = jnp.split(vars_vec_odd_layers, self.d//2)
@@ -329,6 +336,7 @@ class MaxCut1DLocalPurity(meta_system.System):
 
         # the entropy term
         # cost = jnp.dot(self.Lambdas, self.entropy_bounds)
+        self.Lambdas = jnp.exp(self.a_vars)
         cost = jnp.dot(self.Lambdas, self.entropy_bounds.at[self.d_purity:].get())
 
         # the effective Hamiltonian term
@@ -351,7 +359,7 @@ class MaxCut1DLocalPurity(meta_system.System):
             Hi = self.construct_H(i)
             Ei = jnp.linalg.eigvalsh(Hi)
 
-            cost += -self.Lambdas[i] * jnp.log(jnp.sum(jnp.exp(-Ei/self.Lambdas[i])))
+            cost += -self.Lambdas[0] * jnp.log(jnp.sum(jnp.exp(-Ei/self.Lambdas[0])))
 
         # the initial state term
         epsilon1_dag_sigma1 = self.make_full_dim(self.noisy_dual_layer(0))
