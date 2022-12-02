@@ -20,9 +20,9 @@ import jax
 config.update("jax_enable_x64", True)
 
 from vqa_bounds import graphs, circuit_utils, dual_utils
-from vqa_bounds import sumsigma1D
+from vqa_bounds import sumsigma1DNN
 
-m = 4
+m = 6
 lattice = graphs.define_lattice((m,))
 
 d_purity = 3
@@ -31,10 +31,10 @@ d = 4
 p = 0.1
 
 
-key = jax.random.PRNGKey(17)
+key = jax.random.PRNGKey(69)
 # sys_obj_nc = maxcut1D.MaxCut1DNoChannel(graph, lattice, d, p)
-sys_obj_local_pur = sumsigma1D.SumSigma1D(key, lattice, d_purity, d_vne, p, mode = 'local')
-sys_obj_nc = sumsigma1D.SumSigma1D(key, lattice, d_purity, d_vne, p, mode = 'nc')
+sys_obj_local_pur = sumsigma1DNN.SumSigma1DNN(key, lattice, d_purity, d_vne, p, mode = 'local')
+sys_obj_nc = sumsigma1DNN.SumSigma1DNN(key, lattice, d_purity, d_vne, p, mode = 'nc')
 
 a_bound = -10.0
 sigma_bound = 100.0
@@ -58,7 +58,8 @@ a_nc = dual_opt_result_nc.x[0]
 # dual_vars_init_pur = dual_vars_init_pur.at[0].set(a_nc)
 #
 # sys_obj_local_pur.a_vars = dual_opt_result_nc.x
-sys_obj_local_pur.a_vars = jnp.array(dual_opt_result_nc.x).at[0].set(a_nc - 4)
+sys_obj_local_pur.a_vars = jnp.array(dual_opt_result_nc.x).at[0].set(a_nc)
+sys_obj_local_pur.Lambdas = jnp.exp(sys_obj_local_pur.a_vars)
 dual_vars_init_local_pur = 1e-9 * jnp.ones(sys_obj_local_pur.total_num_vars)
 # dual_vars_init_local_pur = dual_vars_init_local_pur.at[0].set(a_nc)
 
@@ -93,16 +94,16 @@ dual_vars_init_local_pur = 1e-9 * jnp.ones(sys_obj_local_pur.total_num_vars)
 num_iters = 5000
 dual_obj_over_opti_local_pur, dual_opt_result_local_pur = dual_utils.optimize_dual(dual_vars_init_local_pur, sys_obj_local_pur, num_iters, a_bound, sigma_bound, use_bounds = False, opt_method = 'L-BFGS-B')
 #
-# # alpha = 0.1
-# # # eta = 1.0
-# # num_iters = int(1e4)
-# # method = "adam"
-# # dual_obj_over_opti_local_pur, dual_opt_result_local_pur = dual_utils.optax_optimize(sys_obj_local_pur, dual_vars_init_local_pur, alpha, num_iters, method)
+# alpha = 0.1
+# # eta = 1.0
+# num_iters = int(1e4)
+# method = "adam"
+# dual_obj_over_opti_local_pur, dual_opt_result_local_pur = dual_utils.optax_optimize(sys_obj_local_pur, dual_vars_init_local_pur, alpha, num_iters, method)
 #
-# # eta = 1e-2
-# # # # eta = 1.0
-# # num_iters = int(1e4)
-# # dual_obj_over_opti_pur, dual_opt_result_pur = dual_utils.gd_optimize(sys_obj_pur, dual_vars_init_pur, eta, num_iters)
+# eta = 1e-2
+# # # eta = 1.0
+# num_iters = int(1e4)
+# dual_obj_over_opti_pur, dual_opt_result_pur = dual_utils.gd_optimize(sys_obj_pur, dual_vars_init_pur, eta, num_iters)
 #
 # eta = 1e-6
 # # # eta = 1.0

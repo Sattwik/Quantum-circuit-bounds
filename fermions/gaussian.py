@@ -137,6 +137,38 @@ def random_k_local_normal_hamiltonian_majorana(N: int, k: int, key: jnp.array):
 
     return h, key
 
+def k_local_hamiltonian_indicators(N: int, k: int):
+    """
+    Parameters
+    ----------
+    N: number of fermionic modes
+    k < N: range of interactions
+
+    Returns
+    -------
+    A matrix with ones where a k-nearest neighbours interaction
+    Hamiltonian can have elements
+    """
+
+    hxx = jnp.ones((N, N))
+    hxx = hxx.at[jnp.diag_indices(N)].set(0.0)
+    hxx = hxx.at[jnp.triu_indices(N, k + 1)].set(0.0)
+    hxx = hxx.at[jnp.tril_indices(N, -k - 1)].set(0.0)
+
+    hpp = jnp.ones((N, N))
+    hpp = hpp.at[jnp.diag_indices(N)].set(0.0)
+    hpp = hpp.at[jnp.triu_indices(N, k + 1)].set(0.0)
+    hpp = hpp.at[jnp.tril_indices(N, -k - 1)].set(0.0)
+
+    hxp = jnp.ones((N, N))
+    hxp = hxp.at[jnp.triu_indices(N, k + 1)].set(0.0)
+    hxp = hxp.at[jnp.tril_indices(N, -k - 1)].set(0.0)
+
+    h = jnp.block([[hxx, hxp],
+                  [hxp.T, hpp]])
+
+    return h
+
 def random_normal_hamiltonian_majorana(N: int, key: jnp.array):
     """
     Parameters
@@ -1032,6 +1064,104 @@ def dual_obj_no_channel(dual_vars: jnp.array, dual_params: DualParams):
 @partial(jit, static_argnums = (1,))
 def dual_grad_no_channel(dual_vars: jnp.array, dual_params: DualParams):
     return grad(dual_obj_no_channel, argnums = 0)(dual_vars, dual_params)
+
+#--------------------------------------------------#
+#------- Sigma projection, scaling analysis -------#
+#--------------------------------------------------#
+
+def cond_fun(args):
+    i, _, _, _, _ = args
+    return i >= 0
+
+def set_ith_sigma_projected(args):
+    i, sigmas, layer_hamiltonians, p, proj = args
+
+    epsilon_dag_sigma_i_plus_1 = \
+    noisy_dual_layer(layer_hamiltonians.at[i+1, :, :].get(),
+                     sigmas.at[:,:,i+1].get(), p)
+
+    sigmas = sigmas.at[:, :, i].set(jnp.real(proj * jnp.real(epsilon_dag_sigma_i_plus_1)))
+
+    i = i - 1
+
+    return (i, sigmas, layer_hamiltonians, p, proj)
+
+def set_all_sigmas(dual_params: DualParams):
+    """
+    sets all sigmas to the appropriate local Hamiltonian projection of
+    the dual channel action on next sigma.
+    adds the sigma_proj variable to dual_params
+    """
+
+    N = dual_params.circ_params.N
+    d = dual_params.circ_params.d
+    h_parent = dual_params.circ_params.h_parent
+    layer_hamiltonians = dual_params.circ_params.layer_hamiltonians
+    p = dual_params.p
+    Gamma_mjr_init = dual_params.circ_params.Gamma_mjr_init
+    k_dual = dual_params.k_dual
+
+    proj = k_local_hamiltonian_indicators(N, k_dual)
+
+    sigmas = jnp.zeros((2 * N, 2 * N, d))
+
+    # setting all the sigmas to the dual channel projected onto local Ham.
+    # last layer sigma is just -H_parent
+    sigmas = sigmas.at[:, :, d - 1].set(-jnp.real(h_parent))
+
+    init_args = (d - 2, sigmas, layer_hamiltonians, p, proj)
+    _, sigmas, _, _, _ = jax.lax.while_loop(cond_fun, set_ith_sigma_projected, init_args)
+
+    dual_params.sigmas_proj = sigmas
+
+@partial(jit, static_argnums = (1,))
+def dual_obj_projected(a_vars: jnp.array, dual_params: DualParams):
+    N = dual_params.circ_params.N
+    d = dual_params.circ_params.d
+    h_parent = dual_params.circ_params.h_parent
+    layer_hamiltonians = dual_params.circ_params.layer_hamiltonians
+    p = dual_params.p
+    Gamma_mjr_init = dual_params.circ_params.Gamma_mjr_init
+    k_dual = dual_params.k_dual
+
+    sigmas = dual_params.sigmas_proj
+    lambdas = jnp.exp(a_vars)
+
+    cost = 0
+    # log Tr exp terms
+
+    # first d - 1 layers
+    init_args = (lambdas, sigmas, layer_hamiltonians, p, cost)
+    _, _, _, _, cost = jax.lax.fori_loop(0, d - 1, dual_free_energy_ith_term, init_args)
+
+    # last layer
+    hi = h_parent + sigmas.at[:,:,d-1].get()
+    cost += -lambdas.at[d-1].get() * log_trace_fgstate(-hi/lambdas[d-1])
+
+    # init. state term
+    # !!
+    epsilon_1_dag_sigma1 = \
+    noisy_dual_layer(layer_hamiltonians.at[0, :, :].get(), sigmas.at[:,:,0].get(), p)
+
+    cost += -energy(Gamma_mjr_init, epsilon_1_dag_sigma1)
+
+    # entropy term
+    # !!
+    q = 1 - p
+    q_powers = jnp.array([q**i for i in range(d)])
+
+    entropy_bounds = N * p * jnp.log(2) * \
+             jnp.array([jnp.sum(q_powers.at[:i+1].get()) for i in range(d)])
+
+    # !!
+    cost += jnp.dot(lambdas, entropy_bounds)
+
+    return -jnp.real(cost)
+
+@partial(jit, static_argnums = (1,))
+def dual_grad_projected(a_vars: jnp.array, dual_params: DualParams):
+    return grad(dual_obj_projected, argnums = 0)(a_vars, dual_params)
+
 
 # @partial(jit, static_argnums = (1,))
 # def dual_obj_no_channel_direct_lambda(dual_vars: jnp.array, dual_params: DualParams):
