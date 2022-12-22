@@ -58,7 +58,7 @@ a_nc = dual_opt_result_nc.x[0]
 # dual_vars_init_pur = dual_vars_init_pur.at[0].set(a_nc)
 #
 # sys_obj_local_pur.a_vars = dual_opt_result_nc.x
-sys_obj_local_pur.a_vars = jnp.array(dual_opt_result_nc.x).at[0].set(a_nc)
+sys_obj_local_pur.a_vars = jnp.array(dual_opt_result_nc.x).at[0].set(a_nc - 2)
 sys_obj_local_pur.Lambdas = jnp.exp(sys_obj_local_pur.a_vars)
 dual_vars_init_local_pur = 1e-9 * jnp.ones(sys_obj_local_pur.total_num_vars)
 # dual_vars_init_local_pur = dual_vars_init_local_pur.at[0].set(a_nc)

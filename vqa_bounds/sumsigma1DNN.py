@@ -18,7 +18,8 @@ from vqa_bounds import graphs, meta_system
 
 class SumSigma1DNN():
 
-    def __init__(self, key, lattice, d_purity: int, d_vne: int, p: float, circ_backend = "qutip", mode = "local"):
+    def __init__(self, key, lattice, d_purity: int, d_vne: int, p: float,
+                circ_backend = "qutip", mode = "local", sigmad = "variable"):
 
         self.lattice = lattice
         self.graph = lattice
@@ -36,7 +37,8 @@ class SumSigma1DNN():
         self.num_sites_in_lattice = self.lattice.number_of_nodes() # assuming even
         # layer numbering starts from 1
         self.site_tuple_list = list(zip(range(0, self.num_sites_in_lattice, 2), range(1, self.num_sites_in_lattice, 2))) + list(zip(range(1, self.num_sites_in_lattice, 2), range(2, self.num_sites_in_lattice, 2)))
-        self.site_tuple_list_inverted = list(zip(range(1, self.num_sites_in_lattice, 2), range(2, self.num_sites_in_lattice, 2))) + list(zip(range(0, self.num_sites_in_lattice, 2), range(1, self.num_sites_in_lattice, 2)))
+        self.site_tuple_list.append((self.num_sites_in_lattice - 1, 0))
+        self.site_tuple_list_inverted = list(zip(range(1, self.num_sites_in_lattice, 2), range(2, self.num_sites_in_lattice, 2))) + [(self.num_sites_in_lattice - 1, 0)] + list(zip(range(0, self.num_sites_in_lattice, 2), range(1, self.num_sites_in_lattice, 2)))
 
         self.Z_qutip = qutip.sigmaz()
         self.X_qutip = qutip.sigmax()
@@ -79,7 +81,10 @@ class SumSigma1DNN():
         self.num_vars_layers = self.num_vars_local * len(self.site_tuple_list) * self.d
         # self.total_num_vars = self.d_vne + self.num_vars_layers
 
-        self.total_num_vars = self.num_vars_layers
+        if sigmad == "variable":
+            self.total_num_vars = self.num_vars_layers
+        elif sigmad == "fixed":
+            self.total_num_vars = self.num_vars_local * len(self.site_tuple_list) * (self.d - 1)
 
         self.num_diag_elements_local = self.local_dim ** 2
         self.utri_indices_local = jnp.triu_indices(self.local_dim ** 2, 1)
@@ -106,10 +111,14 @@ class SumSigma1DNN():
 
         self.init_entropy_bounds()
 
-        if mode == "local":
+        if mode == "local" and sigmad == "variable":
             self.dual_obj = self.dual_obj_local
             self.dual_grad = self.dual_grad_local
             self.dual_hessian_prod = self.dual_hessian_prod_local
+
+        elif mode == "local" and sigmad == "fixed":
+            self.dual_obj = self.dual_obj_local_fixed
+            self.dual_grad = self.dual_grad_local_fixed
 
         elif mode == "nc":
             self.dual_obj = self.dual_obj_nc
@@ -153,6 +162,69 @@ class SumSigma1DNN():
     def dual_hessian_prod_local(self, dual_vars: jnp.array, vec: jnp.array):
 
         return jvp(grad(self.dual_obj_local), (dual_vars,), (vec,))[1]
+
+    def dual_obj_local_fixed(self, dual_vars: jnp.array):
+
+        # Unvectorize the vars_vec and construct Sigmas and Lambdas
+        self.assemble_vars_into_tensors_fixed(dual_vars)
+
+        # Compute the objective function using the list of tensors
+        obj = self.cost_local_fixed()
+
+        return -jnp.real(obj)
+
+    def dual_grad_local_fixed(self, dual_vars: jnp.array):
+
+        return grad(self.dual_obj_local_fixed)(dual_vars)
+
+    def assemble_vars_into_tensors_fixed(self, vars_vec: jnp.array):
+
+        # a_vars = vars_vec.at[:self.d_vne].get()
+        # # self.Lambdas = jnp.log(1 + jnp.exp(a_vars))
+        # self.Lambdas = jnp.exp(a_vars)
+        #
+        # vars_vec_layers = vars_vec.at[self.d_vne:].get()
+
+        vars_vec_layers = vars_vec
+
+        # split the variables into equal arrays corresponding to each layer
+        vars_vec_layers_split = jnp.split(vars_vec_layers, self.d - 1)
+
+        # list where each element corresponds to the dual variable for a layer
+        # each element is a dictionary with site tuples as keys and the local
+        # Hamiltonians as values
+        self.Sigmas = []
+
+        for i in range(0, self.d - 1):
+
+            Sigma_layer = {}
+
+            # for each circuit step the variables are arranged as:
+            # [vars_diag, vars_real, vars_imag]
+
+            vars_layer = vars_vec_layers_split[i]
+            vars_layer_split = jnp.split(vars_layer, len(self.site_tuple_list))
+            site_index_list = self.site_tuple_list
+
+            for n, site_tuple in enumerate(site_index_list):
+
+                vars_diag = vars_layer_split[n].at[:self.num_diag_elements_local].get()
+                vars_real = vars_layer_split[n].at[self.num_diag_elements_local:self.num_diag_elements_local + self.num_tri_elements_local].get()
+                vars_imag = vars_layer_split[n].at[self.num_diag_elements_local + self.num_tri_elements_local:].get()
+
+                tri_real = jnp.zeros((self.local_var_dim, self.local_var_dim), dtype = complex)
+                tri_imag = jnp.zeros((self.local_var_dim, self.local_var_dim), dtype = complex)
+
+                tri_real = tri_real.at[self.utri_indices_local].set(vars_real)
+                tri_real = tri_real.at[self.ltri_indices_local].set(vars_real)
+                tri_imag = tri_imag.at[self.utri_indices_local].set(1j * vars_imag)
+                tri_imag = tri_imag.at[self.ltri_indices_local].set(-1j * vars_imag)
+
+                vars_full = jnp.diag(vars_diag) + tri_real + tri_imag
+
+                Sigma_layer[site_tuple] = vars_full
+
+            self.Sigmas.append(Sigma_layer)
 
     def assemble_vars_into_tensors(self, vars_vec: jnp.array):
 
@@ -230,6 +302,45 @@ class SumSigma1DNN():
 
             # construct the effective Hamiltonian for the ith step/layer
             Hi = self.construct_H(i)
+            Ei = jnp.linalg.eigvalsh(Hi)
+
+            cost += -self.Lambdas[0] * jnp.log(jnp.sum(jnp.exp(-Ei/self.Lambdas[0])))
+
+        # the initial state term
+        # epsilon1_dag_sigma1 = self.make_full_dim(self.noisy_dual_layer(0))
+        epsilon1_dag_sigma1 = self.noisy_dual_layer(0)
+
+        cost += -jnp.trace(jnp.matmul(self.rho_init, epsilon1_dag_sigma1))
+
+        return cost
+
+    def cost_local_fixed(self):
+
+        # the entropy term
+        # cost = jnp.dot(self.Lambdas, self.entropy_bounds)
+
+        self.Lambdas = jnp.exp(self.a_vars)
+
+        cost = jnp.dot(self.Lambdas, self.entropy_bounds.at[self.d_purity:].get())
+
+        # the effective Hamiltonian term
+        for i in range(self.d_purity):
+            # i corresponds to the layer of the circuit, 0 being the earliest
+            # i.e. i = 0 corresponds to t = 1 in notes
+
+            # construct the effective Hamiltonian for the ith step/layer
+            Hi = self.construct_H_fixed(i)
+            Hi_squared = jnp.matmul(Hi, Hi)
+
+            cost += -jnp.sqrt(self.purity_bounds.at[i].get() * jnp.trace(Hi_squared))
+
+        for i in range(self.d_purity, self.d):
+
+            # i corresponds to the layer of the circuit, 0 being the earliest
+            # i.e. i = 0 corresponds to t = 1 in notes
+
+            # construct the effective Hamiltonian for the ith step/layer
+            Hi = self.construct_H_fixed(i)
             Ei = jnp.linalg.eigvalsh(Hi)
 
             cost += -self.Lambdas[0] * jnp.log(jnp.sum(jnp.exp(-Ei/self.Lambdas[0])))
@@ -348,6 +459,35 @@ class SumSigma1DNN():
 
         if i == self.d - 1:
             Hi = self.make_full_dim(self.Sigmas[i]) + self.H_problem
+
+        else:
+            # Hi = self.make_full_dim(self.Sigmas[i]) - \
+            #      self.make_full_dim(self.noisy_dual_layer(i + 1))
+
+            Hi = self.make_full_dim(self.Sigmas[i]) - \
+                 self.noisy_dual_layer(i + 1)
+
+        return Hi
+
+    def construct_H_fixed(self, i: int):
+
+        """
+        Constructs, from the Sigma dual variables, the effective Hamiltonian
+        corresponding to a layer.
+
+        Params:
+            i: layer number (>= 0)
+        Returns:
+            Hi: np.array of shape (self.dim, self.dim)
+        """
+
+        if i == self.d - 1:
+            Hi = 0
+
+        elif i == self.d - 2:
+            # implement channel on negative of hamiltonian
+            # need PBC?
+            raise(RuntimeError)
 
         else:
             # Hi = self.make_full_dim(self.Sigmas[i]) - \
