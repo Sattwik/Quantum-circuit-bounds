@@ -31,9 +31,9 @@ d = 4
 p = 0.1
 
 
-key = jax.random.PRNGKey(69)
+key = jax.random.PRNGKey(59)
 # sys_obj_nc = maxcut1D.MaxCut1DNoChannel(graph, lattice, d, p)
-sys_obj_local_pur = sumsigma1DNN.SumSigma1DNN(key, lattice, d_purity, d_vne, p, mode = 'local')
+sys_obj_local_pur = sumsigma1DNN.SumSigma1DNN(key, lattice, d_purity, d_vne, p, mode = 'local', bc = 'pbc')
 sys_obj_nc = sumsigma1DNN.SumSigma1DNN(key, lattice, d_purity, d_vne, p, mode = 'nc')
 
 a_bound = -10.0
@@ -58,7 +58,7 @@ a_nc = dual_opt_result_nc.x[0]
 # dual_vars_init_pur = dual_vars_init_pur.at[0].set(a_nc)
 #
 # sys_obj_local_pur.a_vars = dual_opt_result_nc.x
-sys_obj_local_pur.a_vars = jnp.array(dual_opt_result_nc.x).at[0].set(a_nc - 2)
+sys_obj_local_pur.a_vars = jnp.array(dual_opt_result_nc.x).at[0].set(a_nc)
 sys_obj_local_pur.Lambdas = jnp.exp(sys_obj_local_pur.a_vars)
 dual_vars_init_local_pur = 1e-9 * jnp.ones(sys_obj_local_pur.total_num_vars)
 # dual_vars_init_local_pur = dual_vars_init_local_pur.at[0].set(a_nc)
@@ -91,7 +91,7 @@ dual_vars_init_local_pur = 1e-9 * jnp.ones(sys_obj_local_pur.total_num_vars)
 # num_iters = 5000
 # dual_obj_over_opti_pur, dual_opt_result_pur = dual_utils.optimize_dual(dual_vars_init_pur, sys_obj_pur, num_iters, a_bound, sigma_bound, opt_method = 'L-BFGS-B', use_bounds = False)
 #
-num_iters = 5000
+num_iters = 1500
 dual_obj_over_opti_local_pur, dual_opt_result_local_pur = dual_utils.optimize_dual(dual_vars_init_local_pur, sys_obj_local_pur, num_iters, a_bound, sigma_bound, use_bounds = False, opt_method = 'L-BFGS-B')
 #
 # alpha = 0.1

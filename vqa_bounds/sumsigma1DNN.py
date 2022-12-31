@@ -19,7 +19,8 @@ from vqa_bounds import graphs, meta_system
 class SumSigma1DNN():
 
     def __init__(self, key, lattice, d_purity: int, d_vne: int, p: float,
-                circ_backend = "qutip", mode = "local", sigmad = "variable"):
+                circ_backend = "qutip", mode = "local", sigmad = "variable",
+                bc = "obc"):
 
         self.lattice = lattice
         self.graph = lattice
@@ -37,8 +38,17 @@ class SumSigma1DNN():
         self.num_sites_in_lattice = self.lattice.number_of_nodes() # assuming even
         # layer numbering starts from 1
         self.site_tuple_list = list(zip(range(0, self.num_sites_in_lattice, 2), range(1, self.num_sites_in_lattice, 2))) + list(zip(range(1, self.num_sites_in_lattice, 2), range(2, self.num_sites_in_lattice, 2)))
-        self.site_tuple_list.append((self.num_sites_in_lattice - 1, 0))
-        self.site_tuple_list_inverted = list(zip(range(1, self.num_sites_in_lattice, 2), range(2, self.num_sites_in_lattice, 2))) + [(self.num_sites_in_lattice - 1, 0)] + list(zip(range(0, self.num_sites_in_lattice, 2), range(1, self.num_sites_in_lattice, 2)))
+        # self.site_tuple_list.append((self.num_sites_in_lattice - 1, 0))
+        # self.site_tuple_list_inverted = list(zip(range(1, self.num_sites_in_lattice, 2), range(2, self.num_sites_in_lattice, 2))) + [(self.num_sites_in_lattice - 1, 0)] + list(zip(range(0, self.num_sites_in_lattice, 2), range(1, self.num_sites_in_lattice, 2)))
+        self.site_tuple_list_inverted = list(zip(range(1, self.num_sites_in_lattice, 2), range(2, self.num_sites_in_lattice, 2))) + list(zip(range(0, self.num_sites_in_lattice, 2), range(1, self.num_sites_in_lattice, 2)))
+
+        if bc == "obc":
+            self.site_tuple_list = list(zip(range(0, self.num_sites_in_lattice, 2), range(1, self.num_sites_in_lattice, 2))) + list(zip(range(1, self.num_sites_in_lattice, 2), range(2, self.num_sites_in_lattice, 2)))
+            self.site_tuple_list_inverted = list(zip(range(1, self.num_sites_in_lattice, 2), range(2, self.num_sites_in_lattice, 2))) + list(zip(range(0, self.num_sites_in_lattice, 2), range(1, self.num_sites_in_lattice, 2)))
+        else:
+            self.site_tuple_list = list(zip(range(0, self.num_sites_in_lattice, 2), range(1, self.num_sites_in_lattice, 2))) + list(zip(range(1, self.num_sites_in_lattice, 2), range(2, self.num_sites_in_lattice, 2)))
+            self.site_tuple_list.append((self.num_sites_in_lattice - 1, 0))
+            self.site_tuple_list_inverted = list(zip(range(1, self.num_sites_in_lattice, 2), range(2, self.num_sites_in_lattice, 2))) + [(self.num_sites_in_lattice - 1, 0)] + list(zip(range(0, self.num_sites_in_lattice, 2), range(1, self.num_sites_in_lattice, 2)))
 
         self.Z_qutip = qutip.sigmaz()
         self.X_qutip = qutip.sigmax()
@@ -107,7 +117,11 @@ class SumSigma1DNN():
 
         self.key = key
         theta_half = jax.random.normal(self.key, shape = (len(self.site_tuple_list), self.d//2))
-        self.theta = jnp.column_stack((theta_half, -jnp.roll(theta_half[:, ::-1], (self.num_sites_in_lattice - 2)//2, axis = 0)))
+
+        if bc == "obc":
+            self.theta = jnp.column_stack((theta_half, -jnp.roll(theta_half[:, ::-1], (self.num_sites_in_lattice - 2)//2, axis = 0)))
+        else:
+            self.theta = jnp.column_stack((theta_half, -jnp.roll(theta_half[:, ::-1], (self.num_sites_in_lattice)//2, axis = 0)))
 
         self.init_entropy_bounds()
 
@@ -504,13 +518,26 @@ class SumSigma1DNN():
 
         for site_tuple, local_var_tensor in var_tensors.items():
 
-            dim_left = self.local_dim ** site_tuple[0]
-            dim_right = self.local_dim ** (self.num_sites_in_lattice - site_tuple[-1] - 1)
+            if site_tuple == (self.num_sites_in_lattice - 1, 0):
+                dim_middle = self.local_dim ** (self.num_sites_in_lattice - 2)
+                identity_middle = jnp.identity(dim_middle)
 
-            identity_left = jnp.identity(dim_left)
-            identity_right = jnp.identity(dim_right)
+                block_11 = jnp.kron(identity_middle, local_var_tensor[:2, :2])
+                block_12 = jnp.kron(identity_middle, local_var_tensor[:2, 2:])
+                block_21 = jnp.kron(identity_middle, local_var_tensor[2:, :2])
+                block_22 = jnp.kron(identity_middle, local_var_tensor[2:, 2:])
 
-            full_mat += jnp.kron(identity_left, jnp.kron(local_var_tensor, identity_right))
+                full_mat += jnp.block([[block_11, block_12],
+                                    [block_21, block_22]])
+
+            else:
+                dim_left = self.local_dim ** site_tuple[0]
+                dim_right = self.local_dim ** (self.num_sites_in_lattice - site_tuple[-1] - 1)
+
+                identity_left = jnp.identity(dim_left)
+                identity_right = jnp.identity(dim_right)
+
+                full_mat += jnp.kron(identity_left, jnp.kron(local_var_tensor, identity_right))
 
         return full_mat
 
@@ -588,14 +615,28 @@ class SumSigma1DNN():
                            [0.0, -1j*s, c, 0.0],
                            [-1j*s, 0.0, 0.0, c]])
 
-            dim_left = self.local_dim ** gate_tuple[0]
-            dim_right = self.local_dim ** (self.num_sites_in_lattice - gate_tuple[-1] - 1)
+            if gate_tuple == (self.num_sites_in_lattice - 1, 0):
+                dim_middle = self.local_dim ** (self.num_sites_in_lattice - 2)
+                identity_middle = jnp.identity(dim_middle)
 
-            identity_left = jnp.identity(dim_left)
-            identity_right = jnp.identity(dim_right)
+                block_11 = jnp.kron(identity_middle, U[:2, :2])
+                block_12 = jnp.kron(identity_middle, U[:2, 2:])
+                block_21 = jnp.kron(identity_middle, U[2:, :2])
+                block_22 = jnp.kron(identity_middle, U[2:, 2:])
 
-            U_full = jnp.kron(identity_left, jnp.kron(U, identity_right))
-            U_full_dag = jnp.transpose(jnp.conj(U_full))
+                U_full = jnp.block([[block_11, block_12],
+                                    [block_21, block_22]])
+                U_full_dag = jnp.transpose(jnp.conj(U_full))
+
+            else:
+                dim_left = self.local_dim ** gate_tuple[0]
+                dim_right = self.local_dim ** (self.num_sites_in_lattice - gate_tuple[-1] - 1)
+
+                identity_left = jnp.identity(dim_left)
+                identity_right = jnp.identity(dim_right)
+
+                U_full = jnp.kron(identity_left, jnp.kron(U, identity_right))
+                U_full_dag = jnp.transpose(jnp.conj(U_full))
 
             res_matrix_full = jnp.matmul(U_full_dag, jnp.matmul(res_matrix_full, U_full))
 
@@ -656,12 +697,27 @@ class SumSigma1DNN():
                                [0.0, -1j*s, c, 0.0],
                                [-1j*s, 0.0, 0.0, c]])
 
-                U_2site = qutip.Qobj(U_2site_array, dims = qutip.tensor([qutip.qeye(2)] * 2).dims)
+                if site_tuple == (self.num_sites_in_lattice - 1, 0):
+                    dim_middle = self.local_dim ** (self.num_sites_in_lattice - 2)
+                    identity_middle = np.identity(dim_middle)
 
-                # site_num = self.site_nums[site]
+                    block_11 = np.kron(identity_middle, U_2site_array[:2, :2])
+                    block_12 = np.kron(identity_middle, U_2site_array[:2, 2:])
+                    block_21 = np.kron(identity_middle, U_2site_array[2:, :2])
+                    block_22 = np.kron(identity_middle, U_2site_array[2:, 2:])
 
-                U_2site_full = qutip.tensor([self.I_qutip] * site_tuple[0] + [U_2site] + \
-                        [self.I_qutip] * (self.num_sites_in_lattice - site_tuple[1] - 1))
+                    U_full = np.block([[block_11, block_12],
+                                        [block_21, block_22]])
+
+                    U_2site_full = qutip.Qobj(U_full, dims = self.H.dims)
+
+                else:
+                    U_2site = qutip.Qobj(U_2site_array, dims = qutip.tensor([qutip.qeye(2)] * 2).dims)
+
+                    # site_num = self.site_nums[site]
+
+                    U_2site_full = qutip.tensor([self.I_qutip] * site_tuple[0] + [U_2site] + \
+                            [self.I_qutip] * (self.num_sites_in_lattice - site_tuple[1] - 1))
 
                 rho_after_step = U_2site_full * rho_after_step * U_2site_full.dag()
 
