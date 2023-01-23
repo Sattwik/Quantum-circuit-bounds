@@ -18,18 +18,57 @@ num_sites = 4
 #
 # H, tensors = mpo_jnp.HamSumZ(num_sites)
 
-tensors = [jax.random.normal(shape = (i + 1, 2, i + 2, 2), key = jax.random.PRNGKey(i), dtype = complex) for i in range(num_sites)]
-lastshape = tensors[-1].shape[0:2] + (1,) + (tensors[-1].shape[3],)
-tensors[-1] = jax.random.normal(shape = lastshape, key = jax.random.PRNGKey(num_sites + 1), dtype = complex)
+theta = np.pi/5
+c = jnp.cos(theta)
+s = jnp.sin(theta)
 
-ctensors = mpo_jnp.left_canonicalize(tensors)
-# ctensors = mpo_jnp.right_canonicalize(tensors)
-norms = mpo_jnp.check_canon(ctensors, canon = "left")
+U = jnp.array([[c, 0.0, 0.0, -1j*s],
+               [0.0, c, -1j*s, 0.0],
+               [0.0, -1j*s, c, 0.0],
+               [-1j*s, 0.0, 0.0, c]])
 
+# CNOT = jnp.array([[1, 0, 0, 0],
+#                   [0, 1, 0, 0],
+#                   [0, 0, 0, 1],
+#                   [0, 0, 1, 0]], dtype = complex)
+
+tensors, s = mpo_jnp.gate_to_MPO(U, num_sites = 2, D = 4)
 T_full = mpo_jnp.full_contract(tensors)
-CT_full = mpo_jnp.full_contract(ctensors)
 
-print(np.linalg.norm(T_full - CT_full))
+print(jnp.linalg.norm(U - T_full))
+
+
+# tensors = [jax.random.normal(shape = (i + 1, 2, i + 2, 2), key = jax.random.PRNGKey(i), dtype = complex) for i in range(num_sites)]
+# lastshape = tensors[-1].shape[0:2] + (1,) + (tensors[-1].shape[3],)
+# tensors[-1] = jax.random.normal(shape = lastshape, key = jax.random.PRNGKey(num_sites + 1), dtype = complex)
+#
+# res = mpo_jnp.trace_MPO_squared(tensors)
+# T_full = mpo_jnp.full_contract(tensors)
+# res2 = jnp.trace(jnp.matmul(T_full, T_full))
+# print(jnp.abs(res - res2))
+
+# tensors2 = [jax.random.normal(shape = (i + 3, 2, i + 4, 2), key = jax.random.PRNGKey(i * 5), dtype = complex) for i in range(num_sites)]
+# lastshape = tensors2[-1].shape[0:2] + (1,) + (tensors2[-1].shape[3],)
+# firstshape = (1,) + tensors2[0].shape[1:]
+# tensors2[-1] = jax.random.normal(shape = lastshape, key = jax.random.PRNGKey(num_sites * 5), dtype = complex)
+# tensors2[0] = jax.random.normal(shape = firstshape, key = jax.random.PRNGKey(num_sites * 9), dtype = complex)
+#
+# stensors = mpo_jnp.subtract_MPO(tensors, tensors2)
+#
+# full1 = mpo_jnp.full_contract(tensors)
+# full2 = mpo_jnp.full_contract(tensors2)
+#
+# print(jnp.linalg.norm(full1 + full2 - mpo_jnp.full_contract(stensors)))
+
+
+# ctensors = mpo_jnp.left_canonicalize(tensors)
+# # ctensors = mpo_jnp.right_canonicalize(tensors)
+# norms = mpo_jnp.check_canon(ctensors, canon = "left")
+#
+# T_full = mpo_jnp.full_contract(tensors)
+# CT_full = mpo_jnp.full_contract(ctensors)
+#
+# print(np.linalg.norm(T_full - CT_full))
 
 
 
