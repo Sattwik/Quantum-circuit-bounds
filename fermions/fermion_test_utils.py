@@ -190,6 +190,22 @@ def full_op_from_majorana(h: np.array, rotate = None):
                 # NB using alpha here as H_beta is already rotated
 
         return full_op
+    
+def full_op_squared_from_majorana(h: np.array):
+    N = h.shape[0]//2
+
+    x_list = [x(N, n) for n in range(0, N)]
+    p_list = [p(N, n) for n in range(0, N)]
+    r_list = x_list + p_list
+
+    full_op = 0
+    for i in range(0, 2 * N):
+        for j in range(0, 2 * N):
+            for k in range(0, 2 * N):
+                for l in range(0, 2 * N):
+                    full_op += - h[i,j] * h[k,l] * r_list[i] * r_list[j] * r_list[k] * r_list[l]
+
+    return full_op
 
 #--------------- Tests ---------------#
 def test_noise_on_hamiltonian(s: np.array, p: float, N: int):
@@ -524,6 +540,13 @@ def test_log_trace(h: jnp.array):
     log_trace_direct = gaussian.log_trace_fgstate(h)
 
     return jnp.log(trace_direct) - log_trace_direct
+
+def test_purity(h: jnp.array):
+    purity = gaussian.purity(h)
+    H_full = full_op_from_majorana(np.array(h))
+    purity_direct = (H_full * H_full).tr()
+
+    return np.abs(purity - purity_direct)
 
 def test_gamma_mjr_product(h1: jnp.array, h2: jnp.array):
 

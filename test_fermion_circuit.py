@@ -26,11 +26,11 @@ from fermions import gaussian, fermion_test_utils
 colorama.init()
 
 N = 15
-if N%2 == 0:
-    d = N - 1
-else:
-    d = N
-# d = 2
+# if N%2 == 0:
+#     d = N - 1
+# else:
+#     d = N
+d = 5
 local_d = 1
 k = 1
 
@@ -259,18 +259,50 @@ plt.show()
 #
 # noisy_bound_direct = -gaussian.dual_obj_direct_lambda(dual_vars_opt_result, dual_params)
 
+#------------------------------------------------------------------------------#
+#--------------------------------- PURITY DUAL --------------------------------#
+#------------------------------------------------------------------------------#
+
+k_dual = 1
+lambda_lower_bounds_purity = jnp.array([0.0])
+dual_params_purity = gaussian.DualParamsPurity(circ_params, p, k_dual, lambda_lower_bounds_purity)
+
+alpha = 0.01
+num_steps = int(5e3)
+
+dual_vars_init_purity = 1e-9 * jnp.ones((dual_params_purity.total_num_dual_vars,))
+dual_vars_init_purity = dual_vars_init_purity.at[0].set(dual_opt_result_nc.x[0])
+
+# key, subkey = jax.random.split(key)
+# dual_vars_init_purity = jax.random.uniform(key, shape = (dual_params_purity.total_num_dual_vars,))/N
+
+# init_obj = gaussian.dual_obj_purity(dual_vars_init_purity, dual_params_purity)
+
+dual_obj_over_opti_purity, dual_opt_result_purity = \
+    gaussian.optimize(dual_vars_init_purity, dual_params_purity,
+                      gaussian.dual_obj_purity, gaussian.dual_grad_purity,
+                      num_iters = num_steps)
+noisy_bound_purity = -gaussian.dual_obj_purity(jnp.array(dual_opt_result_purity.x), dual_params_purity)
+
+
 print(colorama.Fore.GREEN + "noisy bound = ", noisy_bound)
+print(colorama.Fore.GREEN + "noisy bound purity = ", noisy_bound_purity)
 print(colorama.Fore.GREEN + "noisy bound nc = ", noisy_bound_nc)
 print(colorama.Fore.GREEN + "noisy bound nc <= noisy bound? ")
 if noisy_bound_nc <= noisy_bound:
     print(colorama.Fore.GREEN + "True")
 else:
     print(colorama.Fore.RED + "False")
+print(colorama.Fore.GREEN + "noisy bound nc <= noisy bound purity? ")
+if noisy_bound_nc <= noisy_bound_purity:
+    print(colorama.Fore.GREEN + "True")
+else:
+    print(colorama.Fore.RED + "False")
 print(colorama.Style.RESET_ALL)
 
-lambdas, sigmas = gaussian.unvec_and_process_dual_vars(jnp.array(dual_opt_result_phase1.x), dual_params)
+# lambdas, sigmas = gaussian.unvec_and_process_dual_vars(jnp.array(dual_opt_result_phase1.x), dual_params)
 
-print("lambdas = ", lambdas)
+# print("lambdas = ", lambdas)
 
 
 # plt.plot(-dual_obj_over_opti_direct)
