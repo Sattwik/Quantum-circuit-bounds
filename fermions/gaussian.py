@@ -32,7 +32,7 @@ def unjaxify_grad(func):
     return wrap
 
 def optimize(vars_init: np.array, params, obj_fun: Callable, grad_fun: Callable,
-             num_iters: int = 500, bounds = None, opt_method: str = "L-BFGS-B"):
+             num_iters: int = 500, bounds = None, opt_method: str = "L-BFGS-B", tol_scale: float = 1.0):
 
     opt_args = (params,)
 
@@ -52,7 +52,7 @@ def optimize(vars_init: np.array, params, obj_fun: Callable, grad_fun: Callable,
                                 jac = unjaxify_grad(grad_fun),
                                 options={'disp': None,
                                 'maxcor': 10,
-                                'ftol': 2.220446049250313e-16,
+                                'ftol': 2.220446049250313e-09 * tol_scale,
                                 'gtol': 1e-05,
                                 'eps': 1e-08,
                                 'maxfun': 15000,
@@ -535,13 +535,59 @@ class DualParams():
         num_vars_pp = num_vars_xx
         num_vars_xp = self.block_band_indices[0].shape[0]
 
-        num_sigma_vars_layer = num_vars_xx + num_vars_pp + num_vars_xp
+        self.num_sigma_vars_layer = num_vars_xx + num_vars_pp + num_vars_xp
 
         self.total_num_dual_vars = self.circ_params.d + \
-        self.circ_params.d * num_sigma_vars_layer
+        self.circ_params.d * self.num_sigma_vars_layer
 
         # self.total_num_dual_vars = self.circ_params.d + \
         # (2*self.circ_params.N - 1) * self.circ_params.N * self.circ_params.d
+
+def sigmas_to_vec(sigmas: jnp.array, dual_params:DualParams):
+
+    N = dual_params.circ_params.N
+    d = dual_params.circ_params.d
+    block_upper_band_indices = dual_params.block_upper_band_indices
+    block_lower_band_indices = dual_params.block_lower_band_indices
+    block_band_indices = dual_params.block_band_indices
+
+    vars = jnp.zeros((dual_params.circ_params.d * dual_params.num_sigma_vars_layer,))
+
+    init_args = (vars, sigmas, block_upper_band_indices, block_lower_band_indices, block_band_indices)
+
+    vars, _, _, _, _ = jax.lax.fori_loop(0, d, vec_layer_i, init_args)
+
+    return vars
+
+def vec_layer_i(i: int, args: Tuple):
+
+    vars, sigmas, block_upper_band_indices, block_lower_band_indices, block_band_indices = args
+
+    # number of variables in blocks of the full sigma dual var
+    l_xx = block_upper_band_indices[0].shape[0]
+    l_pp = l_xx
+    l_xp = block_band_indices[0].shape[0]
+
+    # total_num_vars
+    l = l_xp + l_xx + l_pp
+
+    sigma_layer = sigmas.at[:,:,i].get()
+
+    N = sigmas.shape[0]//2
+
+    sigma_layer_xx = sigma_layer.at[:N, :N].get()
+    sigma_layer_xp = sigma_layer.at[:N, N:].get()
+    sigma_layer_pp = sigma_layer.at[N:, N:].get()
+
+    sigma_slice_xx = sigma_layer_xx.at[block_upper_band_indices].get()
+    sigma_slice_pp = sigma_layer_pp.at[block_upper_band_indices].get()
+    sigma_slice_xp = sigma_layer_xp.at[block_band_indices].get()
+
+    sigma_slice = jnp.concatenate((sigma_slice_xx, sigma_slice_pp, sigma_slice_xp))
+
+    vars = jax.lax.dynamic_update_slice_in_dim(vars, sigma_slice, i * l, axis = 0)
+
+    return (vars, sigmas, block_upper_band_indices, block_lower_band_indices, block_band_indices)
 
 def unvec_layer_i(i: int, args: Tuple):
     sigmas, sigma_vars, \

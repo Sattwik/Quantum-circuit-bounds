@@ -25,7 +25,7 @@ from fermions import gaussian, fermion_test_utils
 
 colorama.init()
 
-N = 15
+N = 18
 # if N%2 == 0:
 #     d = N - 1
 # else:
@@ -37,11 +37,15 @@ k = 1
 rng = np.random.default_rng()
 # seed = rng.integers(low=0, high=100, size=1)[0]
 # seed = 69
-seed = N + 0
+seed = N + 9
 key = jax.random.PRNGKey(seed)
+
+print(key)
 
 circ_params = gaussian.PrimalParams(N, d, local_d, key, k = k)
 key, subkey = jax.random.split(circ_params.key_after_ham_gen)
+
+print(key)
 
 # circ_params.layer_hamiltonians = jnp.zeros(circ_params.layer_hamiltonians.shape)
 
@@ -163,11 +167,23 @@ noisy_bound_nc = -gaussian.dual_obj_no_channel(jnp.array(dual_opt_result_nc.x), 
 #---------------------------------- FULL DUAL ---------------------------------#
 #------------------------------------------------------------------------------#
 
-key, subkey = jax.random.split(key)
-dual_vars_init = jax.random.uniform(key, shape = (dual_params.total_num_dual_vars,))/N
+# dual_params_copy = gaussian.DualParams(circ_params, p, k_dual, lambda_lower_bounds)
+gaussian.set_all_sigmas(dual_params)
+proj_sigmas_vec = gaussian.sigmas_to_vec(dual_params.sigmas_proj, dual_params)
+
+dual_vars_init = jnp.zeros((dual_params.total_num_dual_vars,))
+dual_vars_init = dual_vars_init.at[d:].set(proj_sigmas_vec)
+
+
+# key, subkey = jax.random.split(key)
+# print(key)
+# dual_vars_init = jax.random.uniform(key, shape = (dual_params.total_num_dual_vars,))/N
+
 # dual_vars_init = jnp.arange(0, dual_params.total_num_dual_vars)
 
 # lambdas, sigmas = gaussian.unvec_and_process_dual_vars(dual_vars_init, dual_params)
+
+
 
 # obj_init_fori = gaussian.dual_obj(dual_vars_init, dual_params)
 # print(colorama.Fore.GREEN + "new dual = ", obj_init_fori)
@@ -213,8 +229,8 @@ noisy_bound = -gaussian.dual_obj(jnp.array(dual_opt_result_phase1.x), dual_param
 #
 # print("noisy bound after phase 2 = ", noisy_bound)
 #
-plt.plot(-dual_obj_over_opti_phase1)
-plt.show()
+# plt.plot(-dual_obj_over_opti_phase1)
+# plt.show()
 #
 # plt.plot(-dual_obj_over_opti_phase2)
 # plt.show()
@@ -267,21 +283,25 @@ k_dual = 1
 lambda_lower_bounds_purity = jnp.array([0.0])
 dual_params_purity = gaussian.DualParamsPurity(circ_params, p, k_dual, lambda_lower_bounds_purity)
 
-alpha = 0.01
-num_steps = int(5e3)
+# alpha = 0.01
+# num_steps = int(5e3)
 
-dual_vars_init_purity = 1e-9 * jnp.ones((dual_params_purity.total_num_dual_vars,))
-dual_vars_init_purity = dual_vars_init_purity.at[0].set(dual_opt_result_nc.x[0])
+# dual_vars_init_purity = 1e-9 * jnp.ones((dual_params_purity.total_num_dual_vars,))
+# dual_vars_init_purity = dual_vars_init_purity.at[0].set(dual_opt_result_nc.x[0])
 
 # key, subkey = jax.random.split(key)
 # dual_vars_init_purity = jax.random.uniform(key, shape = (dual_params_purity.total_num_dual_vars,))/N
 
+dual_vars_init_purity = jnp.zeros((dual_params_purity.total_num_dual_vars,))
+dual_vars_init_purity = dual_vars_init_purity.at[1:].set(proj_sigmas_vec)
+
 # init_obj = gaussian.dual_obj_purity(dual_vars_init_purity, dual_params_purity)
+
 
 dual_obj_over_opti_purity, dual_opt_result_purity = \
     gaussian.optimize(dual_vars_init_purity, dual_params_purity,
                       gaussian.dual_obj_purity, gaussian.dual_grad_purity,
-                      num_iters = num_steps)
+                      num_iters = num_steps, tol_scale = 1e-7)
 noisy_bound_purity = -gaussian.dual_obj_purity(jnp.array(dual_opt_result_purity.x), dual_params_purity)
 
 
