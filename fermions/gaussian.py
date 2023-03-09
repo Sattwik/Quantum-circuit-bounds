@@ -57,7 +57,7 @@ def optimize(vars_init: np.array, params, obj_fun: Callable, grad_fun: Callable,
                                 'eps': 1e-08,
                                 'maxfun': 15000,
                                 'maxiter': num_iters,
-                                'iprint': 10,
+                                'iprint': 98,
                                 'maxls': 20},
                                 bounds = bnds,
                                 callback = callback_func)
@@ -103,6 +103,82 @@ def adam_optimize(obj_fun: Callable, grad_fun: Callable,
 #--------------------------------------------------#
 #-------------------- FGS tools -------------------#
 #--------------------------------------------------#
+
+def random_NN_odd_bond_normal_hamiltonian_majorana(N: int, key: jnp.array):
+    """
+    Parameters
+    ----------
+    N: number of fermionic modes (assuming even)
+
+    Returns
+    -------
+    A random NN odd bond f.g.h. (2N x 2N) in Majorana representation
+    """
+    key, subkey = jax.random.split(key)
+    hxx = jax.random.normal(subkey, (N, N))
+    hxx = hxx - hxx.T
+    hxx = hxx.at[jnp.triu_indices(N, 1 + 1)].set(0.0)
+    hxx = hxx.at[jnp.tril_indices(N, -1 - 1)].set(0.0)
+    hxx = hxx.at[(list(range(1, N - 1, 2)), list(range(2, N, 2)))].set(0.0)
+    hxx = hxx.at[(list(range(2, N, 2)), list(range(1, N - 1, 2)))].set(0.0)
+
+    key, subkey = jax.random.split(key)
+    hpp = jax.random.normal(subkey, (N, N))
+    hpp = hpp - hpp.T
+    hpp = hpp.at[jnp.triu_indices(N, 1 + 1)].set(0.0)
+    hpp = hpp.at[jnp.tril_indices(N, -1 - 1)].set(0.0)
+    hpp = hpp.at[(list(range(1, N - 1, 2)), list(range(2, N, 2)))].set(0.0)
+    hpp = hpp.at[(list(range(2, N, 2)), list(range(1, N - 1, 2)))].set(0.0)
+
+    key, subkey = jax.random.split(key)
+    hxp = jax.random.normal(subkey, (N, N))
+    hxp = hxp.at[jnp.triu_indices(N, 1 + 1)].set(0.0)
+    hxp = hxp.at[jnp.tril_indices(N, -1 - 1)].set(0.0)
+    hxp = hxp.at[(list(range(1, N - 1, 2)), list(range(2, N, 2)))].set(0.0)
+    hxp = hxp.at[(list(range(2, N, 2)), list(range(1, N - 1, 2)))].set(0.0)
+
+    h = jnp.block([[hxx, hxp],
+                  [-hxp.T, hpp]])
+
+    return h, key
+
+def random_NN_even_bond_normal_hamiltonian_majorana(N: int, key: jnp.array):
+    """
+    Parameters
+    ----------
+    N: number of fermionic modes (assuming even)
+
+    Returns
+    -------
+    A random NN odd bond f.g.h. (2N x 2N) in Majorana representation
+    """
+    key, subkey = jax.random.split(key)
+    hxx = jax.random.normal(subkey, (N, N))
+    hxx = hxx - hxx.T
+    hxx = hxx.at[jnp.triu_indices(N, 1 + 1)].set(0.0)
+    hxx = hxx.at[jnp.tril_indices(N, -1 - 1)].set(0.0)
+    hxx = hxx.at[(list(range(0, N, 2)), list(range(1, N, 2)))].set(0.0)
+    hxx = hxx.at[(list(range(1, N, 2)), list(range(0, N, 2)))].set(0.0)
+
+    key, subkey = jax.random.split(key)
+    hpp = jax.random.normal(subkey, (N, N))
+    hpp = hpp - hpp.T
+    hpp = hpp.at[jnp.triu_indices(N, 1 + 1)].set(0.0)
+    hpp = hpp.at[jnp.tril_indices(N, -1 - 1)].set(0.0)
+    hpp = hpp.at[(list(range(0, N, 2)), list(range(1, N, 2)))].set(0.0)
+    hpp = hpp.at[(list(range(1, N, 2)), list(range(0, N, 2)))].set(0.0)
+
+    key, subkey = jax.random.split(key)
+    hxp = jax.random.normal(subkey, (N, N))
+    hxp = hxp.at[jnp.triu_indices(N, 1 + 1)].set(0.0)
+    hxp = hxp.at[jnp.tril_indices(N, -1 - 1)].set(0.0)
+    hxp = hxp.at[(list(range(0, N, 2)), list(range(1, N, 2)))].set(0.0)
+    hxp = hxp.at[(list(range(1, N, 2)), list(range(0, N, 2)))].set(0.0)
+
+    h = jnp.block([[hxx, hxp],
+                  [-hxp.T, hpp]])
+
+    return h, key
 
 def random_k_local_normal_hamiltonian_majorana(N: int, k: int, key: jnp.array):
     """
@@ -346,25 +422,49 @@ class PrimalParams():
         self.generate_init_state(init_state_desc)
 
     def generate_layer_hamiltonians(self, key: jnp.array, mode = 'adjacent'):
-        self.layer_hamiltonians = []
+        if mode == "NN":
+            print("NN circuit")
+            self.layer_hamiltonians = []
+            for i in range(self.local_d//2):
+                random_even_h, key = random_NN_even_bond_normal_hamiltonian_majorana(self.N, key)
+                self.layer_hamiltonians.append(random_even_h)
 
-        for i in range(self.local_d):
-            random_local_h, key = random_k_local_normal_hamiltonian_majorana(self.N, self.k, key)
-            self.layer_hamiltonians.append(random_local_h/self.N)
+                random_odd_h, key = random_NN_odd_bond_normal_hamiltonian_majorana(self.N, key)
+                self.layer_hamiltonians.append(random_odd_h)
 
-        if mode == 'adjacent':
-            for i in range((self.d - self.local_d)//2):
-                self.layer_hamiltonians.append(random_local_h/self.N)
-                self.layer_hamiltonians.append(-random_local_h/self.N)
-        elif mode == 'block':
             h_list = []
-            for i in range((self.d - self.local_d)//2):
+            for i in range((self.d - self.local_d)//4):
+                random_even_h, key = random_NN_even_bond_normal_hamiltonian_majorana(self.N, key)
+                self.layer_hamiltonians.append(random_even_h)
+                h_list.append(random_even_h)
+
+                random_odd_h, key = random_NN_odd_bond_normal_hamiltonian_majorana(self.N, key)
+                self.layer_hamiltonians.append(random_odd_h)
+                h_list.append(random_odd_h)
+
+            for i in range((self.d - self.local_d)//4):
+                self.layer_hamiltonians.append(-h_list[::-1][i])
+
+        else:
+            self.layer_hamiltonians = []
+
+            for i in range(self.local_d):
                 random_local_h, key = random_k_local_normal_hamiltonian_majorana(self.N, self.k, key)
                 self.layer_hamiltonians.append(random_local_h/self.N)
-                h_list.append(random_local_h)
 
-            for i in range((self.d - self.local_d)//2):
-                self.layer_hamiltonians.append(-h_list[::-1][i]/self.N)
+            if mode == 'adjacent':
+                for i in range((self.d - self.local_d)//2):
+                    self.layer_hamiltonians.append(random_local_h/self.N)
+                    self.layer_hamiltonians.append(-random_local_h/self.N)
+            elif mode == 'block':
+                h_list = []
+                for i in range((self.d - self.local_d)//2):
+                    random_local_h, key = random_k_local_normal_hamiltonian_majorana(self.N, self.k, key)
+                    self.layer_hamiltonians.append(random_local_h/self.N)
+                    h_list.append(random_local_h)
+
+                for i in range((self.d - self.local_d)//2):
+                    self.layer_hamiltonians.append(-h_list[::-1][i]/self.N)
 
         self.layer_hamiltonians = jnp.array(self.layer_hamiltonians)
         self.key_after_ham_gen = key
