@@ -710,10 +710,12 @@ def unvec_layer_i(i: int, args: Tuple):
 
     # making block matrices
     sigma_layer_xx = zeros_N.at[block_upper_band_indices].set(sigma_slice_xx)
-    sigma_layer_xx = sigma_layer_xx.at[block_lower_band_indices].set(-sigma_slice_xx)
+    sigma_layer_xx = sigma_layer_xx - sigma_layer_xx.T
+    # sigma_layer_xx = sigma_layer_xx.at[block_lower_band_indices].set(-sigma_slice_xx)
 
     sigma_layer_pp = zeros_N.at[block_upper_band_indices].set(sigma_slice_pp)
-    sigma_layer_pp = sigma_layer_pp.at[block_lower_band_indices].set(-sigma_slice_pp)
+    sigma_layer_pp = sigma_layer_pp - sigma_layer_pp.T
+    # sigma_layer_pp = sigma_layer_pp.at[block_lower_band_indices].set(-sigma_slice_pp)
 
     sigma_layer_xp = zeros_N.at[block_band_indices].set(sigma_slice_xp)
 
@@ -1377,9 +1379,7 @@ def dual_free_energy_ith_term_purity(i: int, args: Tuple):
 
     purity_bounds, sigmas, layer_hamiltonians, p, cost = args
 
-    hi = sigmas.at[:,:,i].get() - \
-         noisy_dual_layer(layer_hamiltonians.at[i+1, :, :].get(),
-                          sigmas.at[:,:,i+1].get(), p)
+    hi = sigmas.at[:,:,i].get() - noisy_dual_layer(layer_hamiltonians.at[i+1, :, :].get(), sigmas.at[:,:,i+1].get(), p)
 
     cost += -jnp.sqrt(purity_bounds.at[i].get() * purity(hi))
 
