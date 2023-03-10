@@ -1,18 +1,16 @@
-import abc
 from typing import List, Tuple, Callable, Dict
 from functools import partial
-import time
 
 import numpy as np
 import scipy
 import networkx as nx
-import qutip
 import tensornetwork as tn
 tn.set_default_backend("jax")
 import jax.numpy as jnp
 import jax.scipy.linalg
 from jax import jit, grad, vmap, value_and_grad
 from jax.example_libraries import optimizers
+import optax
 
 
 #--------------------------------------------------#
@@ -76,29 +74,122 @@ def optimize(vars_init: np.array, params, obj_fun: Callable, grad_fun: Callable,
 
     return np.array(obj_over_opti), opt_result
 
-def adam_optimize(obj_fun: Callable, grad_fun: Callable,
-                  vars_init: jnp.array, params,
-                  alpha: float, num_steps: int):
+def optax_optimize(obj_fun: Callable, grad_fun: Callable,
+                  vars_init: jnp.array, params, alpha: float, 
+                  num_steps: int, method: str):
 
-    init, update, get_params = optimizers.adam(alpha)
+    if method == 'adam':
+        optimizer = optax.adam(learning_rate=alpha)
 
-    def step(t, opt_state):
-        value = obj_fun(get_params(opt_state), params)
-        grads = grad_fun(get_params(opt_state), params)
-        opt_state = update(t, grads, opt_state)
-        return value, opt_state
+    if method == 'amsgrad':
+        optimizer = optax.amsgrad(learning_rate=alpha)
 
-    opt_state = init(vars_init)
+    if method == 'adabelief':
+        optimizer = optax.adabelief(learning_rate=alpha)
+    
+    if method == "adagrad":
+        optimizer = optax.adagrad(learning_rate=alpha)
+    
+    if method == "rmsprop":
+        optimizer = optax.rmsprop(learning_rate=alpha)
+
+    @jit
+    def step(vars, opt_state):
+        value = obj_fun(vars, params)
+        grads = grad_fun(vars, params)
+
+        updates, opt_state = optimizer.update(grads, opt_state, vars)
+        vars = optax.apply_updates(vars, updates)
+
+        return vars, opt_state, value
+
+    opt_state = optimizer.init(vars_init)
+    vars = vars_init
     value_array = jnp.zeros(num_steps)
 
     for t in range(num_steps):
-        # if t%(num_steps//10) == 0:
-        #     print("Step :", t)
-        print("Step :", t)
-        value, opt_state = step(t, opt_state)
+        if t%(num_steps//100) == 0:
+            print("Step :", t)
+        # print("Step :", t)
+        vars, opt_state, value = step(vars, opt_state)
         value_array = value_array.at[t].set(value)
 
-    return value_array, get_params(opt_state)
+    return value_array, vars
+
+def subgrad_descent(obj_fun: Callable, grad_fun: Callable,
+                  vars_init: jnp.array, params, alpha: float, 
+                  num_steps: int, method: str):
+    
+    # @partial(jit, static_argnums = (1,))
+    def step(vars, params):
+        value = obj_fun(vars, params)
+        grads = grad_fun(vars, params)
+
+        # vars = vars - alpha * grads/jnp.linalg.norm(grads)
+        vars = vars - alpha * grads/jnp.linalg.norm(grads)
+
+        return vars, params, value
+    
+    vars = vars_init
+    value_array = jnp.zeros(num_steps)
+
+    for t in range(num_steps):
+        if t%(num_steps//100) == 0:
+            print("Step :", t)
+        # print("Step :", t)
+        vars, params, value = step(vars, params)
+        value_array = value_array.at[t].set(value)
+
+    return value_array, vars
+
+
+# def adam_optimize(obj_fun: Callable, grad_fun: Callable,
+#                   vars_init: jnp.array, params,
+#                   alpha: float, num_steps: int):
+
+#     init, update, get_params = optimizers.adam(alpha)
+
+#     def step(t, opt_state):
+#         value = obj_fun(get_params(opt_state), params)
+#         grads = grad_fun(get_params(opt_state), params)
+#         opt_state = update(t, grads, opt_state)
+#         return value, opt_state
+
+#     opt_state = init(vars_init)
+#     value_array = jnp.zeros(num_steps)
+
+#     for t in range(num_steps):
+#         # if t%(num_steps//10) == 0:
+#         #     print("Step :", t)
+#         print("Step :", t)
+#         value, opt_state = step(t, opt_state)
+#         value_array = value_array.at[t].set(value)
+
+#     return value_array, get_params(opt_state)
+
+# def adagrad_optimize(obj_fun: Callable, grad_fun: Callable,
+#                   vars_init: jnp.array, params,
+#                   step_size: float, num_steps: int):
+
+#     init, update, get_params = optimizers.adam(step_size)
+
+#     def step(t, opt_state):
+#         value = obj_fun(get_params(opt_state), params)
+#         grads = grad_fun(get_params(opt_state), params)
+#         opt_state = update(t, grads, opt_state)
+#         return value, opt_state
+
+#     opt_state = init(vars_init)
+#     value_array = jnp.zeros(num_steps)
+
+#     for t in range(num_steps):
+#         # if t%(num_steps//10) == 0:
+#         #     print("Step :", t)
+#         print("Step :", t)
+#         value, opt_state = step(t, opt_state)
+#         value_array = value_array.at[t].set(value)
+
+#     return value_array, get_params(opt_state)
 
 #--------------------------------------------------#
 #-------------------- FGS tools -------------------#

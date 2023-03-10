@@ -104,18 +104,18 @@ proj_sigmas_vec = gaussian.sigmas_to_vec(dual_params.sigmas_proj, dual_params)
 dual_vars_init = jnp.zeros((dual_params.total_num_dual_vars,))
 dual_vars_init = dual_vars_init.at[d:].set(proj_sigmas_vec)
 
-lmbda_list = np.linspace(-7, 0, 100)
-nb_list = []
+# lmbda_list = np.linspace(-7, 0, 100)
+# nb_list = []
 
-for lmbda in lmbda_list:
-    dual_vars = jnp.zeros((dual_params.total_num_dual_vars,))
-    dual_vars = dual_vars.at[d:].set(proj_sigmas_vec)
-    dual_vars = dual_vars.at[:d].set(lmbda)
-    nb_list.append(-gaussian.dual_obj(dual_vars, dual_params))
+# for lmbda in lmbda_list:
+#     dual_vars = jnp.zeros((dual_params.total_num_dual_vars,))
+#     dual_vars = dual_vars.at[d:].set(proj_sigmas_vec)
+#     dual_vars = dual_vars.at[:d].set(lmbda)
+#     nb_list.append(-gaussian.dual_obj(dual_vars, dual_params))
 
-plt.plot(lmbda_list, nb_list)
-# plt.xscale('log')
-plt.show()
+# plt.plot(lmbda_list, nb_list)
+# # plt.xscale('log')
+# plt.show()
 
 
 # key, subkey = jax.random.split(key)
@@ -127,13 +127,13 @@ plt.show()
 # lambdas, sigmas = gaussian.unvec_and_process_dual_vars(dual_vars_init, dual_params)
 
 # alpha = 0.01
-# num_steps = int(5e3)
+num_steps = int(5e3)
 
-# dual_obj_over_opti_phase1, dual_opt_result_phase1 = \
-#     gaussian.optimize(dual_vars_init, dual_params,
-#                     gaussian.dual_obj, gaussian.dual_grad,
-#                     num_iters = num_steps)
-# noisy_bound = -gaussian.dual_obj(jnp.array(dual_opt_result_phase1.x), dual_params)
+dual_obj_over_opti_phase1, dual_opt_result_phase1 = \
+    gaussian.optimize(dual_vars_init, dual_params,
+                    gaussian.dual_obj, gaussian.dual_grad,
+                    num_iters = num_steps)
+noisy_bound = -gaussian.dual_obj(jnp.array(dual_opt_result_phase1.x), dual_params)
 
 
 #------------------------------------------------------------------------------#
@@ -157,18 +157,18 @@ dual_vars_init_purity = dual_vars_init_purity.at[1:].set(proj_sigmas_vec)
 
 # init_obj = gaussian.dual_obj_purity(dual_vars_init_purity, dual_params_purity)
 
-lmbda_list = np.linspace(-7, 0, 100)
-nb_pur_list = []
+# lmbda_list = np.linspace(-7, 0, 100)
+# nb_pur_list = []
 
-for lmbda in lmbda_list:
-    dual_vars_purity = jnp.zeros((dual_params_purity.total_num_dual_vars,))
-    dual_vars_purity = dual_vars_purity.at[1:].set(proj_sigmas_vec)
-    dual_vars_purity = dual_vars_purity.at[:1].set(lmbda)
-    nb_pur_list.append(-gaussian.dual_obj_purity(dual_vars_purity, dual_params_purity))
+# for lmbda in lmbda_list:  
+#     dual_vars_purity = jnp.zeros((dual_params_purity.total_num_dual_vars,))
+#     dual_vars_purity = dual_vars_purity.at[1:].set(proj_sigmas_vec)
+#     dual_vars_purity = dual_vars_purity.at[:1].set(lmbda)
+#     nb_pur_list.append(gaussian.dual_obj_purity(dual_vars_purity, dual_params_purity))
 
-plt.plot(lmbda_list, nb_pur_list)
-# plt.xscale('log')
-plt.show()
+# plt.plot(lmbda_list, nb_pur_list)
+# # plt.xscale('log')
+# plt.show()
 
 # _, sigmas_unwrapped = gaussian.unvec_and_process_dual_vars(dual_vars_init, dual_params)
 # print(jnp.linalg.norm(sigmas_unwrapped - dual_params.sigmas_proj))
@@ -179,6 +179,17 @@ plt.show()
 #                     num_iters = num_steps, tol_scale = 1e-7)
 # noisy_bound_purity = -gaussian.dual_obj_purity(jnp.array(dual_opt_result_purity.x), dual_params_purity)
 
+num_steps = 10000
+step_size = 0.0001
+dual_obj_over_opti_purity_optax, dual_opt_result_purity_optax = \
+gaussian.optax_optimize(gaussian.dual_obj_purity, gaussian.dual_grad_purity,
+                  dual_vars_init_purity, dual_params_purity,
+                  step_size, num_steps, method = "adam")
+
+noisy_bound_purity = -dual_obj_over_opti_purity_optax[-1]
+plt.plot(dual_obj_over_opti_purity_optax)
+plt.show()
+
 # test_vars = jnp.arange(dual_params.total_num_dual_vars)
 # lambdas_test, sigmas_test = gaussian.unvec_and_process_dual_vars(test_vars, dual_params)
 # sigmas_vec_test = gaussian.sigmas_to_vec(sigmas_test, dual_params)
@@ -188,20 +199,20 @@ plt.show()
 
 
 
-# print(colorama.Fore.GREEN + "noisy bound = ", noisy_bound)
-# print(colorama.Fore.GREEN + "noisy bound purity = ", noisy_bound_purity)
-# print(colorama.Fore.GREEN + "noisy bound nc = ", noisy_bound_nc)
-# print(colorama.Fore.GREEN + "noisy bound nc <= noisy bound? ")
-# if noisy_bound_nc <= noisy_bound:
-#     print(colorama.Fore.GREEN + "True")
-# else:
-#     print(colorama.Fore.RED + "False")
-# print(colorama.Fore.GREEN + "noisy bound nc <= noisy bound purity? ")
-# if noisy_bound_nc <= noisy_bound_purity:
-#     print(colorama.Fore.GREEN + "True")
-# else:
-#     print(colorama.Fore.RED + "False")
-# print(colorama.Style.RESET_ALL)
+print(colorama.Fore.GREEN + "noisy bound = ", noisy_bound)
+print(colorama.Fore.GREEN + "noisy bound purity = ", noisy_bound_purity)
+print(colorama.Fore.GREEN + "noisy bound nc = ", noisy_bound_nc)
+print(colorama.Fore.GREEN + "noisy bound nc <= noisy bound? ")
+if noisy_bound_nc <= noisy_bound:
+    print(colorama.Fore.GREEN + "True")
+else:
+    print(colorama.Fore.RED + "False")
+print(colorama.Fore.GREEN + "noisy bound nc <= noisy bound purity? ")
+if noisy_bound_nc <= noisy_bound_purity:
+    print(colorama.Fore.GREEN + "True")
+else:
+    print(colorama.Fore.RED + "False")
+print(colorama.Style.RESET_ALL)
 
 # lambdas, sigmas = gaussian.unvec_and_process_dual_vars(jnp.array(dual_opt_result_phase1.x), dual_params)
 
