@@ -43,7 +43,7 @@ local_d = 1
 k = 1
 
 #--> set up circuit 
-circ_params = gaussian.PrimalParams(N, d, local_d, key, k = k, mode = 'block')
+circ_params = gaussian.PrimalParams(N, d, local_d, key, k = k, mode = 'NN_k1')
 key, subkey = jax.random.split(circ_params.key_after_ham_gen)
 
 #--> noiseless solution
@@ -62,11 +62,11 @@ gaussian.set_all_sigmas(dual_params)
 proj_sigmas_vec = gaussian.sigmas_to_vec(dual_params.sigmas_proj, dual_params)
 
 #--> full von neumann dual
-# dual_vars_init = jnp.zeros((dual_params.total_num_dual_vars,))
-# dual_vars_init = dual_vars_init.at[d:].set(proj_sigmas_vec)
+dual_vars_init = jnp.zeros((dual_params.total_num_dual_vars,))
+dual_vars_init = dual_vars_init.at[d:].set(proj_sigmas_vec)
 
-key, subkey = jax.random.split(key)
-dual_vars_init = jax.random.uniform(key, shape = (dual_params.total_num_dual_vars,))/N
+# key, subkey = jax.random.split(key)
+# dual_vars_init = jax.random.uniform(key, shape = (dual_params.total_num_dual_vars,))/N
 
 num_steps = int(5e3)
 dual_obj_over_opti, dual_opt_result = \
@@ -104,20 +104,26 @@ else:
 lambda_lower_bounds_purity = jnp.array([0.0])
 dual_params_purity = gaussian.DualParamsPurity(circ_params, p, k_dual, lambda_lower_bounds_purity)
 
-alpha = 0.01
-num_steps = int(5e3)
+step_size = 0.001
+num_steps = int(10e3)
 
-# dual_vars_init_purity = jnp.zeros((dual_params_purity.total_num_dual_vars,))
-# dual_vars_init_purity = dual_vars_init_purity.at[1:].set(proj_sigmas_vec)
+dual_vars_init_purity = jnp.zeros((dual_params_purity.total_num_dual_vars,))
+dual_vars_init_purity = dual_vars_init_purity.at[1:].set(proj_sigmas_vec)
 
-dual_vars_init_purity = 1e-9 * jnp.ones((dual_params_purity.total_num_dual_vars,))
-dual_vars_init_purity = dual_vars_init_purity.at[0].set(dual_opt_result_nc.x[0])
+# dual_vars_init_purity = 1e-9 * jnp.ones((dual_params_purity.total_num_dual_vars,))
+# dual_vars_init_purity = dual_vars_init_purity.at[0].set(dual_opt_result_nc.x[0])
 
-dual_obj_over_opti_purity, dual_opt_result_purity = \
-    gaussian.optimize(dual_vars_init_purity, dual_params_purity,
-                      gaussian.dual_obj_purity, gaussian.dual_grad_purity,
-                      num_iters = num_steps, tol_scale = 1e-7)
-noisy_bound_purity = -gaussian.dual_obj_purity(jnp.array(dual_opt_result_purity.x), dual_params_purity)
+# dual_obj_over_opti_purity, dual_opt_result_purity = \
+#     gaussian.optax_optimize(dual_vars_init_purity, dual_params_purity,
+#                       gaussian.dual_obj_purity, gaussian.dual_grad_purity,
+#                       num_iters = num_steps, tol_scale = 1e-7)
+# noisy_bound_purity = -gaussian.dual_obj_purity(jnp.array(dual_opt_result_purity.x), dual_params_purity)
+
+dual_obj_over_opti_purity_optax, dual_opt_result_purity_optax = \
+gaussian.optax_optimize(gaussian.dual_obj_purity, gaussian.dual_grad_purity,
+                  dual_vars_init_purity, dual_params_purity,
+                  step_size, num_steps, method = "adam")
+noisy_bound_purity = -jnp.min(dual_obj_over_opti_purity_optax)
 
 print(noisy_sol)
 print(noisy_bound)
@@ -131,5 +137,5 @@ data_list = [clean_sol, noisy_sol, noisy_bound, noisy_bound_nc, noisy_bound_puri
 data_file_name = "fermion1D-block-purity-N-" + str(N) + "-d-" + str(d) + "-seed-" + cliargs.seed + "-p-" + str(p) + "-kdual-" + \
                  str(k_dual) + ".pkl"
 
-with open(os.path.join(cliargs.result_save_path, data_file_name), "wb") as f_for_pkl:
-    pickle.dump(data_list, f_for_pkl)
+# with open(os.path.join(cliargs.result_save_path, data_file_name), "wb") as f_for_pkl:
+#     pickle.dump(data_list, f_for_pkl)

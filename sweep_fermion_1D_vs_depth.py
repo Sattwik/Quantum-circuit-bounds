@@ -9,7 +9,7 @@ import pickle
 from datetime import datetime
 from datetime import date
 
-def sweep_fermion(N_list, p_list, d_list):
+def sweep_fermion(N_list, p_list, d_list, k_dual_list):
     max_threads = 6
 
     # Setting up directory to save
@@ -29,11 +29,11 @@ def sweep_fermion(N_list, p_list, d_list):
 
     with concurrent.futures.ThreadPoolExecutor(max_workers = max_threads) as executor:
         for N in N_list:
-            seed_list = N + np.array(range(5))
+            seed_list = N + np.array(range(1))
             for seed in seed_list:
                 for d in d_list: 
                     for p in p_list:
-                        for k_dual in [1]:
+                        for k_dual in k_dual_list:
                             executor.submit(submit_simulation,
                             str(N), str(d), str(seed), str(p), str(k_dual), result_save_path)
 
@@ -74,8 +74,9 @@ def submit_simulation(N, d, seed, p, k_dual, result_save_path):
 # N_list = [32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 72]
 # p_list = [0.01, 0.05]
 
-N_list = [30]
+N_list = [20]
 p_list = [0.05]
 d_list = np.arange(3, 17, 2)
+k_dual_list = [1, 5, 10, 15, 20]
 
-sweep_fermion(N_list, p_list, d_list)
+sweep_fermion(N_list, p_list, d_list, k_dual_list)

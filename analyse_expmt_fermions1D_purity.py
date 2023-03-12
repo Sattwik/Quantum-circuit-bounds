@@ -10,7 +10,7 @@ import qutip
 from matplotlib import rc
 import matplotlib
 
-rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
+# rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
 # rc('text', usetex=True)
 # rc('text.latex', preamble=r'\usepackage{amsmath}')
 matplotlib.rcParams["image.cmap"] = "inferno"
@@ -25,17 +25,18 @@ CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
                   '#999999', '#e41a1c', '#dede00']
 
 
-data_path = "./../vqa_data/0217/20230217-052506"
+data_path = "./../vqa_data/0310/20230310-065713"
 
-N_list = [30]
+N_list = [20]
 p_list = [0.05]
+k_dual_list = [1, 5, 10, 15, 20]
 d_list = np.arange(3, 17, 2)
 
-num_k_duals = 1
+num_k_duals = len(k_dual_list)
 num_N = len(N_list)
 num_p = len(p_list)
 num_d = len(d_list)
-num_seeds = 5
+num_seeds = 1
 
 clean_sol_list = np.zeros((num_N, num_seeds, num_d, num_p, num_k_duals), dtype = float)
 noisy_sol_list = np.zeros((num_N, num_seeds, num_d, num_p, num_k_duals), dtype = float)
@@ -48,7 +49,7 @@ for i_N, N in enumerate(N_list):
         for i_d, d in enumerate(d_list):
             for i_p, p in enumerate(p_list):
                 # for i_k, k_dual in enumerate([1, N]):
-                for i_k, k_dual in enumerate([1]):
+                for i_k, k_dual in enumerate(k_dual_list):
                     fname = "fermion1D-block-purity-N-" + str(N) + "-d-" + str(d) + "-seed-" + str(seed) + "-p-" + str(p) + "-kdual-" + str(k_dual) + ".pkl"
                     with open(os.path.join(data_path, fname), 'rb') as result_file:
                         print("Reading file: " + os.path.join(data_path, fname))
@@ -181,48 +182,51 @@ for i_N, N in enumerate(N_list):
         mean_approx_noisy_sol = np.mean(approx_ratio_noisy_sol[i_N, :, :, i_p, 0], axis = 0)
         std_approx_noisy_sol = np.std(approx_ratio_noisy_sol[i_N, :, :, i_p, 0], axis = 0)
 
-        ax.plot(d_list, mean_approx_noisy_sol, marker = '^', color = CB_color_cycle[3], label = r'Primal')
+        ax.plot(d_list, mean_approx_noisy_sol, marker = '^', color = 'C0', label = r'Primal')
         ax.fill_between(d_list,
                         (mean_approx_noisy_sol - std_approx_noisy_sol),
                         (mean_approx_noisy_sol + std_approx_noisy_sol),
-                        color = CB_color_cycle[3], alpha = 0.1)
+                        color = 'C0', alpha = 0.1)
 
         mean_approx_noisy_bound_nc = np.mean(approx_ratio_noisy_bound_nc[i_N, :, :, i_p, 0], axis = 0)
         std_approx_noisy_bound_nc = np.std(approx_ratio_noisy_bound_nc[i_N, :, :, i_p, 0], axis = 0)
 
-        ax.plot(d_list, mean_approx_noisy_bound_nc, marker = 'D', color = CB_color_cycle[5], label = r'Dual (NC)')
+        ax.plot(d_list, mean_approx_noisy_bound_nc, marker = 'D', color = 'C1', label = r'Dual (NC)')
         ax.fill_between(d_list,
                         (mean_approx_noisy_bound_nc - std_approx_noisy_bound_nc),
                         (mean_approx_noisy_bound_nc + std_approx_noisy_bound_nc),
-                        color = CB_color_cycle[5], alpha = 0.1)
+                        color = 'C1', alpha = 0.1)
 
-        mean_approx_noisy_bound = np.mean(approx_ratio_noisy_bound[i_N, :, :, i_p, 0], axis = 0)
-        std_approx_noisy_bound = np.std(approx_ratio_noisy_bound[i_N, :, :, i_p, 0], axis = 0)
+        for i_k, k_dual in enumerate(k_dual_list):
+            mean_approx_noisy_bound = np.mean(approx_ratio_noisy_bound[i_N, :, :, i_p, i_k], axis = 0)
+            std_approx_noisy_bound = np.std(approx_ratio_noisy_bound[i_N, :, :, i_p, i_k], axis = 0)
 
-        ax.plot(d_list, mean_approx_noisy_bound, marker = '.', color = CB_color_cycle[0], label = r'Dual (VN)')
-        ax.fill_between(d_list,
-                        (mean_approx_noisy_bound - std_approx_noisy_bound),
-                        (mean_approx_noisy_bound + std_approx_noisy_bound),
-                        color = CB_color_cycle[0], alpha = 0.1)
+            ax.plot(d_list, mean_approx_noisy_bound, marker = '.', color = 'C' + str(i_k + 2), ls = "--")
+            ax.fill_between(d_list,
+                            (mean_approx_noisy_bound - std_approx_noisy_bound),
+                            (mean_approx_noisy_bound + std_approx_noisy_bound),
+                            color = 'C' + str(i_k + 2), alpha = 0.1)
 
-        mean_approx_noisy_bound_purity = np.mean(approx_ratio_noisy_bound_purity[i_N, :, :, i_p, 0], axis = 0)
-        std_approx_noisy_bound_purity = np.std(approx_ratio_noisy_bound_purity[i_N, :, :, i_p, 0], axis = 0)
+            mean_approx_noisy_bound_purity = np.mean(approx_ratio_noisy_bound_purity[i_N, :, :, i_p, i_k], axis = 0)
+            std_approx_noisy_bound_purity = np.std(approx_ratio_noisy_bound_purity[i_N, :, :, i_p, i_k], axis = 0)
 
-        ax.plot(d_list, mean_approx_noisy_bound_purity, marker = '.', color = CB_color_cycle[1], label = r'Dual (Pur)')
-        ax.fill_between(d_list,
-                        (mean_approx_noisy_bound_purity - std_approx_noisy_bound_purity),
-                        (mean_approx_noisy_bound_purity + std_approx_noisy_bound_purity),
-                        color = CB_color_cycle[1], alpha = 0.1)
+            ax.plot(d_list, mean_approx_noisy_bound_purity, marker = '.', color = 'C' + str(i_k + 2), label = r'k = ' + str(k_dual), ls = ":")
+            ax.fill_between(d_list,
+                            (mean_approx_noisy_bound_purity - std_approx_noisy_bound_purity),
+                            (mean_approx_noisy_bound_purity + std_approx_noisy_bound_purity),
+                            color = 'C' + str(i_k + 2), alpha = 0.1)
 
 
         ax.set_ylabel('Approx. ratio')
         ax.set_xlabel(r'd')
         ax.legend()
-        plt.tight_layout()
+        # plt.tight_layout()
         ax.set_yscale('log')
 
         figname = "approx_ratios_N_" + str(N) + "_p_" + str(p) + ".pdf"
         plt.savefig(os.path.join(data_path, figname), format = 'pdf')
+
+        plt.show()
 
 
 # i_p = 2

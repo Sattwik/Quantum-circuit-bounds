@@ -25,21 +25,21 @@ from fermions import gaussian, fermion_test_utils
 
 colorama.init()
 
-N = 10
+N = 20
 assert(N%2 == 0)
-d = 2 * 5
-local_d = 2 * 1
+d = 2 * 5 - 1
+local_d = 1
 k = 1
 
 rng = np.random.default_rng()
 # seed = rng.integers(low=0, high=100, size=1)[0]
 # seed = 69
-seed = N + 9
+seed = N + 69
 key = jax.random.PRNGKey(seed)
 
 print(key)
 
-circ_params = gaussian.PrimalParams(N, d, local_d, key, k = k, mode = "NN")
+circ_params = gaussian.PrimalParams(N, d, local_d, key, k = k, mode = "NN_k1")
 key, subkey = jax.random.split(circ_params.key_after_ham_gen)
 
 print(key)
@@ -75,7 +75,7 @@ print(colorama.Style.RESET_ALL)
 #---------------------------------- DUAL SETUP --------------------------------#
 #------------------------------------------------------------------------------#
 
-k_dual = N
+k_dual = 20
 
 lambda_lower_bounds = (0.0) * jnp.ones(d)
 dual_params = gaussian.DualParams(circ_params, p, k_dual, lambda_lower_bounds)
@@ -180,13 +180,13 @@ dual_vars_init_purity = dual_vars_init_purity.at[1:].set(proj_sigmas_vec)
 # noisy_bound_purity = -gaussian.dual_obj_purity(jnp.array(dual_opt_result_purity.x), dual_params_purity)
 
 num_steps = 10000
-step_size = 0.0001
+step_size = 0.001
 dual_obj_over_opti_purity_optax, dual_opt_result_purity_optax = \
 gaussian.optax_optimize(gaussian.dual_obj_purity, gaussian.dual_grad_purity,
                   dual_vars_init_purity, dual_params_purity,
                   step_size, num_steps, method = "adam")
 
-noisy_bound_purity = -dual_obj_over_opti_purity_optax[-1]
+noisy_bound_purity = -jnp.min(dual_obj_over_opti_purity_optax)
 plt.plot(dual_obj_over_opti_purity_optax)
 plt.show()
 

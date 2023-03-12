@@ -536,6 +536,27 @@ class PrimalParams():
             for i in range((self.d - self.local_d)//4):
                 self.layer_hamiltonians.append(-h_list[::-1][i])
 
+        elif mode == "NN_k1":
+            print("NN circuit, k = 1 parent H")
+            self.layer_hamiltonians = []
+            for i in range(self.local_d):
+                random_even_h, key = random_NN_even_bond_normal_hamiltonian_majorana(self.N, key)
+                self.layer_hamiltonians.append(random_even_h)
+
+            h_list = []
+            for i in range((self.d - self.local_d)//2):
+                if i%2 == 0:
+                    random_even_h, key = random_NN_even_bond_normal_hamiltonian_majorana(self.N, key)
+                    self.layer_hamiltonians.append(random_even_h)
+                    h_list.append(random_even_h)
+                else:
+                    random_odd_h, key = random_NN_odd_bond_normal_hamiltonian_majorana(self.N, key)
+                    self.layer_hamiltonians.append(random_odd_h)
+                    h_list.append(random_odd_h)
+
+            for i in range((self.d - self.local_d)//2):
+                self.layer_hamiltonians.append(-h_list[::-1][i])
+        
         else:
             self.layer_hamiltonians = []
 
