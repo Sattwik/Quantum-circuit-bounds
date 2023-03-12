@@ -1549,6 +1549,118 @@ def optimize_dual_purity(dual_vars_init: jnp.array, dual_params: DualParamsPurit
                     dual_params, dual_obj_purity, dual_grad_purity,
                     num_iters = 250, bounds = bnds)
 
+
+class DualParamsPuritySmooth():
+    def __init__(self, circ_params: PrimalParams, p: float, k_dual: int,
+                 lambda_lower_bounds: jnp.array, scale: float = 1):
+        self.circ_params = circ_params
+        self.p = p
+        self.k_dual = k_dual
+        self.lambda_lower_bounds = lambda_lower_bounds
+        self.scale = scale
+
+        block_upper_indices_to_zero = jnp.triu_indices(self.circ_params.N, self.k_dual + 1)
+        block_lower_indices_to_zero = jnp.tril_indices(self.circ_params.N, -self.k_dual - 1)
+
+        ones_N = jnp.ones((self.circ_params.N, self.circ_params.N))
+        upper_ones_N = jnp.triu(ones_N, 1)
+        lower_ones_N = jnp.tril(ones_N, -1)
+
+        block_upper_band = upper_ones_N.at[block_upper_indices_to_zero].set(0.0)
+        block_lower_band = lower_ones_N.at[block_lower_indices_to_zero].set(0.0)
+        block_band = ones_N.at[block_upper_indices_to_zero].set(0.0)
+        block_band = block_band.at[block_lower_indices_to_zero].set(0.0)
+
+        self.block_upper_band_indices = jnp.where(block_upper_band == 1)
+        self.block_lower_band_indices = jnp.where(block_lower_band == 1)
+        self.block_band_indices = jnp.where(block_band == 1)
+
+        num_vars_xx = self.block_upper_band_indices[0].shape[0]
+        num_vars_pp = num_vars_xx
+        num_vars_xp = self.block_band_indices[0].shape[0]
+
+        num_sigma_vars_layer = num_vars_xx + num_vars_pp + num_vars_xp
+
+        self.total_num_dual_vars = self.circ_params.d + \
+        self.circ_params.d * num_sigma_vars_layer
+
+@partial(jit, static_argnums = (1,))
+def unvec_and_process_dual_vars_purity_smooth(dual_vars: jnp.array, dual_params: DualParamsPuritySmooth):
+    N = dual_params.circ_params.N
+    d = dual_params.circ_params.d
+    block_upper_band_indices = dual_params.block_upper_band_indices
+    block_lower_band_indices = dual_params.block_lower_band_indices
+    block_band_indices = dual_params.block_band_indices
+
+    sigmas = jnp.zeros((2 * N, 2 * N, d))
+    zeros_N = jnp.zeros((N, N))
+
+    a_vars = dual_vars.at[:d].get()
+    lambdas = dual_params.lambda_lower_bounds + jnp.log(1 + jnp.exp(a_vars))
+
+    sigma_vars = dual_vars.at[d:].get()
+    init_args = (sigmas, sigma_vars,
+                 block_upper_band_indices, block_lower_band_indices,
+                 block_band_indices, zeros_N)
+    sigmas, _, _, _, _, _ = jax.lax.fori_loop(0, d, unvec_layer_i, init_args)
+
+    return lambdas, sigmas
+
+def dual_free_energy_ith_term_purity_smooth(i: int, args: Tuple):
+
+    purity_bounds, lambdas, sigmas, layer_hamiltonians, p, cost = args
+
+    hi = sigmas.at[:,:,i].get() - noisy_dual_layer(layer_hamiltonians.at[i+1, :, :].get(), sigmas.at[:,:,i+1].get(), p)
+
+    cost += -purity(hi)/(4 * lambdas.at[i].get()) - lambdas.at[i].get() * purity_bounds.at[i].get()
+
+    return (purity_bounds, lambdas, sigmas, layer_hamiltonians, p, cost)
+
+
+@partial(jit, static_argnums = (1,))
+def dual_obj_purity_smooth(dual_vars: jnp.array, dual_params: DualParamsPurity):
+    N = dual_params.circ_params.N
+    d = dual_params.circ_params.d
+    h_parent = dual_params.circ_params.h_parent
+    layer_hamiltonians = dual_params.circ_params.layer_hamiltonians
+    p = dual_params.p
+    Gamma_mjr_init = dual_params.circ_params.Gamma_mjr_init
+
+    lambdas, sigmas = unvec_and_process_dual_vars_purity_smooth(dual_vars, dual_params)
+
+    q = 1 - p
+    q_powers = jnp.array([q**i for i in range(d)])
+
+    entropy_bounds = N * p * jnp.log(2) * \
+             jnp.array([jnp.sum(q_powers.at[:i+1].get()) for i in range(d)])
+    purity_bounds = jnp.exp(-entropy_bounds)
+
+    cost = 0
+    # purity terms
+    # first d - 1 layers
+    init_args = (purity_bounds, lambdas, sigmas, layer_hamiltonians, p, cost)
+    _, _, _, _, _, cost = jax.lax.fori_loop(0, d - 1, dual_free_energy_ith_term_purity_smooth, init_args)
+
+    # last layer
+    hi = h_parent + sigmas.at[:,:,d-1].get()
+    cost += -lambdas.at[0].get() * log_trace_fgstate(-hi/lambdas[0])
+
+    # init. state term
+    epsilon_1_dag_sigma1 = \
+    noisy_dual_layer(layer_hamiltonians.at[0, :, :].get(), sigmas.at[:,:,0].get(), p)
+
+    cost += -energy(Gamma_mjr_init, epsilon_1_dag_sigma1)
+
+    # entropy term
+    # cost += jnp.dot(lambdas, entropy_bounds.at[-1].get())
+    cost += lambdas.at[0].get() * entropy_bounds.at[-1].get()
+
+    return -jnp.real(cost)
+
+@partial(jit, static_argnums = (1,))
+def dual_grad_purity_smooth(dual_vars: jnp.array, dual_params: DualParamsPurity):
+    return grad(dual_obj_purity_smooth, argnums = 0)(dual_vars, dual_params)
+
 # @partial(jit, static_argnums = (1,))
 # def dual_obj_no_channel_direct_lambda(dual_vars: jnp.array, dual_params: DualParams):
 #     N = dual_params.circ_params.N

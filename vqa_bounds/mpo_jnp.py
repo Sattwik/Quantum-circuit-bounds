@@ -351,6 +351,16 @@ def gate_to_MPO(gate: jnp.array, num_sites: int, D: int = None):
 #------------------------------------------------------------------------------#
 
 @jit
+def RX(theta:float):
+    X = jnp.array([[0, 1],[1, 0]], dtype = complex)
+    I = jnp.array([[1, 0],[0, 1]], dtype = complex)
+
+    c = jnp.cos(theta/2)
+    s = jnp.sin(theta/2)
+
+    return c * I - 1j * s * X
+
+@jit
 def RXX(theta: float):
     # not clifford
     # D = 2
@@ -362,7 +372,7 @@ def RXX(theta: float):
                    [0.0, -1j*s, c, 0.0],
                    [-1j*s, 0.0, 0.0, c]], dtype = complex)
 
-    tensors = gate_to_MPO(U, num_sites = 2, D = 2)
+    tensors, _ = gate_to_MPO(U, num_sites = 2, D = 2)
 
     return U, tensors
 
@@ -373,7 +383,7 @@ def CNOT():
                    [0, 0, 0, 1],
                    [0, 0, 1, 0]], dtype = complex)
 
-    tensors = gate_to_MPO(U, num_sites = 2, D = 2)
+    tensors, _ = gate_to_MPO(U, num_sites = 2, D = 2)
 
     return U, tensors
 
@@ -382,34 +392,44 @@ def CNOT():
 #------------------------------------------------------------------------------#
 @jit
 def singleq_gate(gate: jnp.array, tensor: jnp.array):
-    ### WARNING: INCORRECT> CONJUGATE
+    """checked."""
+
     res = jnp.tensordot(gate, tensor, axes = ((1), (1)))
     # u,d tdot l,u,r,d -> u,l,r,d
     res = jnp.swapaxes(res, 0, 1) # l,u,r,d
     res = jnp.tensordot(gate.conj().T, res, axes = ((0), (3)))
-    # u,d tdot l,u,r,d -> d, u, l, r
-    res = jnp.transpose(res, (2, 1, 3, 0))
+    # u,d tdot l,u,r,d -> d,l,u,r
+    res = jnp.transpose(res, (1, 2, 3, 0))
 
     return res
 
 @jit
 def twoq_gate(gates: List[jnp.array], tensors: List[jnp.array]):
-    ### WARNING: INCORRECT> CONJUGATE
-    res = []
+    """checked."""
+    res_tensors = []
 
     num_sites = len(gates)
 
     for i in range(num_sites):
+        gate = gates[i]
+        tensor = tensors[i]
+
         res = jnp.tensordot(gate, tensor, axes = ((3), (1)))
         # gl,gu,gr,gd tdot l,u,r,d -> gl, gu, gr, l, r, d
         res = jnp.transpose(res, (0, 3, 1, 2, 4, 5)) # gl, l, gu, gr, r, d
+        # gl, l, gu, gr, r, d -> (gl, l), gu, (gr, r), d 
+        res = jnp.reshape(res, (res.shape[0] * res.shape[1], res.shape[2], res.shape[3] * res.shape[4], res.shape[5]))
 
-        gate_herm_conj = jnp.transpose(gate)
-        res = jnp.tensordot(gate, res, axes = ((0), (3)))
-        # u,d tdot l,u,r,d -> d, u, l, r
-        res = jnp.transpose(res, (2, 1, 3, 0))
+        gate_herm_conj = jnp.transpose(gate.conj(), (0, 3, 2, 1))
+        # gl,gu,gr,gd -> gl,gd,gr,gu*
+        res = jnp.tensordot(gate_herm_conj, res, axes = ((1), (3)))
+        # gl,gd,gr,gu* tdot l,u,r,d -> gl,gr,gu,l,u,r
+        res = jnp.transpose(res, (0, 3, 4, 1, 5, 2)) # gl, l, u, gr, r, gu
+        res = jnp.reshape(res, (res.shape[0] * res.shape[1], res.shape[2], res.shape[3] * res.shape[4], res.shape[5]))
 
-    return res
+        res_tensors.append(res)
+
+    return res_tensors
 
 @jit
 def noise_layer(tensors: List[jnp.array], p: float):
@@ -420,15 +440,18 @@ def noise_layer(tensors: List[jnp.array], p: float):
     num_sites = len(tensors)
 
     for i in range(num_sites):
-        tmpX = singleq_gate_on_tensor(X, tensors[i])
-        tmpY = singleq_gate_on_tensor(Y, tensors[i])
-        tmpZ = singleq_gate_on_tensor(Z, tensors[i])
+        tmpX = singleq_gate(X, tensors[i])
+        tmpY = singleq_gate(Y, tensors[i])
+        tmpZ = singleq_gate(Z, tensors[i])
 
         tensors[i] = (1 - 3 * p/4) * tensors[i] + \
                      (p/4) * (tmpX + tmpY + tmpZ)
 
     return tensors
 
+#------------------------------------------------------------------------------#
+# Vectorization
+#------------------------------------------------------------------------------#
 
 
 
@@ -437,13 +460,9 @@ def noise_layer(tensors: List[jnp.array], p: float):
 
 # managing bond dims?
     # optimization will need fixed sizes for MPOs
-# subtract/sum with negation
-    # probably easiest to implement subtraction directly
 # dual circuit
 # vec to MPO
     # vec to operators first
     # sum with conj tr to get Herm
-# tr(.^2)
-    # optimal contraction order?
 # local Ham to MPO
     # ??
