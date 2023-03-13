@@ -1,25 +1,18 @@
 from datetime import datetime
 from datetime import date
-import time
-import pickle
-import sys
 import argparse
-import io
-import copy
-import shutil
+import pickle
 import os
 
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import rc
-import matplotlib
 import jax.numpy as jnp
 import jax
-import scipy
 from jax.config import config
 config.update("jax_enable_x64", True)
 
-from fermions import gaussian, fermion_test_utils
+from fermions import gaussian
 
 parser = argparse.ArgumentParser(description='System size(N), noise probability(p), seed')
 parser.add_argument('--N', type = str)
@@ -101,29 +94,43 @@ else:
     print("False")
 
 #--> full purity dual
+# lambda_lower_bounds_purity = jnp.array([0.0])
+# dual_params_purity = gaussian.DualParamsPurity(circ_params, p, k_dual, lambda_lower_bounds_purity)
+
+# step_size = 0.001
+# num_steps = int(10e3)
+
+# dual_vars_init_purity = jnp.zeros((dual_params_purity.total_num_dual_vars,))
+# dual_vars_init_purity = dual_vars_init_purity.at[1:].set(proj_sigmas_vec)
+
+# # dual_vars_init_purity = 1e-9 * jnp.ones((dual_params_purity.total_num_dual_vars,))
+# # dual_vars_init_purity = dual_vars_init_purity.at[0].set(dual_opt_result_nc.x[0])
+
+# # dual_obj_over_opti_purity, dual_opt_result_purity = \
+# #     gaussian.optax_optimize(dual_vars_init_purity, dual_params_purity,
+# #                       gaussian.dual_obj_purity, gaussian.dual_grad_purity,
+# #                       num_iters = num_steps, tol_scale = 1e-7)
+# # noisy_bound_purity = -gaussian.dual_obj_purity(jnp.array(dual_opt_result_purity.x), dual_params_purity)
+
+# dual_obj_over_opti_purity_optax, dual_opt_result_purity_optax = \
+# gaussian.optax_optimize(gaussian.dual_obj_purity, gaussian.dual_grad_purity,
+#                   dual_vars_init_purity, dual_params_purity,
+#                   step_size, num_steps, method = "adam")
+# noisy_bound_purity = -jnp.min(dual_obj_over_opti_purity_optax)
+
+#--> full purity dual (smooth)
 lambda_lower_bounds_purity = jnp.array([0.0])
-dual_params_purity = gaussian.DualParamsPurity(circ_params, p, k_dual, lambda_lower_bounds_purity)
+dual_params_purity_smooth = gaussian.DualParamsPuritySmooth(circ_params, p, k_dual, lambda_lower_bounds_purity)
 
-step_size = 0.001
-num_steps = int(10e3)
+num_steps = 5e3 
+dual_vars_init_purity_smooth = jnp.zeros((dual_params_purity_smooth.total_num_dual_vars,))
+dual_vars_init_purity_smooth = dual_vars_init_purity_smooth.at[d:].set(proj_sigmas_vec)
 
-dual_vars_init_purity = jnp.zeros((dual_params_purity.total_num_dual_vars,))
-dual_vars_init_purity = dual_vars_init_purity.at[1:].set(proj_sigmas_vec)
-
-# dual_vars_init_purity = 1e-9 * jnp.ones((dual_params_purity.total_num_dual_vars,))
-# dual_vars_init_purity = dual_vars_init_purity.at[0].set(dual_opt_result_nc.x[0])
-
-# dual_obj_over_opti_purity, dual_opt_result_purity = \
-#     gaussian.optax_optimize(dual_vars_init_purity, dual_params_purity,
-#                       gaussian.dual_obj_purity, gaussian.dual_grad_purity,
-#                       num_iters = num_steps, tol_scale = 1e-7)
-# noisy_bound_purity = -gaussian.dual_obj_purity(jnp.array(dual_opt_result_purity.x), dual_params_purity)
-
-dual_obj_over_opti_purity_optax, dual_opt_result_purity_optax = \
-gaussian.optax_optimize(gaussian.dual_obj_purity, gaussian.dual_grad_purity,
-                  dual_vars_init_purity, dual_params_purity,
-                  step_size, num_steps, method = "adam")
-noisy_bound_purity = -jnp.min(dual_obj_over_opti_purity_optax)
+dual_obj_over_opti_purity_smooth, dual_opt_result_purity_smooth = \
+    gaussian.optimize(dual_vars_init_purity_smooth, dual_params_purity_smooth,
+                    gaussian.dual_obj_purity_smooth, gaussian.dual_grad_purity_smooth,
+                    num_iters = num_steps)
+noisy_bound_purity = -gaussian.dual_obj_purity_smooth(jnp.array(dual_opt_result_purity_smooth.x), dual_params_purity_smooth)
 
 print(noisy_sol)
 print(noisy_bound)
@@ -137,5 +144,5 @@ data_list = [clean_sol, noisy_sol, noisy_bound, noisy_bound_nc, noisy_bound_puri
 data_file_name = "fermion1D-block-purity-N-" + str(N) + "-d-" + str(d) + "-seed-" + cliargs.seed + "-p-" + str(p) + "-kdual-" + \
                  str(k_dual) + ".pkl"
 
-# with open(os.path.join(cliargs.result_save_path, data_file_name), "wb") as f_for_pkl:
-#     pickle.dump(data_list, f_for_pkl)
+with open(os.path.join(cliargs.result_save_path, data_file_name), "wb") as f_for_pkl:
+    pickle.dump(data_list, f_for_pkl)

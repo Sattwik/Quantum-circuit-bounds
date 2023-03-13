@@ -10,7 +10,7 @@ from datetime import datetime
 from datetime import date
 
 def sweep_fermion(N_list, p_list, d_list, k_dual_list):
-    max_threads = 6
+    max_threads = 9
 
     # Setting up directory to save
     today = date.today()
@@ -76,7 +76,7 @@ def submit_simulation(N, d, seed, p, k_dual, result_save_path):
 
 N_list = [20]
 p_list = [0.05]
-d_list = np.arange(3, 17, 2)
+d_list = np.arange(3, 43, 2)
 k_dual_list = [1, 5, 10, 15, 20]
 
 sweep_fermion(N_list, p_list, d_list, k_dual_list)

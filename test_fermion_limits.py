@@ -25,7 +25,7 @@ from fermions import gaussian, fermion_test_utils
 
 colorama.init()
 
-N = 20
+N = 10
 assert(N%2 == 0)
 d = 2 * 5 - 1
 local_d = 1
@@ -75,7 +75,7 @@ print(colorama.Style.RESET_ALL)
 #---------------------------------- DUAL SETUP --------------------------------#
 #------------------------------------------------------------------------------#
 
-k_dual = 20
+k_dual = 10
 
 lambda_lower_bounds = (0.0) * jnp.ones(d)
 dual_params = gaussian.DualParams(circ_params, p, k_dual, lambda_lower_bounds)
@@ -140,8 +140,62 @@ noisy_bound = -gaussian.dual_obj(jnp.array(dual_opt_result_phase1.x), dual_param
 #--------------------------------- PURITY DUAL --------------------------------#
 #------------------------------------------------------------------------------#
 
+# lambda_lower_bounds_purity = jnp.array([0.0])
+# dual_params_purity = gaussian.DualParamsPurity(circ_params, p, k_dual, lambda_lower_bounds_purity)
+
+# # alpha = 0.01
+# # num_steps = int(5e3)
+
+# # dual_vars_init_purity = 1e-9 * jnp.ones((dual_params_purity.total_num_dual_vars,))
+# # dual_vars_init_purity = dual_vars_init_purity.at[0].set(dual_opt_result_nc.x[0])
+
+# # key, subkey = jax.random.split(key)
+# # dual_vars_init_purity = jax.random.uniform(key, shape = (dual_params_purity.total_num_dual_vars,))/N
+
+# dual_vars_init_purity = jnp.zeros((dual_params_purity.total_num_dual_vars,))
+# dual_vars_init_purity = dual_vars_init_purity.at[1:].set(proj_sigmas_vec)
+
+# # init_obj = gaussian.dual_obj_purity(dual_vars_init_purity, dual_params_purity)
+
+# # lmbda_list = np.linspace(-7, 0, 100)
+# # nb_pur_list = []
+
+# # for lmbda in lmbda_list:  
+# #     dual_vars_purity = jnp.zeros((dual_params_purity.total_num_dual_vars,))
+# #     dual_vars_purity = dual_vars_purity.at[1:].set(proj_sigmas_vec)
+# #     dual_vars_purity = dual_vars_purity.at[:1].set(lmbda)
+# #     nb_pur_list.append(gaussian.dual_obj_purity(dual_vars_purity, dual_params_purity))
+
+# # plt.plot(lmbda_list, nb_pur_list)
+# # # plt.xscale('log')
+# # plt.show()
+
+# # _, sigmas_unwrapped = gaussian.unvec_and_process_dual_vars(dual_vars_init, dual_params)
+# # print(jnp.linalg.norm(sigmas_unwrapped - dual_params.sigmas_proj))
+
+# # dual_obj_over_opti_purity, dual_opt_result_purity = \
+# #     gaussian.optimize(dual_vars_init_purity, dual_params_purity,
+# #                     gaussian.dual_obj_purity, gaussian.dual_grad_purity,
+# #                     num_iters = num_steps, tol_scale = 1e-7)
+# # noisy_bound_purity = -gaussian.dual_obj_purity(jnp.array(dual_opt_result_purity.x), dual_params_purity)
+
+# num_steps = 10000
+# step_size = 0.001
+# dual_obj_over_opti_purity_optax, dual_opt_result_purity_optax = \
+# gaussian.optax_optimize(gaussian.dual_obj_purity, gaussian.dual_grad_purity,
+#                   dual_vars_init_purity, dual_params_purity,
+#                   step_size, num_steps, method = "adam")
+
+# noisy_bound_purity = -jnp.min(dual_obj_over_opti_purity_optax)
+# plt.plot(dual_obj_over_opti_purity_optax)
+# plt.show()
+
+#------------------------------------------------------------------------------#
+#---------------------------- SMOOTH PURITY DUAL ------------------------------#
+#------------------------------------------------------------------------------#
+
 lambda_lower_bounds_purity = jnp.array([0.0])
-dual_params_purity = gaussian.DualParamsPurity(circ_params, p, k_dual, lambda_lower_bounds_purity)
+dual_params_purity_smooth = gaussian.DualParamsPuritySmooth(circ_params, p, k_dual, lambda_lower_bounds_purity)
 
 # alpha = 0.01
 # num_steps = int(5e3)
@@ -152,8 +206,8 @@ dual_params_purity = gaussian.DualParamsPurity(circ_params, p, k_dual, lambda_lo
 # key, subkey = jax.random.split(key)
 # dual_vars_init_purity = jax.random.uniform(key, shape = (dual_params_purity.total_num_dual_vars,))/N
 
-dual_vars_init_purity = jnp.zeros((dual_params_purity.total_num_dual_vars,))
-dual_vars_init_purity = dual_vars_init_purity.at[1:].set(proj_sigmas_vec)
+dual_vars_init_purity_smooth = jnp.zeros((dual_params_purity_smooth.total_num_dual_vars,))
+dual_vars_init_purity_smooth = dual_vars_init_purity_smooth.at[d:].set(proj_sigmas_vec)
 
 # init_obj = gaussian.dual_obj_purity(dual_vars_init_purity, dual_params_purity)
 
@@ -161,10 +215,10 @@ dual_vars_init_purity = dual_vars_init_purity.at[1:].set(proj_sigmas_vec)
 # nb_pur_list = []
 
 # for lmbda in lmbda_list:  
-#     dual_vars_purity = jnp.zeros((dual_params_purity.total_num_dual_vars,))
-#     dual_vars_purity = dual_vars_purity.at[1:].set(proj_sigmas_vec)
-#     dual_vars_purity = dual_vars_purity.at[:1].set(lmbda)
-#     nb_pur_list.append(gaussian.dual_obj_purity(dual_vars_purity, dual_params_purity))
+#     dual_vars_purity_smooth = jnp.zeros((dual_params_purity_smooth.total_num_dual_vars,))
+#     dual_vars_purity_smooth = dual_vars_purity_smooth.at[d:].set(proj_sigmas_vec)
+#     dual_vars_purity_smooth = dual_vars_purity_smooth.at[:d].set(lmbda)
+#     nb_pur_list.append(gaussian.dual_obj_purity_smooth(dual_vars_purity_smooth, dual_params_purity_smooth))
 
 # plt.plot(lmbda_list, nb_pur_list)
 # # plt.xscale('log')
@@ -173,22 +227,11 @@ dual_vars_init_purity = dual_vars_init_purity.at[1:].set(proj_sigmas_vec)
 # _, sigmas_unwrapped = gaussian.unvec_and_process_dual_vars(dual_vars_init, dual_params)
 # print(jnp.linalg.norm(sigmas_unwrapped - dual_params.sigmas_proj))
 
-# dual_obj_over_opti_purity, dual_opt_result_purity = \
-#     gaussian.optimize(dual_vars_init_purity, dual_params_purity,
-#                     gaussian.dual_obj_purity, gaussian.dual_grad_purity,
-#                     num_iters = num_steps, tol_scale = 1e-7)
-# noisy_bound_purity = -gaussian.dual_obj_purity(jnp.array(dual_opt_result_purity.x), dual_params_purity)
-
-num_steps = 10000
-step_size = 0.001
-dual_obj_over_opti_purity_optax, dual_opt_result_purity_optax = \
-gaussian.optax_optimize(gaussian.dual_obj_purity, gaussian.dual_grad_purity,
-                  dual_vars_init_purity, dual_params_purity,
-                  step_size, num_steps, method = "adam")
-
-noisy_bound_purity = -jnp.min(dual_obj_over_opti_purity_optax)
-plt.plot(dual_obj_over_opti_purity_optax)
-plt.show()
+dual_obj_over_opti_purity_smooth, dual_opt_result_purity_smooth = \
+    gaussian.optimize(dual_vars_init_purity_smooth, dual_params_purity_smooth,
+                    gaussian.dual_obj_purity_smooth, gaussian.dual_grad_purity_smooth,
+                    num_iters = num_steps, tol_scale = 1e-7)
+noisy_bound_purity = -gaussian.dual_obj_purity_smooth(jnp.array(dual_opt_result_purity_smooth.x), dual_params_purity_smooth)
 
 # test_vars = jnp.arange(dual_params.total_num_dual_vars)
 # lambdas_test, sigmas_test = gaussian.unvec_and_process_dual_vars(test_vars, dual_params)
