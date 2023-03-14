@@ -3,6 +3,10 @@ V1:
     sigma_d = -H.
     lambda_d = 0.
     OBC.
+
+    TODO:
+        1. test canonicalization with D < actual dim
+        2. lax fori_loops?
 """
 
 import abc
@@ -14,15 +18,10 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 from jax import jit, grad, vmap
-# from tensornetwork.backends.decorators import jit
-# from tensornetwork.backends import backend_factory
 from jax.config import config
+config.update("jax_enable_x64", True)
 import tensornetwork as tn
 tn.set_default_backend("jax")
-config.update("jax_enable_x64", True)
-
-# NEED:
-# 2. Compress
 
 class Hamiltonian():
     def __init__(self, num_sites: int):
@@ -44,288 +43,253 @@ class Hamiltonian():
 
         return full_mat
 
-class MPO():
-    def __init__(self, num_sites: int, name: str = None, arrs: List = None, canon: str = None):
-        """
-        MPO is a list of (tn.Node)s with bonds connected using tn.^.
+#------------------------------------------------------------------------------#
+# MPO methods:
+# MPOs are just a list of jnp arrays (tensors) with shapes consistent
+# with the bonds (l,u,r,d).
+#------------------------------------------------------------------------------#
 
-        Assumes that input arrays have axes shaped as (l, u, r, d)
+def bond_dims(tensors: List[jnp.array]):
+    bdims = [tensors[0].shape[0]]
 
-        self.canon =
-            None: not canonicalized
-            left
-            right
-            Id: is identity MPO
-        """
-        # self.backend =
-        self.d = 2
-        self.num_sites = num_sites
-        self.L = num_sites
-        self.num_bonds = num_sites - 1 # not counting the dim 1 bonds at the ends
-        # self.dims_max = np.where(dims <= self.D, dims, self.D)
-        self.name = name
-        # self.arrs = arrs
+    for i in range(len(tensors) - 1):
+        bdims.append(tensors[i].shape[2])
+    
+    bdims.append(tensors[-1].shape[2])
 
-        self.nodes = []
+    return bdims
 
-        if name is None:
-            name = "?"
-
-        if arrs is not None:
-            for i, arr in enumerate(arrs):
-                self.nodes.append(tn.Node(arr, name = name + str(i),
-                axis_names = ["left", "up", "right", "down"]))
-                self.canon = canon
-
-        else:
-            id = jnp.eye(2, dtype = complex)
-            id = id.reshape((1, 2, 1, 2))
-            self.nodes = [tn.Node(id, name = "Id" + str(i),
-            axis_names = ["left", "up", "right", "down"])] * self.num_sites
-            self.canon = "Id"
-
-        self.dims = [node.shape[2] for node in self.nodes[:-1]]
-
-        assert(len(self.dims) == self.num_bonds)
-
-        for i in range(num_sites - 1):
-            nodeL = self.nodes[i]
-            nodeR = self.nodes[i + 1]
-            bond = nodeL["right"] ^ nodeR["left"]
-
-@jit
-def full_contract(arrs: List[jnp.array]):
+def full_contract(tensors: List[jnp.array]):
     """
     WARNING: memory expensive!!
+    Assumes dim(l1) = dim(rN) = 1
+
+    Not checked for random matrices. Verified through HamSumZ. 
     """
+    num_sites = len(tensors)
 
-    mpo = MPO(len(arrs), arrs = arrs, canon = None)
+    res = tensors[0]
 
-    full_op = tn.contractors.auto(mpo.nodes,
-    output_edge_order = [mpo.nodes[0]["left"]] + \
-    [node["up"] for node in mpo.nodes] + \
-    [node["down"] for node in mpo.nodes] + \
-    [mpo.nodes[-1]["right"]])
+    for i in range(num_sites-1):
+        res = jnp.tensordot(res, tensors[i + 1], axes=((-2,), (0,))) # (l) (u) (d) (u') (r') (d')
 
-    full_op = jnp.squeeze(full_op.tensor)
-    full_op = jnp.reshape(full_op, (2**mpo.num_sites, 2**mpo.num_sites))
+    res = jnp.swapaxes(res, -1, -2) # l, u1, d1, u2, d2, ..., dN, rN
+    res = jnp.squeeze(res) # u1, d1, u2, d2, ..., dN
 
-    return full_op
+    # (u1) (d1) (u2) (d2) ... (uN) (dN) -> (u1) (u2) ... (uN) (d1) (d2) ... (dN)
+    # [0, 2, 4, ..., 2N - 2, 1, 3, ..., 2N - 1]
+    i1 = np.arange(0, 2 * num_sites - 1, 2)
+    i2 = np.arange(1, 2 * num_sites, 2)
+    i = np.concatenate((i1, i2))
+    res = jnp.transpose(res, tuple(i))
 
-# @partial(jit, backend=backend_factory.get_backend("jax"))
-# @partial(jit, static_argnums = 0)
-def left_canonicalize_body_fun(i, args):
-    arrs, compressed_dims = args
+    res = jnp.reshape(res, (2**num_sites, 2**num_sites))
 
-    nodeL = tn.Node(arrs[i], axis_names = ["left", "up", "right", "down"])
-    nodeR = tn.Node(arrs[i + 1], axis_names = ["left", "up", "right", "down"])
+    return res
 
-    nodeL["right"] ^ nodeR["left"]
+@partial(jit, static_argnums = 1)
+def left_split_lurd_tensor(tensor: jnp.array, D = None):
+    """
+    checked through check_canon and full_contract.
+    """
+    tensor_copy = jnp.swapaxes(tensor, -1, -2) # l, u, d, r
+    tensor_copy = jnp.reshape(tensor_copy,
+    (tensor_copy.shape[0] * tensor_copy.shape[1] * tensor_copy.shape[2],
+    tensor_copy.shape[3])) # lud, r
+    u, s, vh = jnp.linalg.svd(tensor_copy, full_matrices = False)
 
-    left_node, S_node, right_node, trunc_S_vals = \
-    tn.split_node_full_svd(
-    nodeL,
-    left_edges = [nodeL["left"], nodeL["up"], nodeL["down"]],
-    right_edges = [nodeL["right"]],
-    max_singular_values = compressed_dims.at[i].get(),
-    left_name = "whatevs",
-    left_edge_name = "right",
-    right_edge_name = "Sr")
+    # u.shape = (lud, D)
+    # s.shape = (D,)
+    # vh.shape = (D, r)
 
-    left_node.reorder_edges([left_node["left"], left_node["up"],
-                            S_node["right"], left_node["down"]])
+    if D is not None:
+        # D = jnp.min(jnp.array((D, K))) #JAX conveniently takes care of this
+        # with how an out of bounds index is handled
+        s = s[:D]
+        u = u[:, :D]
+        vh = vh[:D, :]
 
-    res = tn.contract_between(S_node, right_node, name = "SV",
-    output_edge_order = [S_node["right"], right_node["right"]],
-    axis_names = ["Sl", "right"])
+    u = jnp.reshape(u, (tensor.shape[0], tensor.shape[1], tensor.shape[3], u.shape[1])) # l,u,d,D
+    u = jnp.swapaxes(u, -1, -2) # l, u, D, d
 
-    new_right = tn.contract_between(res, nodeR,
-    name = "whatevs",
-    output_edge_order = [res["Sl"], nodeR["up"],
-    nodeR["right"], nodeR["down"]],
-    axis_names = ["left", "up", "right", "down"])
+    return u, s, vh
 
-    arrs[i] = left_node.tensor
-    arrs[i + 1] = new_right.tensor
+@partial(jit, static_argnums = 1)
+def right_split_lurd_tensor(tensor: jnp.array, D = None):
+    """
+    checked through check_canon and full_contract.
+    """
+    tensor_copy = jnp.swapaxes(tensor, -1, -2) # l, u, d, r
+    tensor_copy = jnp.reshape(tensor_copy,
+    (tensor_copy.shape[0],
+    tensor_copy.shape[1] * tensor_copy.shape[2] * tensor_copy.shape[3])) # l, udr
+    u, s, vh = jnp.linalg.svd(tensor_copy, full_matrices = False)
 
-    return (arrs, compressed_dims)
+    # u.shape = (l, D)
+    # s.shape = (D,)
+    # vh.shape = (D, udr)
+
+    if D is not None:
+        # D = jnp.min(jnp.array((D, K))) #JAX conveniently takes care of this
+        # with how an out of bounds index is handled
+        s = s[:D]
+        u = u[:, :D]
+        vh = vh[:D, :]
+
+    vh = jnp.reshape(vh, (vh.shape[0], tensor.shape[1], tensor.shape[3], tensor.shape[2])) # D, u, d, r
+    vh = jnp.swapaxes(vh, -1, -2) # D, u, r, d
+
+    return u, s, vh
 
 @partial(jit, static_argnums = (1,))
-def left_canonicalize(arrs: List[jnp.array], D:int = None):
+def left_canonicalize(tensors: List[jnp.array], D:int = None):
     """
     Left canonicalize (leave last site uncanonicalized)
     and compress if D is specified.
+    checked through check_canon and full_contract.
     """
 
-    num_sites = len(arrs)
+    num_sites = len(tensors)
     dims_max = (2 * 2) ** np.concatenate((np.arange(1, num_sites//2 + 1),
                                      np.arange(num_sites//2 - 1, 0, -1)))
     num_bonds = num_sites - 1
 
     if D is not None:
-        compressed_dims = np.where(dims_max <= D, dims_max, D)
+        compressed_dims = jnp.where(dims_max <= D, dims_max, D)
     else:
         compressed_dims = [None] * num_bonds
 
-    # first iteration
-    i = 0
-    nodeL = tn.Node(arrs[i], axis_names = ["left", "up", "right", "down"])
-    nodeR = tn.Node(arrs[i + 1], axis_names = ["left", "up", "right", "down"])
+    for i in range(num_sites - 1):
+        u, s, vh = left_split_lurd_tensor(tensors[i], D = compressed_dims[i])
+        svh = jnp.matmul(jnp.diag(s), vh) # D, r
+        new_right = jnp.tensordot(svh, tensors[i + 1], axes=((-1,), (0,))) # D, u, r, d
 
-    nodeL["right"] ^ nodeR["left"]
+        tensors[i] = u
+        tensors[i + 1] = new_right
 
-    left_node, S_node, right_node, trunc_S_vals = \
-    tn.split_node_full_svd(
-    nodeL,
-    left_edges = [nodeL["left"], nodeL["up"], nodeL["down"]],
-    right_edges = [nodeL["right"]],
-    max_singular_values = compressed_dims[i],
-    left_name = str(i),
-    left_edge_name = "right",
-    right_edge_name = "Sr")
-
-    left_node.reorder_edges([left_node["left"], left_node["up"],
-                            S_node["right"], left_node["down"]])
-
-
-    res = tn.contract_between(S_node, right_node, name = "SV",
-    output_edge_order = [S_node["right"], right_node["right"]],
-    axis_names = ["Sl", "right"])
-
-    new_right = tn.contract_between(res, nodeR,
-    name = str(i + 1),
-    output_edge_order = [res["Sl"], nodeR["up"],
-    nodeR["right"], nodeR["down"]],
-    axis_names = ["left", "up", "right", "down"])
-
-    arrs[i] = left_node.tensor
-    arrs[i + 1] = new_right.tensor
-
-    # middle iterations
-    init_args = (jnp.array(arrs[1:-2]), jnp.array(compressed_dims[1:-1]))
-    arrs[1:-2], _, _, _ = jax.lax.fori_loop(0, num_sites-3,
-    left_canonicalize_body_fun, init_args)
-
-    # last iteration
-    i = num_sites - 2
-    nodeL = tn.Node(arrs[i], axis_names = ["left", "up", "right", "down"])
-    nodeR = tn.Node(arrs[i + 1], axis_names = ["left", "up", "right", "down"])
-
-    nodeL["right"] ^ nodeR["left"]
-
-    left_node, S_node, right_node, trunc_S_vals = \
-    tn.split_node_full_svd(
-    nodeL,
-    left_edges = [nodeL["left"], nodeL["up"], nodeL["down"]],
-    right_edges = [nodeL["right"]],
-    max_singular_values = compressed_dims[i],
-    left_name = str(i),
-    left_edge_name = "right",
-    right_edge_name = "Sr")
-
-    left_node.reorder_edges([left_node["left"], left_node["up"],
-                            S_node["right"], left_node["down"]])
-
-    res = tn.contract_between(S_node, right_node, name = "SV",
-    output_edge_order = [S_node["right"], right_node["right"]],
-    axis_names = ["Sl", "right"])
-
-    new_right = tn.contract_between(res, nodeR,
-    name = str(i + 1),
-    output_edge_order = [res["Sl"], nodeR["up"],
-    nodeR["right"], nodeR["down"]],
-    axis_names = ["left", "up", "right", "down"])
-
-    arrs[i] = left_node.tensor
-    arrs[i + 1] = new_right.tensor
-
-    return arrs
-
-    # for i in range(self.num_sites - 1):
-    #     left_node, S_node, right_node, trunc_S_vals = \
-    #     tn.split_node_full_svd(
-    #     self.nodes[i],
-    #     left_edges = [self.nodes[i]["left"], self.nodes[i]["up"], self.nodes[i]["down"]],
-    #     right_edges = [self.nodes[i]["right"]],
-    #     max_singular_values = compressed_dims[i],
-    #     left_name = self.name + str(i),
-    #     left_edge_name = "right",
-    #     right_edge_name = "Sr")
-    #
-    #     left_node.reorder_edges([left_node["left"], left_node["up"],
-    #                             S_node["right"], left_node["down"]])
-    #
-    #     res = tn.contract_between(S_node, right_node, name = "SV",
-    #     output_edge_order = [S_node["right"], right_node["right"]],
-    #     axis_names = ["Sl", "right"])
-    #
-    #     new_right = tn.contract_between(res, self.nodes[i + 1],
-    #     name = self.name + str(i + 1),
-    #     output_edge_order = [res["Sl"], self.nodes[i + 1]["up"],
-    #     self.nodes[i + 1]["right"], self.nodes[i + 1]["down"]],
-    #     axis_names = ["left", "up", "right", "down"])
-    #
-    #     self.nodes[i] = left_node
-    #     self.nodes[i + 1] = new_right
-
-    # self.canon = "left"
-
-def check_canon_left_body_fun(i, args):
-    arrs, norm_list = args
-
-    check_node = tn.Node(arrs[i], axis_names = ["left", "up", "right", "down"])
-    check_node_conj = tn.replicate_nodes([check_node,], conjugate = True)[0]
-
-    check_node["left"] ^ check_node_conj["left"]
-    check_node["up"] ^ check_node_conj["down"]
-    check_node["down"] ^ check_node_conj["up"]
-
-    check = tn.contract_between(check_node, check_node_conj,
-    output_edge_order = [check_node["right"], check_node_conj["right"]])
-
-    check_tensor = check.tensor
-
-    norm_list.at[i].set(jnp.linalg.norm(check_tensor - jnp.identity(check_tensor.shape[0])))
-
-    return arrs, norm_list
+    return tensors
 
 @partial(jit, static_argnums = (1,))
-def check_canon(arrs: List[jnp.array], canon = "left"):
+def right_canonicalize(tensors: List[jnp.array], D:int = None):
+    """
+    Right canonicalize (leave first site uncanonicalized)
+    and compress if D is specified.
+    checked through check_canon and full_contract.
+    """
 
-    num_sites = len(arrs)
-    norm_list = jnp.zeros(num_sites - 1)
+    num_sites = len(tensors)
+    dims_max = (2 * 2) ** np.concatenate((np.arange(1, num_sites//2 + 1),
+                                     np.arange(num_sites//2 - 1, 0, -1)))
+    num_bonds = num_sites - 1
+
+    if D is not None:
+        compressed_dims = jnp.where(dims_max <= D, dims_max, D)
+    else:
+        compressed_dims = [None] * num_bonds
+
+    for i in range(num_sites - 1, 0, -1):
+        u, s, vh = right_split_lurd_tensor(tensors[i], D = compressed_dims[i - 1])
+        us = jnp.matmul(u, jnp.diag(s)) # l, D
+        new_left = jnp.tensordot(us, tensors[i - 1], axes=((0,), (2,))) #  D l u d
+        new_left = jnp.transpose(new_left, [1, 2, 0, 3])
+
+        tensors[i] = vh
+        tensors[i - 1] = new_left
+
+    return tensors
+
+@partial(jit, static_argnums = (1,))
+def check_canon(tensors: List[jnp.array], canon = "left"):
+    num_sites = len(tensors)
+    norm_list = []
 
     if canon == "left":
-        init_args = (arrs, norm_list)
-        arrs, norm_list = jax.lax.fori_loop(0, num_sites-1, check_canon_left_body_fun, init_args)
-
-        # for i in range(num_sites - 1):
-        #     check_node = tn.Node(arrs[i], axis_names = ["left", "up", "right", "down"])
-        #     check_node_conj = tn.replicate_nodes([check_node,], conjugate = True)[0]
-        #
-        #     check_node["left"] ^ check_node_conj["left"]
-        #     check_node["up"] ^ check_node_conj["down"]
-        #     check_node["down"] ^ check_node_conj["up"]
-        #
-        #     check = tn.contract_between(check_node, check_node_conj,
-        #     output_edge_order = [check_node["right"], check_node_conj["right"]])
-        #
-        #     check_tensor = check.tensor
-        #
-        #     norm_list.append(jnp.linalg.norm(check_tensor - jnp.identity(check_tensor.shape[0])))
-
+        for i in range(num_sites - 1):
+            check = jnp.tensordot(tensors[i], tensors[i].conj(),
+                    axes = ((0, 1, 3), (0, 1, 3)))
+            norm_list.append(jnp.linalg.norm(check - jnp.identity(check.shape[0])))
+    elif canon == "right":
+        for i in range(num_sites - 1, 0, -1):
+            check = jnp.tensordot(tensors[i], tensors[i].conj(),
+                    axes = ((2, 1, 3), (2, 1, 3)))
+            norm_list.append(jnp.linalg.norm(check - jnp.identity(check.shape[0])))
+    else:
+        raise ValueError
     return norm_list
 
-def subtract_MPO(a: MPO, b: MPO):
+@jit
+def subtract_MPO(tensorsA: List[jnp.array], tensorsB: List[jnp.array]):
     """
     Direct sum.
-    """
 
-def trace_MPO_squared(H: MPO):
+    checked through full_contract.
     """
-    Connect up/down edges with a replica (tn.replicate_nodes) and
-    use tn.contract_auto or tn.contract_between.
+    num_sites = len(tensorsA)
+
+    sum_tensors = []
+
+    i = 0
+    tA = tensorsA[i]
+    tB = tensorsB[i]
+
+    new_tensor = jnp.zeros((tA.shape[0], tA.shape[1],
+    tA.shape[2] + tB.shape[2], tA.shape[3]), dtype = complex)
+
+    new_tensor = new_tensor.at[:, :, :tA.shape[2], :].set(tA)
+    new_tensor = new_tensor.at[:, :, tA.shape[2]:, :].set(-tB)
+    sum_tensors.append(new_tensor)
+
+    for i in range(1, num_sites - 1):
+        tA = tensorsA[i]
+        tB = tensorsB[i]
+
+        new_tensor = jnp.zeros((tA.shape[0] + tB.shape[0], tA.shape[1],
+        tA.shape[2] + tB.shape[2], tA.shape[3]), dtype = complex)
+
+        new_tensor = new_tensor.at[:tA.shape[0], :, :tA.shape[2], :].set(tA)
+        new_tensor = new_tensor.at[tA.shape[0]:, :, tA.shape[2]:, :].set(-tB)
+
+        sum_tensors.append(new_tensor)
+
+    i = num_sites - 1
+    tA = tensorsA[i]
+    tB = tensorsB[i]
+
+    new_tensor = jnp.zeros((tA.shape[0] + tB.shape[0], tA.shape[1],
+    tA.shape[2], tA.shape[3]), dtype = complex)
+
+    new_tensor = new_tensor.at[:tA.shape[0], :, :, :].set(tA)
+    new_tensor = new_tensor.at[tA.shape[0]:, :, :, :].set(-tB)
+    sum_tensors.append(new_tensor)
+
+    return sum_tensors
+
+@jit
+def trace_MPO_squared(tensors: List[jnp.array]):
     """
+    checked through full_contract.
+    """
+    # bond_dims = [tensor.shape[2] for tensor in tensors[:-1]]
+    num_sites = len(tensors)
+    tooth = tensors[0]
+
+    for i in range(0, num_sites - 1):
+        # Di = bond_dims[i]
+        # zip = jnp.zeros((Di, Di), dtype = complex)
+        zip = jnp.tensordot(tooth, tensors[i], axes = ((0,1,3), (0,3,1)))
+        # Di (tooth), Di (tensor)
+        tooth = jnp.tensordot(zip, tensors[i+1], axes = ((0,),(0,)))
+        # Di (tooth), Di (tensor) tdot l,u,r,d -> Di (tensor), u,r,d
+
+    res = jnp.tensordot(tooth, tensors[-1], axes = ((0,1,2,3), (0,3,2,1)))
+
+    return res
+
+def energy_MPO(H_tensors: List[jnp.array], mpo_tensors: List[jnp.array]):
+
+#------------------------------------------------------------------------------#
+# Models and circuits
+#------------------------------------------------------------------------------#
 
 def HamSumZ(num_sites: int):
     """
@@ -357,15 +321,275 @@ def HamSumZ(num_sites: int):
 
     return H, arrs
 
+@partial(jit, static_argnums=(1,2))
+def gate_to_MPO(gate: jnp.array, num_sites: int, D: int = None):
+    """
+    this is just general tensor decomposition into MPO. 
+    should be the inverse of full_contract. 
+
+    checked through full_contract. 
+    """
+    # gate.shape = s1s2s3..., s1's2's3'...
+    gate = jnp.reshape(gate, [2] * (2 * num_sites)) # s1,s2,...,s1',s2',...
+
+    # (s1) (s2) ... (sN) (s1') (s2') ... (sN') -> (s1) (s1') ... (sN) (sN')
+    # [0, N, 1, N + 1, ..., N - 1, 2N - 1]
+    i1 = np.arange(num_sites)
+    i2 = num_sites + i1
+    i  = np.zeros(2 * num_sites, dtype = int)
+    i[::2] = i1
+    i[1::2] = i2
+    gate = jnp.transpose(gate, tuple(i))
+
+    gate = jnp.expand_dims(gate, 0) # (l) (s1) (s1') ... (sN) (sN')
+
+    tensors = []
+
+    for i in range(num_sites - 1):
+        lshape = gate.shape[0] # (l)
+        rshape = gate.shape[3:] # (s2) (s2')...
+
+        newshape = (gate.shape[0] * gate.shape[1] * gate.shape[2], np.prod(gate.shape[3:]))
+        gate = jnp.reshape(gate, newshape)
+        # (l s1 s1') (s2 s2' ...)
+        u, s, vh = jnp.linalg.svd(gate, full_matrices = False)
+        # u -> (l s1 s1')(D)
+        # s -> (D)
+        # vh -> (D)(s2 s2' ...)
+        if D is not None:
+            # D = jnp.min(jnp.array((D, K))) #JAX conveniently takes care of this
+            # with how an out of bounds index is handled
+            s = s[:D]
+            u = u[:, :D]
+            vh = vh[:D, :]
+
+        u = jnp.reshape(u, (lshape, 2, 2, s.shape[0]))
+        u = jnp.swapaxes(u, -1, -2)
+
+        gate = jnp.tensordot(jnp.diag(s), vh, axes = ((1), (0)))
+        # gate -> (D) (s2 s2'...)
+        newshape = (gate.shape[0],) + rshape
+        gate = jnp.reshape(gate, newshape) # l, s2, s2'...
+
+        tensors.append(u)
+
+    gate = jnp.expand_dims(gate, 2)
+    tensors.append(gate)
+
+    return tensors, s
+
+#------------------------------------------------------------------------------#
+# Common gates
+#------------------------------------------------------------------------------#
+
+@jit
+def RX(theta:float):
+    X = jnp.array([[0, 1],[1, 0]], dtype = complex)
+    I = jnp.array([[1, 0],[0, 1]], dtype = complex)
+
+    c = jnp.cos(theta/2)
+    s = jnp.sin(theta/2)
+
+    return c * I - 1j * s * X
+
+@jit
+def RXX(theta: float):
+    # not clifford
+    # D = 2
+    c = jnp.cos(theta)
+    s = jnp.sin(theta)
+
+    U = jnp.array([[c, 0.0, 0.0, -1j*s],
+                   [0.0, c, -1j*s, 0.0],
+                   [0.0, -1j*s, c, 0.0],
+                   [-1j*s, 0.0, 0.0, c]], dtype = complex)
+
+    tensors, _ = gate_to_MPO(U, num_sites = 2, D = 2)
+
+    return U, tensors
+
+@jit
+def CNOT():
+    U = jnp.array([[1, 0, 0, 0],
+                   [0, 1, 0, 0],
+                   [0, 0, 0, 1],
+                   [0, 0, 1, 0]], dtype = complex)
+
+    tensors, _ = gate_to_MPO(U, num_sites = 2, D = 2)
+
+    return U, tensors
+
+#------------------------------------------------------------------------------#
+# Circuits and noise
+#------------------------------------------------------------------------------#
+@jit
+def singleq_gate(gate: jnp.array, tensor: jnp.array):
+    """checked."""
+
+    res = jnp.tensordot(gate, tensor, axes = ((1), (1)))
+    # u,d tdot l,u,r,d -> u,l,r,d
+    res = jnp.swapaxes(res, 0, 1) # l,u,r,d
+    res = jnp.tensordot(gate.conj().T, res, axes = ((0), (3)))
+    # u,d tdot l,u,r,d -> d,l,u,r
+    res = jnp.transpose(res, (1, 2, 3, 0))
+
+    return res
+
+@jit
+def twoq_gate(gates: List[jnp.array], tensors: List[jnp.array]):
+    """checked."""
+    res_tensors = []
+
+    num_sites = len(gates)
+
+    for i in range(num_sites):
+        gate = gates[i]
+        tensor = tensors[i]
+
+        res = jnp.tensordot(gate, tensor, axes = ((3), (1)))
+        # gl,gu,gr,gd tdot l,u,r,d -> gl, gu, gr, l, r, d
+        res = jnp.transpose(res, (0, 3, 1, 2, 4, 5)) # gl, l, gu, gr, r, d
+        # gl, l, gu, gr, r, d -> (gl, l), gu, (gr, r), d 
+        res = jnp.reshape(res, (res.shape[0] * res.shape[1], res.shape[2], res.shape[3] * res.shape[4], res.shape[5]))
+
+        gate_herm_conj = jnp.transpose(gate.conj(), (0, 3, 2, 1))
+        # gl,gu,gr,gd -> gl,gd,gr,gu*
+        res = jnp.tensordot(gate_herm_conj, res, axes = ((1), (3)))
+        # gl,gd,gr,gu* tdot l,u,r,d -> gl,gr,gu,l,u,r
+        res = jnp.transpose(res, (0, 3, 4, 1, 5, 2)) # gl, l, u, gr, r, gu
+        res = jnp.reshape(res, (res.shape[0] * res.shape[1], res.shape[2], res.shape[3] * res.shape[4], res.shape[5]))
+
+        res_tensors.append(res)
+
+    return res_tensors
+
+@jit
+def noise_layer(tensors: List[jnp.array], p: float):
+    X = jnp.array([[0,1],[1,0]], dtype = complex) # u, d
+    Y = jnp.array([[0,-1j],[1j,0]], dtype = complex) # u, d
+    Z = jnp.array([[1,0],[0,-1]], dtype = complex) # u, d
+
+    num_sites = len(tensors)
+
+    for i in range(num_sites):
+        tmpX = singleq_gate(X, tensors[i])
+        tmpY = singleq_gate(Y, tensors[i])
+        tmpZ = singleq_gate(Z, tensors[i])
+
+        tensors[i] = (1 - 3 * p/4) * tensors[i] + \
+                     (p/4) * (tmpX + tmpY + tmpZ)
+
+    return tensors
+
+#------------------------------------------------------------------------------#
+# Circuits, initialization
+#------------------------------------------------------------------------------#
+
+class SumZ_RXX():
+    def __init__(self, N: int, d: int, p: float, key):
+
+        self.N = N
+        self.d = d
+        self.p = p
+        self.H, self.H_tensors = HamSumZ(self.N)
+
+        self.site_tuple_list = list(zip(range(0, self.N, 2), range(1, self.N, 2))) + list(zip(range(1, self.N, 2), range(2, self.N, 2)))
+        self.site_tuple_list_inverted = list(zip(range(1, self.N, 2), range(2, self.N, 2))) + list(zip(range(0, self.N, 2), range(1, self.N, 2)))
+
+        theta_half = jax.random.normal(key, shape = (len(self.site_tuple_list), self.d//2))
+        self.theta = jnp.column_stack((theta_half, -jnp.roll(theta_half[:, ::-1], (self.N - 2)//2, axis = 0)))   
+
+        self.psi_init = jnp.zeros((2 ** self.N,), dtype = complex)
+        self.psi_init = self.psi_init.at[-1].set(1.0)
+
+        self.X = jnp.array([[0,1],[1,0]], dtype = complex) # u, d
+        self.Y = jnp.array([[0,-1j],[1j,0]], dtype = complex) # u, d
+        self.Z = jnp.array([[1,0],[0,-1]], dtype = complex) # u, d
+
+    def primal_noisy(self):
+        rho_init = jnp.outer(self.psi_init, self.psi_init.conj().T)
+
+        rho_after_step = rho_init
+
+        for layer_num in range(0, self.d):
+            if layer_num < self.d//2:
+                gate_tuples = self.site_tuple_list
+            else:
+                gate_tuples = self.site_tuple_list_inverted
+
+            # nn unitaries
+            for i_tuple, site_tuple in enumerate(gate_tuples):
+                theta = self.theta.at[i_tuple, layer_num].get()
+
+                U_2site, _ = RXX(theta)
+
+                dim_left = 2 ** site_tuple[0]
+                dim_right = 2 ** (self.N - site_tuple[-1] - 1)
+
+                identity_left = jnp.identity(dim_left)
+                identity_right = jnp.identity(dim_right)
+
+                U_2site_full = jnp.kron(identity_left, jnp.kron(U_2site, identity_right))
+
+                rho_after_step = jnp.matmul(U_2site_full, jnp.matmul(rho_after_step, U_2site_full.conj().T)) 
+
+            # noise
+            for site in range(self.N):
+                dim_left = 2 ** site
+                dim_right = 2 ** (self.N - site - 1)
+
+                identity_left = jnp.identity(dim_left)
+                identity_right = jnp.identity(dim_right)
+
+                X_full = jnp.kron(identity_left, jnp.kron(self.X, identity_right))
+                Y_full = jnp.kron(identity_left, jnp.kron(self.Y, identity_right))
+                Z_full = jnp.kron(identity_left, jnp.kron(self.Z, identity_right))
+
+                rho_after_step = (1 - 3 * self.p/4) * rho_after_step \
+                + (self.p/4) * (jnp.matmul(X_full, jnp.matmul(rho_after_step, X_full)) + \
+                                jnp.matmul(Y_full, jnp.matmul(rho_after_step, Y_full)) + \
+                                jnp.matmul(Z_full, jnp.matmul(rho_after_step, Z_full)))
+
+        return jnp.trace(jnp.matmul(self.H.full_ham(), rho_after_step))
+
+    def dual_unitary_layer_on_mpo(self, layer_num: int, mpo_tensors: List[jnp.array]):
+        if layer_num < self.d//2:
+            gate_tuples = self.site_tuple_list
+        else:
+            gate_tuples = self.site_tuple_list_inverted
+
+        for i_tuple, gate_tuple in enumerate(gate_tuples):
+            theta = self.theta.at[i_tuple, layer_num].get() 
+            _, gate_tensors = RXX(-theta) #conjugate the gate
+
+            mpo_tensors = twoq_gate(gate_tensors, mpo_tensors)
+        
+        return mpo_tensors
+    
+    def noisy_dual_layer_on_mpo(self, layer_num: int, mpo_tensors: List[jnp.array]):
+        mpo_tensors = noise_layer(mpo_tensors, self.p)
+        mpo_tensors = self.dual_unitary_layer_on_mpo(layer_num, mpo_tensors)
+
+        return mpo_tensors
+    
+    def init_mpo(self, D: int):
+        mpo_tensors = -self.H_tensors
+
+        for i in range(self.d, 0, -1):
+            mpo_tensors = self.noisy_dual_layer_on_mpo(i, mpo_tensors)
+            mpo_tensors = left_canonicalize(mpo_tensors, D)
+
+        return mpo_tensors
+    
+
+
+
+
 # managing bond dims?
     # optimization will need fixed sizes for MPOs
-# subtract/sum with negation
-    # probably easiest to implement subtraction directly
 # dual circuit
 # vec to MPO
     # vec to operators first
     # sum with conj tr to get Herm
-# tr(.^2)
-    # optimal contraction order?
 # local Ham to MPO
     # ??

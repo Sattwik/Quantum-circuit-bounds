@@ -12,39 +12,49 @@ import tensornetwork as tn
 tn.set_default_backend("jax")
 config.update("jax_enable_x64", True)
 
-from vqa_bounds import mpo_jnp
+from vqa_bounds import mpo
 
-num_sites = 5
+num_sites = 4
+
+#-------------------------------------------#
+#----------- circuit primal test -----------#
+#-------------------------------------------#
+
+seed = 69
+key = jax.random.PRNGKey(seed)
+circ = mpo.SumZ_RXX(N = num_sites, d = 8, p = 0.0, key = key)
+
+print(circ.primal_noisy())
 
 #-------------------------------------------#
 #----------- two qubit gate test -----------#
 #-------------------------------------------#
 
-tensors = [jax.random.normal(shape = (i + 1, 2, i + 2, 2), key = jax.random.PRNGKey(i), dtype = complex) for i in range(num_sites)]
-lastshape = tensors[-1].shape[0:2] + (1,) + (tensors[-1].shape[3],)
-tensors[-1] = jax.random.normal(shape = lastshape, key = jax.random.PRNGKey(num_sites + 1), dtype = complex)
+# tensors = [jax.random.normal(shape = (i + 1, 2, i + 2, 2), key = jax.random.PRNGKey(i), dtype = complex) for i in range(num_sites)]
+# lastshape = tensors[-1].shape[0:2] + (1,) + (tensors[-1].shape[3],)
+# tensors[-1] = jax.random.normal(shape = lastshape, key = jax.random.PRNGKey(num_sites + 1), dtype = complex)
 
-full_tensor_pre = mpo_jnp.full_contract(tensors)
+# full_tensor_pre = mpo.full_contract(tensors)
 
-sites_to_gate = [0,1]
+# sites_to_gate = [0,1]
 
-_, gate_tensor = mpo_jnp.CNOT()
-identity_left = jnp.identity(2 ** (sites_to_gate[0]), dtype = complex) 
-identity_right = jnp.identity(2 ** (num_sites - sites_to_gate[0] - 2), dtype = complex) 
-gate_full = jnp.kron(identity_left, jnp.kron(mpo_jnp.full_contract(gate_tensor), identity_right))
+# _, gate_tensor = mpo.CNOT()
+# identity_left = jnp.identity(2 ** (sites_to_gate[0]), dtype = complex) 
+# identity_right = jnp.identity(2 ** (num_sites - sites_to_gate[0] - 2), dtype = complex) 
+# gate_full = jnp.kron(identity_left, jnp.kron(mpo.full_contract(gate_tensor), identity_right))
 
-print(jnp.linalg.norm(jnp.matmul(mpo_jnp.full_contract(gate_tensor), mpo_jnp.full_contract(gate_tensor).conj().T) - jnp.identity(4)))
+# print(jnp.linalg.norm(jnp.matmul(mpo.full_contract(gate_tensor), mpo.full_contract(gate_tensor).conj().T) - jnp.identity(4)))
 
-new_tensors = mpo_jnp.twoq_gate(gate_tensor, [tensors[i] for i in sites_to_gate])
+# new_tensors = mpo.twoq_gate(gate_tensor, [tensors[i] for i in sites_to_gate])
 
-for i, site in enumerate(sites_to_gate):
-    tensors[site] = new_tensors[i]
+# for i, site in enumerate(sites_to_gate):
+#     tensors[site] = new_tensors[i]
 
-full1 = mpo_jnp.full_contract(tensors)
+# full1 = mpo.full_contract(tensors)
 
-full2 = jnp.matmul(gate_full, jnp.matmul(full_tensor_pre, gate_full.conj().T))
+# full2 = jnp.matmul(gate_full, jnp.matmul(full_tensor_pre, gate_full.conj().T))
 
-print(jnp.linalg.norm(full1 - full2))
+# print(jnp.linalg.norm(full1 - full2))
 
 #-------------------------------------------#
 #----------- one qubit gate test -----------#
@@ -54,21 +64,21 @@ print(jnp.linalg.norm(full1 - full2))
 # lastshape = tensors[-1].shape[0:2] + (1,) + (tensors[-1].shape[3],)
 # tensors[-1] = jax.random.normal(shape = lastshape, key = jax.random.PRNGKey(num_sites + 1), dtype = complex)
 
-# full_tensor_pre = mpo_jnp.full_contract(tensors)
+# full_tensor_pre = mpo.full_contract(tensors)
 
 # site_to_gate = 1
 
-# gate_tensor = mpo_jnp.RX(np.pi/2)
+# gate_tensor = mpo.RX(np.pi/2)
 # identity_left = jnp.identity(2 ** (site_to_gate), dtype = complex) 
 # identity_right = jnp.identity(2 ** (num_sites - site_to_gate - 1), dtype = complex) 
 # gate_full = jnp.kron(identity_left, jnp.kron(gate_tensor, identity_right))
 
 # print(jnp.matmul(gate_tensor, gate_tensor.conj().T))
 
-# new_tensor = mpo_jnp.singleq_gate(gate_tensor, tensors[site_to_gate])
+# new_tensor = mpo.singleq_gate(gate_tensor, tensors[site_to_gate])
 # tensors[site_to_gate] = new_tensor
 
-# full1 = mpo_jnp.full_contract(tensors)
+# full1 = mpo.full_contract(tensors)
 
 # full2 = jnp.matmul(gate_full, jnp.matmul(full_tensor_pre, gate_full.conj().T))
 
@@ -94,8 +104,8 @@ print(jnp.linalg.norm(full1 - full2))
 # #                   [0, 0, 0, 1],
 # #                   [0, 0, 1, 0]], dtype = complex)
 
-# tensors, s = mpo_jnp.gate_to_MPO(U, num_sites = 2, D = 4)
-# T_full = mpo_jnp.full_contract(tensors)
+# tensors, s = mpo.gate_to_MPO(U, num_sites = 2, D = 4)
+# T_full = mpo.full_contract(tensors)
 
 # print(jnp.linalg.norm(U - T_full))
 
@@ -108,8 +118,8 @@ print(jnp.linalg.norm(full1 - full2))
 # lastshape = tensors[-1].shape[0:2] + (1,) + (tensors[-1].shape[3],)
 # tensors[-1] = jax.random.normal(shape = lastshape, key = jax.random.PRNGKey(num_sites + 1), dtype = complex)
 #
-# res = mpo_jnp.trace_MPO_squared(tensors)
-# T_full = mpo_jnp.full_contract(tensors)
+# res = mpo.trace_MPO_squared(tensors)
+# T_full = mpo.full_contract(tensors)
 # res2 = jnp.trace(jnp.matmul(T_full, T_full))
 # print(jnp.abs(res - res2))
 
@@ -123,23 +133,23 @@ print(jnp.linalg.norm(full1 - full2))
 # tensors2[-1] = jax.random.normal(shape = lastshape, key = jax.random.PRNGKey(num_sites * 5), dtype = complex)
 # tensors2[0] = jax.random.normal(shape = firstshape, key = jax.random.PRNGKey(num_sites * 9), dtype = complex)
 #
-# stensors = mpo_jnp.subtract_MPO(tensors, tensors2)
+# stensors = mpo.subtract_MPO(tensors, tensors2)
 #
-# full1 = mpo_jnp.full_contract(tensors)
-# full2 = mpo_jnp.full_contract(tensors2)
+# full1 = mpo.full_contract(tensors)
+# full2 = mpo.full_contract(tensors2)
 #
-# print(jnp.linalg.norm(full1 + full2 - mpo_jnp.full_contract(stensors)))
+# print(jnp.linalg.norm(full1 + full2 - mpo.full_contract(stensors)))
 
 #-------------------------------------------#
 #---------------- canon test ---------------#
 #-------------------------------------------#
 
-# ctensors = mpo_jnp.left_canonicalize(tensors)
-# # ctensors = mpo_jnp.right_canonicalize(tensors)
-# norms = mpo_jnp.check_canon(ctensors, canon = "left")
+# ctensors = mpo.left_canonicalize(tensors)
+# # ctensors = mpo.right_canonicalize(tensors)
+# norms = mpo.check_canon(ctensors, canon = "left")
 #
-# T_full = mpo_jnp.full_contract(tensors)
-# CT_full = mpo_jnp.full_contract(ctensors)
+# T_full = mpo.full_contract(tensors)
+# CT_full = mpo.full_contract(ctensors)
 #
 # print(np.linalg.norm(T_full - CT_full))
 
@@ -148,14 +158,14 @@ print(jnp.linalg.norm(full1 - full2))
 # jnp.tensordot(u, u.conj(), axes = ((0, 1, 3), (0, 3, 1)))
 
 
-# M_full = mpo_jnp.full_contract(tensors)
+# M_full = mpo.full_contract(tensors)
 # H_full = H.full_ham()
 #
 # print(jnp.linalg.norm(M_full - H_full))
 
 # tensor = jax.random.normal(shape = (19, 16, 21, 16), key = jax.random.PRNGKey(69))
 
-# u, s, vh = mpo_jnp.left_split_lurd_tensor(tensor, D = 30)
+# u, s, vh = mpo.left_split_lurd_tensor(tensor, D = 30)
 #
 # node = tn.Node(tensor, axis_names = ["left", "up", "right", "down"])
 #
@@ -176,7 +186,7 @@ print(jnp.linalg.norm(full1 - full2))
 # print(jnp.linalg.norm(vh - right_node.tensor))
 # print(jnp.linalg.norm(jnp.diag(s) - S_node.tensor))
 
-# u, s, vh = mpo_jnp.right_split_lurd_tensor(tensor, D = 10)
+# u, s, vh = mpo.right_split_lurd_tensor(tensor, D = 10)
 #
 # node = tn.Node(tensor, axis_names = ["left", "up", "right", "down"])
 #
@@ -209,7 +219,7 @@ print(jnp.linalg.norm(full1 - full2))
 #     compressed_dims = [None] * num_bonds
 #
 # i = 0
-# u, s, vh = mpo_jnp.split_lurd_tensor(tensors[i], D = compressed_dims[i])
+# u, s, vh = mpo.split_lurd_tensor(tensors[i], D = compressed_dims[i])
 # svh = jnp.matmul(jnp.diag(s), vh)
 # new_right = jnp.tensordot(svh, tensors[i + 1], axes=((-1,), (0,)))
 #

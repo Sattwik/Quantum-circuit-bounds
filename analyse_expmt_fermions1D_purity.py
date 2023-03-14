@@ -25,12 +25,12 @@ CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
                   '#999999', '#e41a1c', '#dede00']
 
 
-data_path = "./../vqa_data/0310/20230310-065713"
+data_path = "./../vqa_data/0313/20230313-143850"
 
 N_list = [20]
 p_list = [0.05]
 k_dual_list = [1, 5, 10, 15, 20]
-d_list = np.arange(3, 17, 2)
+d_list = np.arange(3, 43, 2)
 
 num_k_duals = len(k_dual_list)
 num_N = len(N_list)
@@ -198,14 +198,14 @@ for i_N, N in enumerate(N_list):
                         color = 'C1', alpha = 0.1)
 
         for i_k, k_dual in enumerate(k_dual_list):
-            mean_approx_noisy_bound = np.mean(approx_ratio_noisy_bound[i_N, :, :, i_p, i_k], axis = 0)
-            std_approx_noisy_bound = np.std(approx_ratio_noisy_bound[i_N, :, :, i_p, i_k], axis = 0)
+            # mean_approx_noisy_bound = np.mean(approx_ratio_noisy_bound[i_N, :, :, i_p, i_k], axis = 0)
+            # std_approx_noisy_bound = np.std(approx_ratio_noisy_bound[i_N, :, :, i_p, i_k], axis = 0)
 
-            ax.plot(d_list, mean_approx_noisy_bound, marker = '.', color = 'C' + str(i_k + 2), ls = "--")
-            ax.fill_between(d_list,
-                            (mean_approx_noisy_bound - std_approx_noisy_bound),
-                            (mean_approx_noisy_bound + std_approx_noisy_bound),
-                            color = 'C' + str(i_k + 2), alpha = 0.1)
+            # ax.plot(d_list, mean_approx_noisy_bound, marker = '.', color = 'C' + str(i_k + 2), ls = "--")
+            # ax.fill_between(d_list,
+            #                 (mean_approx_noisy_bound - std_approx_noisy_bound),
+            #                 (mean_approx_noisy_bound + std_approx_noisy_bound),
+            #                 color = 'C' + str(i_k + 2), alpha = 0.1)
 
             mean_approx_noisy_bound_purity = np.mean(approx_ratio_noisy_bound_purity[i_N, :, :, i_p, i_k], axis = 0)
             std_approx_noisy_bound_purity = np.std(approx_ratio_noisy_bound_purity[i_N, :, :, i_p, i_k], axis = 0)
