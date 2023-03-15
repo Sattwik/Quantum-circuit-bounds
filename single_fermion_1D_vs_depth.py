@@ -123,15 +123,15 @@ else:
 lambda_lower_bounds_purity = jnp.array([0.0])
 dual_params_purity_smooth = gaussian.DualParamsPuritySmooth(circ_params, p, k_dual, lambda_lower_bounds_purity)
 
-num_steps = 20e3 
+num_steps = 15e3 
 dual_vars_init_purity_smooth = jnp.zeros((dual_params_purity_smooth.total_num_dual_vars,))
 dual_vars_init_purity_smooth = dual_vars_init_purity_smooth.at[d:].set(proj_sigmas_vec)
-dual_vars_init_purity_smooth = dual_vars_init_purity_smooth.at[:d].set(-4)
+# dual_vars_init_purity_smooth = dual_vars_init_purity_smooth.at[:d].set(-4)
 
 dual_obj_over_opti_purity_smooth, dual_opt_result_purity_smooth = \
     gaussian.optimize(dual_vars_init_purity_smooth, dual_params_purity_smooth,
                     gaussian.dual_obj_purity_smooth, gaussian.dual_grad_purity_smooth,
-                    num_iters = num_steps)
+                    num_iters = num_steps, tol_scale = 1e-7)
 noisy_bound_purity = -gaussian.dual_obj_purity_smooth(jnp.array(dual_opt_result_purity_smooth.x), dual_params_purity_smooth)
 
 print(noisy_sol)

@@ -128,8 +128,38 @@ def left_split_lurd_tensor(tensor: jnp.array, D: int):
 
     return u, s, vh
 
+@partial(jit, static_argnames = ('compressed_dims',))
+def left_canonicalize(tensors: List[jnp.array], compressed_dims:Tuple[int]):
+    """
+    Left canonicalize (leave last site uncanonicalized)
+    and compress if D is specified.
+    checked through check_canon and full_contract.
+    """
+
+    num_sites = len(tensors)
+    # dims_max = (2 * 2) ** np.concatenate((np.arange(1, num_sites//2 + 1),
+    #                                  np.arange(num_sites//2 - 1, 0, -1)))
+    # num_bonds = num_sites - 1
+
+    # compressed_dims = jnp.where(dims_max <= D, dims_max, D)
+
+    # if D is not None:
+    #     compressed_dims = jnp.where(dims_max <= D, dims_max, D)
+    # else:
+    #     compressed_dims = [None] * num_bonds
+
+    for i in range(num_sites - 1):
+        u, s, vh = left_split_lurd_tensor(tensors[i], D = compressed_dims[i])
+        svh = jnp.matmul(jnp.diag(s), vh) # D, r
+        new_right = jnp.tensordot(svh, tensors[i + 1], axes=((-1,), (0,))) # D, u, r, d
+
+        tensors[i] = u
+        tensors[i + 1] = new_right
+
+    return tensors
+
 @partial(jit, static_argnames = ('D',))
-def right_split_lurd_tensor(tensor: jnp.array, D = None):
+def right_split_lurd_tensor(tensor: jnp.array, D: int):
     """
     checked through check_canon and full_contract.
     """
@@ -162,9 +192,9 @@ def right_split_lurd_tensor(tensor: jnp.array, D = None):
     return u, s, vh
 
 @partial(jit, static_argnames = ('compressed_dims',))
-def left_canonicalize(tensors: List[jnp.array], compressed_dims:Tuple[int]):
+def right_canonicalize(tensors: List[jnp.array], compressed_dims:Tuple[int]):
     """
-    Left canonicalize (leave last site uncanonicalized)
+    Right canonicalize (leave first site uncanonicalized)
     and compress if D is specified.
     checked through check_canon and full_contract.
     """
@@ -174,40 +204,10 @@ def left_canonicalize(tensors: List[jnp.array], compressed_dims:Tuple[int]):
     #                                  np.arange(num_sites//2 - 1, 0, -1)))
     # num_bonds = num_sites - 1
 
-    # compressed_dims = jnp.where(dims_max <= D, dims_max, D)
-
     # if D is not None:
     #     compressed_dims = jnp.where(dims_max <= D, dims_max, D)
     # else:
     #     compressed_dims = [None] * num_bonds
-
-    for i in range(num_sites - 1):
-        u, s, vh = left_split_lurd_tensor(tensors[i], D = compressed_dims[i])
-        svh = jnp.matmul(jnp.diag(s), vh) # D, r
-        new_right = jnp.tensordot(svh, tensors[i + 1], axes=((-1,), (0,))) # D, u, r, d
-
-        tensors[i] = u
-        tensors[i + 1] = new_right
-
-    return tensors
-
-@partial(jit, static_argnames = ('D',))
-def right_canonicalize(tensors: List[jnp.array], D:int = None):
-    """
-    Right canonicalize (leave first site uncanonicalized)
-    and compress if D is specified.
-    checked through check_canon and full_contract.
-    """
-
-    num_sites = len(tensors)
-    dims_max = (2 * 2) ** np.concatenate((np.arange(1, num_sites//2 + 1),
-                                     np.arange(num_sites//2 - 1, 0, -1)))
-    num_bonds = num_sites - 1
-
-    if D is not None:
-        compressed_dims = jnp.where(dims_max <= D, dims_max, D)
-    else:
-        compressed_dims = [None] * num_bonds
 
     for i in range(num_sites - 1, 0, -1):
         u, s, vh = right_split_lurd_tensor(tensors[i], D = compressed_dims[i - 1])
@@ -624,6 +624,12 @@ class SumZ_RXX():
 
         for i in range(self.d-1, -1, -1):
             mpo_tensors = self.noisy_dual_layer_on_mpo(i, mpo_tensors)
+            
+            # canonicalize
+            compressed_dims = tuple(bond_dims(mpo_tensors)[1:-1])
+            mpo_tensors = right_canonicalize(tensors = mpo_tensors, compressed_dims = compressed_dims)
+
+            # compress
             compressed_dims = gen_compression_dims(D, self.N)
             mpo_tensors = left_canonicalize(tensors = mpo_tensors, compressed_dims = compressed_dims)
 

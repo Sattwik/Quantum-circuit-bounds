@@ -23,11 +23,11 @@ num_sites = 4
 seed = 420
 key = jax.random.PRNGKey(seed)
 circ = mpo.SumZ_RXX(N = num_sites, d = 4, p = 0.0, key = key)
-circ.theta = jnp.zeros(circ.theta.shape)
+# circ.theta = jnp.zeros(circ.theta.shape)
 
 primal1 = circ.primal_noisy()
 
-init_mpo_tensors = circ.init_mpo(D = 2 ** num_sites)
+init_mpo_tensors = circ.init_mpo(D = 4)
 
 primal2 = mpo.trace_two_MPOs(circ.psi_init_tensors, init_mpo_tensors)
 

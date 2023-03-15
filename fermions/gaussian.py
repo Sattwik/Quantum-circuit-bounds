@@ -1632,7 +1632,7 @@ def dual_obj_purity_smooth(dual_vars: jnp.array, dual_params: DualParamsPurity):
     q_powers = jnp.array([q**i for i in range(d)])
 
     entropy_bounds = N * p * jnp.log(2) * \
-             jnp.array([jnp.sum(q_powers.at[:i+1].get()) for i in range(d)])
+                jnp.array([jnp.sum(q_powers.at[:i+1].get()) for i in range(d)])
     purity_bounds = jnp.exp(-entropy_bounds)
 
     cost = 0

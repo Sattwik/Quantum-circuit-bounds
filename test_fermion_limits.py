@@ -25,16 +25,16 @@ from fermions import gaussian, fermion_test_utils
 
 colorama.init()
 
-N = 10
+N = 20
 assert(N%2 == 0)
-d = 2 * 5 - 1
+d = 5
 local_d = 1
 k = 1
 
 rng = np.random.default_rng()
 # seed = rng.integers(low=0, high=100, size=1)[0]
 # seed = 69
-seed = N + 69
+seed = N
 key = jax.random.PRNGKey(seed)
 
 print(key)
@@ -75,7 +75,7 @@ print(colorama.Style.RESET_ALL)
 #---------------------------------- DUAL SETUP --------------------------------#
 #------------------------------------------------------------------------------#
 
-k_dual = 10
+k_dual = 20
 
 lambda_lower_bounds = (0.0) * jnp.ones(d)
 dual_params = gaussian.DualParams(circ_params, p, k_dual, lambda_lower_bounds)
@@ -101,39 +101,39 @@ noisy_bound_nc = -gaussian.dual_obj_no_channel(jnp.array(dual_opt_result_nc.x), 
 gaussian.set_all_sigmas(dual_params)
 proj_sigmas_vec = gaussian.sigmas_to_vec(dual_params.sigmas_proj, dual_params)
 
-dual_vars_init = jnp.zeros((dual_params.total_num_dual_vars,))
-dual_vars_init = dual_vars_init.at[d:].set(proj_sigmas_vec)
+# dual_vars_init = jnp.zeros((dual_params.total_num_dual_vars,))
+# dual_vars_init = dual_vars_init.at[d:].set(proj_sigmas_vec)
 
-# lmbda_list = np.linspace(-7, 0, 100)
-# nb_list = []
+# # lmbda_list = np.linspace(-7, 0, 100)
+# # nb_list = []
 
-# for lmbda in lmbda_list:
-#     dual_vars = jnp.zeros((dual_params.total_num_dual_vars,))
-#     dual_vars = dual_vars.at[d:].set(proj_sigmas_vec)
-#     dual_vars = dual_vars.at[:d].set(lmbda)
-#     nb_list.append(-gaussian.dual_obj(dual_vars, dual_params))
+# # for lmbda in lmbda_list:
+# #     dual_vars = jnp.zeros((dual_params.total_num_dual_vars,))
+# #     dual_vars = dual_vars.at[d:].set(proj_sigmas_vec)
+# #     dual_vars = dual_vars.at[:d].set(lmbda)
+# #     nb_list.append(-gaussian.dual_obj(dual_vars, dual_params))
 
-# plt.plot(lmbda_list, nb_list)
-# # plt.xscale('log')
-# plt.show()
+# # plt.plot(lmbda_list, nb_list)
+# # # plt.xscale('log')
+# # plt.show()
 
 
-# key, subkey = jax.random.split(key)
-# print(key)
-# dual_vars_init = jax.random.uniform(key, shape = (dual_params.total_num_dual_vars,))/N
+# # key, subkey = jax.random.split(key)
+# # print(key)
+# # dual_vars_init = jax.random.uniform(key, shape = (dual_params.total_num_dual_vars,))/N
 
-# dual_vars_init = jnp.arange(0, dual_params.total_num_dual_vars)
+# # dual_vars_init = jnp.arange(0, dual_params.total_num_dual_vars)
 
-# lambdas, sigmas = gaussian.unvec_and_process_dual_vars(dual_vars_init, dual_params)
+# # lambdas, sigmas = gaussian.unvec_and_process_dual_vars(dual_vars_init, dual_params)
 
-# alpha = 0.01
-num_steps = int(5e3)
+# # alpha = 0.01
+# num_steps = int(5e3)
 
-dual_obj_over_opti_phase1, dual_opt_result_phase1 = \
-    gaussian.optimize(dual_vars_init, dual_params,
-                    gaussian.dual_obj, gaussian.dual_grad,
-                    num_iters = num_steps)
-noisy_bound = -gaussian.dual_obj(jnp.array(dual_opt_result_phase1.x), dual_params)
+# dual_obj_over_opti_phase1, dual_opt_result_phase1 = \
+#     gaussian.optimize(dual_vars_init, dual_params,
+#                     gaussian.dual_obj, gaussian.dual_grad,
+#                     num_iters = num_steps)
+# noisy_bound = -gaussian.dual_obj(jnp.array(dual_opt_result_phase1.x), dual_params)
 
 
 #------------------------------------------------------------------------------#
@@ -208,6 +208,7 @@ dual_params_purity_smooth = gaussian.DualParamsPuritySmooth(circ_params, p, k_du
 
 dual_vars_init_purity_smooth = jnp.zeros((dual_params_purity_smooth.total_num_dual_vars,))
 dual_vars_init_purity_smooth = dual_vars_init_purity_smooth.at[d:].set(proj_sigmas_vec)
+dual_vars_init_purity_smooth = dual_vars_init_purity_smooth.at[:d].set(2)
 
 # init_obj = gaussian.dual_obj_purity(dual_vars_init_purity, dual_params_purity)
 
@@ -227,6 +228,7 @@ dual_vars_init_purity_smooth = dual_vars_init_purity_smooth.at[d:].set(proj_sigm
 # _, sigmas_unwrapped = gaussian.unvec_and_process_dual_vars(dual_vars_init, dual_params)
 # print(jnp.linalg.norm(sigmas_unwrapped - dual_params.sigmas_proj))
 
+num_steps = 10000
 dual_obj_over_opti_purity_smooth, dual_opt_result_purity_smooth = \
     gaussian.optimize(dual_vars_init_purity_smooth, dual_params_purity_smooth,
                     gaussian.dual_obj_purity_smooth, gaussian.dual_grad_purity_smooth,
@@ -242,14 +244,14 @@ noisy_bound_purity = -gaussian.dual_obj_purity_smooth(jnp.array(dual_opt_result_
 
 
 
-print(colorama.Fore.GREEN + "noisy bound = ", noisy_bound)
+# print(colorama.Fore.GREEN + "noisy bound = ", noisy_bound)
 print(colorama.Fore.GREEN + "noisy bound purity = ", noisy_bound_purity)
 print(colorama.Fore.GREEN + "noisy bound nc = ", noisy_bound_nc)
 print(colorama.Fore.GREEN + "noisy bound nc <= noisy bound? ")
-if noisy_bound_nc <= noisy_bound:
-    print(colorama.Fore.GREEN + "True")
-else:
-    print(colorama.Fore.RED + "False")
+# if noisy_bound_nc <= noisy_bound:
+#     print(colorama.Fore.GREEN + "True")
+# else:
+#     print(colorama.Fore.RED + "False")
 print(colorama.Fore.GREEN + "noisy bound nc <= noisy bound purity? ")
 if noisy_bound_nc <= noisy_bound_purity:
     print(colorama.Fore.GREEN + "True")
