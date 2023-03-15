@@ -25,7 +25,7 @@ CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
                   '#999999', '#e41a1c', '#dede00']
 
 
-data_path = "./../vqa_data/0313/20230313-143850"
+data_path = "./../vqa_data/0314/20230314-140600"
 
 N_list = [20]
 p_list = [0.05]
@@ -198,23 +198,23 @@ for i_N, N in enumerate(N_list):
                         color = 'C1', alpha = 0.1)
 
         for i_k, k_dual in enumerate(k_dual_list):
-            # mean_approx_noisy_bound = np.mean(approx_ratio_noisy_bound[i_N, :, :, i_p, i_k], axis = 0)
-            # std_approx_noisy_bound = np.std(approx_ratio_noisy_bound[i_N, :, :, i_p, i_k], axis = 0)
+            mean_approx_noisy_bound = np.mean(approx_ratio_noisy_bound[i_N, :, :, i_p, i_k], axis = 0)
+            std_approx_noisy_bound = np.std(approx_ratio_noisy_bound[i_N, :, :, i_p, i_k], axis = 0)
 
-            # ax.plot(d_list, mean_approx_noisy_bound, marker = '.', color = 'C' + str(i_k + 2), ls = "--")
-            # ax.fill_between(d_list,
-            #                 (mean_approx_noisy_bound - std_approx_noisy_bound),
-            #                 (mean_approx_noisy_bound + std_approx_noisy_bound),
-            #                 color = 'C' + str(i_k + 2), alpha = 0.1)
-
-            mean_approx_noisy_bound_purity = np.mean(approx_ratio_noisy_bound_purity[i_N, :, :, i_p, i_k], axis = 0)
-            std_approx_noisy_bound_purity = np.std(approx_ratio_noisy_bound_purity[i_N, :, :, i_p, i_k], axis = 0)
-
-            ax.plot(d_list, mean_approx_noisy_bound_purity, marker = '.', color = 'C' + str(i_k + 2), label = r'k = ' + str(k_dual), ls = ":")
+            ax.plot(d_list, mean_approx_noisy_bound, marker = '.', color = 'C' + str(i_k + 2), ls = "--")
             ax.fill_between(d_list,
-                            (mean_approx_noisy_bound_purity - std_approx_noisy_bound_purity),
-                            (mean_approx_noisy_bound_purity + std_approx_noisy_bound_purity),
+                            (mean_approx_noisy_bound - std_approx_noisy_bound),
+                            (mean_approx_noisy_bound + std_approx_noisy_bound),
                             color = 'C' + str(i_k + 2), alpha = 0.1)
+
+            # mean_approx_noisy_bound_purity = np.mean(approx_ratio_noisy_bound_purity[i_N, :, :, i_p, i_k], axis = 0)
+            # std_approx_noisy_bound_purity = np.std(approx_ratio_noisy_bound_purity[i_N, :, :, i_p, i_k], axis = 0)
+
+            # ax.plot(d_list, mean_approx_noisy_bound_purity, marker = '.', color = 'C' + str(i_k + 2), label = r'k = ' + str(k_dual), ls = ":")
+            # ax.fill_between(d_list,
+            #                 (mean_approx_noisy_bound_purity - std_approx_noisy_bound_purity),
+            #                 (mean_approx_noisy_bound_purity + std_approx_noisy_bound_purity),
+            #                 color = 'C' + str(i_k + 2), alpha = 0.1)
 
 
         ax.set_ylabel('Approx. ratio')

@@ -17,14 +17,51 @@ from vqa_bounds import mpo
 num_sites = 4
 
 #-------------------------------------------#
+#-------------- mpo init test --------------#
+#-------------------------------------------#
+
+seed = 420
+key = jax.random.PRNGKey(seed)
+circ = mpo.SumZ_RXX(N = num_sites, d = 4, p = 0.0, key = key)
+circ.theta = jnp.zeros(circ.theta.shape)
+
+primal1 = circ.primal_noisy()
+
+init_mpo_tensors = circ.init_mpo(D = 2 ** num_sites)
+
+primal2 = mpo.trace_two_MPOs(circ.psi_init_tensors, init_mpo_tensors)
+
+print(np.abs(primal1 - primal2))
+
+
+
+#-------------------------------------------#
+#--------------- energy test ---------------#
+#-------------------------------------------#
+
+# tensors = [jax.random.normal(shape = (i + 1, 2, i + 2, 2), key = jax.random.PRNGKey(i), dtype = complex) for i in range(num_sites)]
+# lastshape = tensors[-1].shape[0:2] + (1,) + (tensors[-1].shape[3],)
+# tensors[-1] = jax.random.normal(shape = lastshape, key = jax.random.PRNGKey(num_sites + 1), dtype = complex)
+
+# H_tensors = [jax.random.normal(shape = (i + 1, 2, i + 2, 2), key = jax.random.PRNGKey(i + 69), dtype = complex) for i in range(num_sites)]
+# lastshape = H_tensors[-1].shape[0:2] + (1,) + (H_tensors[-1].shape[3],)
+# H_tensors[-1] = jax.random.normal(shape = lastshape, key = jax.random.PRNGKey(num_sites + 1 + 69), dtype = complex)
+
+# res = mpo.trace_H_MPO(H_tensors, tensors)
+# T_full = mpo.full_contract(tensors)
+# H_full = mpo.full_contract(H_tensors)
+# res2 = jnp.trace(jnp.matmul(H_full, T_full))
+# print(jnp.abs(res - res2))
+
+#-------------------------------------------#
 #----------- circuit primal test -----------#
 #-------------------------------------------#
 
-seed = 69
-key = jax.random.PRNGKey(seed)
-circ = mpo.SumZ_RXX(N = num_sites, d = 8, p = 0.0, key = key)
+# seed = 69
+# key = jax.random.PRNGKey(seed)
+# circ = mpo.SumZ_RXX(N = num_sites, d = 8, p = 0.0, key = key)
 
-print(circ.primal_noisy())
+# print(circ.primal_noisy())
 
 #-------------------------------------------#
 #----------- two qubit gate test -----------#

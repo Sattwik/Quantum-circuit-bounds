@@ -59,6 +59,14 @@ def bond_dims(tensors: List[jnp.array]):
 
     return bdims
 
+def gen_compression_dims(D: int, N: int):
+    dims_max = (2 * 2) ** np.concatenate((np.arange(1, N//2 + 1),
+                                     np.arange(N//2 - 1, 0, -1)))
+
+    compressed_dims = tuple(np.where(dims_max <= D, dims_max, D))
+
+    return compressed_dims
+
 def full_contract(tensors: List[jnp.array]):
     """
     WARNING: memory expensive!!
@@ -87,8 +95,8 @@ def full_contract(tensors: List[jnp.array]):
 
     return res
 
-@partial(jit, static_argnums = 1)
-def left_split_lurd_tensor(tensor: jnp.array, D = None):
+@partial(jit, static_argnames = ('D',))
+def left_split_lurd_tensor(tensor: jnp.array, D: int):
     """
     checked through check_canon and full_contract.
     """
@@ -102,19 +110,25 @@ def left_split_lurd_tensor(tensor: jnp.array, D = None):
     # s.shape = (D,)
     # vh.shape = (D, r)
 
-    if D is not None:
-        # D = jnp.min(jnp.array((D, K))) #JAX conveniently takes care of this
-        # with how an out of bounds index is handled
-        s = s[:D]
-        u = u[:, :D]
-        vh = vh[:D, :]
+    # D = jnp.min(jnp.array((D, K))) #JAX conveniently takes care of this
+    # with how an out of bounds index is handled
+    s = s[:D]
+    u = u[:, :D]
+    vh = vh[:D, :]
+
+    # if D is not None:
+    #     # D = jnp.min(jnp.array((D, K))) #JAX conveniently takes care of this
+    #     # with how an out of bounds index is handled
+    #     s = s[:D]
+    #     u = u[:, :D]
+    #     vh = vh[:D, :]
 
     u = jnp.reshape(u, (tensor.shape[0], tensor.shape[1], tensor.shape[3], u.shape[1])) # l,u,d,D
     u = jnp.swapaxes(u, -1, -2) # l, u, D, d
 
     return u, s, vh
 
-@partial(jit, static_argnums = 1)
+@partial(jit, static_argnames = ('D',))
 def right_split_lurd_tensor(tensor: jnp.array, D = None):
     """
     checked through check_canon and full_contract.
@@ -129,20 +143,26 @@ def right_split_lurd_tensor(tensor: jnp.array, D = None):
     # s.shape = (D,)
     # vh.shape = (D, udr)
 
-    if D is not None:
-        # D = jnp.min(jnp.array((D, K))) #JAX conveniently takes care of this
-        # with how an out of bounds index is handled
-        s = s[:D]
-        u = u[:, :D]
-        vh = vh[:D, :]
+    # D = jnp.min(jnp.array((D, K))) #JAX conveniently takes care of this
+    # with how an out of bounds index is handled
+    s = s[:D]
+    u = u[:, :D]
+    vh = vh[:D, :]
+
+    # if D is not None:
+    #     # D = jnp.min(jnp.array((D, K))) #JAX conveniently takes care of this
+    #     # with how an out of bounds index is handled
+    #     s = s[:D]
+    #     u = u[:, :D]
+    #     vh = vh[:D, :]
 
     vh = jnp.reshape(vh, (vh.shape[0], tensor.shape[1], tensor.shape[3], tensor.shape[2])) # D, u, d, r
     vh = jnp.swapaxes(vh, -1, -2) # D, u, r, d
 
     return u, s, vh
 
-@partial(jit, static_argnums = (1,))
-def left_canonicalize(tensors: List[jnp.array], D:int = None):
+@partial(jit, static_argnames = ('compressed_dims',))
+def left_canonicalize(tensors: List[jnp.array], compressed_dims:Tuple[int]):
     """
     Left canonicalize (leave last site uncanonicalized)
     and compress if D is specified.
@@ -150,14 +170,16 @@ def left_canonicalize(tensors: List[jnp.array], D:int = None):
     """
 
     num_sites = len(tensors)
-    dims_max = (2 * 2) ** np.concatenate((np.arange(1, num_sites//2 + 1),
-                                     np.arange(num_sites//2 - 1, 0, -1)))
-    num_bonds = num_sites - 1
+    # dims_max = (2 * 2) ** np.concatenate((np.arange(1, num_sites//2 + 1),
+    #                                  np.arange(num_sites//2 - 1, 0, -1)))
+    # num_bonds = num_sites - 1
 
-    if D is not None:
-        compressed_dims = jnp.where(dims_max <= D, dims_max, D)
-    else:
-        compressed_dims = [None] * num_bonds
+    # compressed_dims = jnp.where(dims_max <= D, dims_max, D)
+
+    # if D is not None:
+    #     compressed_dims = jnp.where(dims_max <= D, dims_max, D)
+    # else:
+    #     compressed_dims = [None] * num_bonds
 
     for i in range(num_sites - 1):
         u, s, vh = left_split_lurd_tensor(tensors[i], D = compressed_dims[i])
@@ -169,7 +191,7 @@ def left_canonicalize(tensors: List[jnp.array], D:int = None):
 
     return tensors
 
-@partial(jit, static_argnums = (1,))
+@partial(jit, static_argnames = ('D',))
 def right_canonicalize(tensors: List[jnp.array], D:int = None):
     """
     Right canonicalize (leave first site uncanonicalized)
@@ -198,7 +220,7 @@ def right_canonicalize(tensors: List[jnp.array], D:int = None):
 
     return tensors
 
-@partial(jit, static_argnums = (1,))
+@partial(jit, static_argnames = ('canon',))
 def check_canon(tensors: List[jnp.array], canon = "left"):
     num_sites = len(tensors)
     norm_list = []
@@ -285,7 +307,26 @@ def trace_MPO_squared(tensors: List[jnp.array]):
 
     return res
 
-def energy_MPO(H_tensors: List[jnp.array], mpo_tensors: List[jnp.array]):
+@jit
+def trace_two_MPOs(A_tensors: List[jnp.array], B_tensors: List[jnp.array]):
+    """
+    checked through full_contract.
+    """
+    # bond_dims = [tensor.shape[2] for tensor in tensors[:-1]]
+    num_sites = len(B_tensors)
+    tooth = B_tensors[0]
+
+    for i in range(0, num_sites - 1):
+        # Di = bond_dims[i]
+        # zip = jnp.zeros((Di, Di), dtype = complex)
+        zip = jnp.tensordot(tooth, A_tensors[i], axes = ((0,1,3), (0,3,1)))
+        # Di (tooth), Di (tensor)
+        tooth = jnp.tensordot(zip, B_tensors[i+1], axes = ((0,),(0,)))
+        # Di (tooth), Di (tensor) tdot l,u,r,d -> Di (tensor), u,r,d
+
+    res = jnp.tensordot(tooth, A_tensors[-1], axes = ((0,1,2,3), (0,3,2,1)))
+
+    return res
 
 #------------------------------------------------------------------------------#
 # Models and circuits
@@ -502,6 +543,10 @@ class SumZ_RXX():
         self.psi_init = jnp.zeros((2 ** self.N,), dtype = complex)
         self.psi_init = self.psi_init.at[-1].set(1.0)
 
+        psi_init_local_tensor = jnp.array([[0, 0],[0, 1]], dtype = complex)
+        psi_init_local_tensor = jnp.expand_dims(psi_init_local_tensor, axis = (0,2))
+        self.psi_init_tensors = [psi_init_local_tensor] * self.N
+
         self.X = jnp.array([[0,1],[1,0]], dtype = complex) # u, d
         self.Y = jnp.array([[0,-1j],[1j,0]], dtype = complex) # u, d
         self.Z = jnp.array([[1,0],[0,-1]], dtype = complex) # u, d
@@ -562,7 +607,9 @@ class SumZ_RXX():
             theta = self.theta.at[i_tuple, layer_num].get() 
             _, gate_tensors = RXX(-theta) #conjugate the gate
 
-            mpo_tensors = twoq_gate(gate_tensors, mpo_tensors)
+            res_tensors = twoq_gate(gate_tensors, [mpo_tensors[site] for site in gate_tuple])
+            mpo_tensors[gate_tuple[0]] = res_tensors[0]
+            mpo_tensors[gate_tuple[1]] = res_tensors[1]
         
         return mpo_tensors
     
@@ -573,11 +620,12 @@ class SumZ_RXX():
         return mpo_tensors
     
     def init_mpo(self, D: int):
-        mpo_tensors = -self.H_tensors
+        mpo_tensors = self.H_tensors
 
-        for i in range(self.d, 0, -1):
+        for i in range(self.d-1, -1, -1):
             mpo_tensors = self.noisy_dual_layer_on_mpo(i, mpo_tensors)
-            mpo_tensors = left_canonicalize(mpo_tensors, D)
+            compressed_dims = gen_compression_dims(D, self.N)
+            mpo_tensors = left_canonicalize(tensors = mpo_tensors, compressed_dims = compressed_dims)
 
         return mpo_tensors
     
