@@ -17,21 +17,56 @@ from vqa_bounds import mpo
 num_sites = 4
 
 #-------------------------------------------#
+#------------ vec to mpo test --------------#
+#-------------------------------------------#
+
+shape = mpo.mpo_tensors_shape_from_bond_dim(N = num_sites, D = 6) 
+t_vec_lengths = [s[0] * s[1] * s[2] * s[3] for s in shape]
+vec_total_length = np.sum(t_vec_lengths)
+vec = jnp.arange(vec_total_length)
+
+mpo_tensors = mpo.vec_to_herm_mpo(vec, tuple(shape))
+
+
+#-------------------------------------------#
+#----------- vec to tensor test ------------#
+#-------------------------------------------#
+
+# t_shape = (3,2,7,2)
+# v_shape = mpo.tensor_shape_to_vec_shape(t_shape)
+# vec = jnp.arange(v_shape[0])
+
+# tensor = mpo.vec_to_herm_tensor(vec, t_shape)
+
+# seed = 420
+# key = jax.random.PRNGKey(seed)
+# circ = mpo.SumZ_RXX(N = num_sites, d = 4, p = 0.0, key = key)
+# # circ.theta = jnp.zeros(circ.theta.shape)
+
+# primal1 = circ.primal_noisy()
+
+# init_mpo_tensors = circ.init_mpo(D = 4)
+
+# primal2 = mpo.trace_two_MPOs(circ.psi_init_tensors, init_mpo_tensors)
+
+# print(np.abs(primal1 - primal2))
+
+#-------------------------------------------#
 #-------------- mpo init test --------------#
 #-------------------------------------------#
 
-seed = 420
-key = jax.random.PRNGKey(seed)
-circ = mpo.SumZ_RXX(N = num_sites, d = 4, p = 0.0, key = key)
-# circ.theta = jnp.zeros(circ.theta.shape)
+# seed = 420
+# key = jax.random.PRNGKey(seed)
+# circ = mpo.SumZ_RXX(N = num_sites, d = 4, p = 0.0, key = key)
+# # circ.theta = jnp.zeros(circ.theta.shape)
 
-primal1 = circ.primal_noisy()
+# primal1 = circ.primal_noisy()
 
-init_mpo_tensors = circ.init_mpo(D = 4)
+# init_mpo_tensors = circ.init_mpo(D = 4)
 
-primal2 = mpo.trace_two_MPOs(circ.psi_init_tensors, init_mpo_tensors)
+# primal2 = mpo.trace_two_MPOs(circ.psi_init_tensors, init_mpo_tensors)
 
-print(np.abs(primal1 - primal2))
+# print(np.abs(primal1 - primal2))
 
 
 

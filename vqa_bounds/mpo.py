@@ -49,6 +49,22 @@ class Hamiltonian():
 # with the bonds (l,u,r,d).
 #------------------------------------------------------------------------------#
 
+def mpo_tensors_shape_from_bond_dim(N: int, D: int):
+    compressed_dims = gen_compression_dims(D, N)
+
+    tensor_shapes = []
+    for i in range(N):
+        if i == 0:
+            tensor_shapes.append((1, 2, compressed_dims[i], 2))
+        elif i == N - 1:
+            tensor_shapes.append((compressed_dims[i - 1], 2, 1, 2))
+        else:
+            tensor_shapes.append((compressed_dims[i - 1], 2, compressed_dims[i], 2))
+    return tensor_shapes
+
+def mpo_shape(tensors):
+    return [t.shape for t in tensors]
+
 def bond_dims(tensors: List[jnp.array]):
     bdims = [tensors[0].shape[0]]
 
@@ -636,6 +652,85 @@ class SumZ_RXX():
         return mpo_tensors
     
 
+#------------------------------------------------------------------------------#
+# Vectorization and unvectorization
+#------------------------------------------------------------------------------#
+
+def tensor_shape_to_vec_shape(t_shape: Tuple[int]):
+    l, u, r, d = t_shape
+    s = u # assuming u = d = s
+
+    vec_shape = (l*r*s*s,)
+    return vec_shape
+
+def vec_to_herm_tensor_bodyfun(i, args):
+    vec, tensor, upper_diag_indices, diag_indices, ones_l, ones_r, zeros_s = args
+
+    l = ones_l.shape[0]
+    r = ones_r.shape[0]
+    s = zeros_s.shape[0]
+
+    diag_vec = jax.lax.dynamic_slice_in_dim(vec, i*s*s, s)
+    real_vec = jax.lax.dynamic_slice_in_dim(vec, i*s*s + s, s * (s - 1)//2)
+    imag_vec = jax.lax.dynamic_slice_in_dim(vec, i*s*s + s * (s + 1)//2, s * (s - 1)//2)
+    
+    tensor_i = zeros_s
+    tensor_i = tensor_i.at[upper_diag_indices].set(real_vec + 1j * imag_vec)
+    tensor_i = tensor_i + tensor_i.conj().T
+    tensor_i = tensor_i.at[diag_indices].set(diag_vec)
+
+    tensor = tensor.at[i, :, :].set(tensor_i)
+
+    return (vec, tensor, upper_diag_indices, diag_indices, ones_l, ones_r, zeros_s)
+
+@partial(jit, static_argnames = ('shape',))
+def vec_to_herm_tensor(vec: jnp.array, shape: Tuple[int]):
+    l, s, r, _ = shape # u, d = s 
+
+    # vec = jnp.reshape(vec, (l * r, s * s))
+
+    tensor = jnp.zeros((l * r, s, s), dtype = complex)
+    zeros_s = jnp.zeros((s,s), dtype = complex)
+
+    ones_l = jnp.ones((l,))
+    ones_r = jnp.ones((l,))
+
+    upper_diag_indices = jnp.triu_indices(s, 1)
+    diag_indices = jnp.diag_indices(s)
+
+    init_args = (vec, tensor, upper_diag_indices, diag_indices, ones_l, ones_r, zeros_s)
+
+    _, tensor, _, _, _, _, _ = jax.lax.fori_loop(0, l*r, vec_to_herm_tensor_bodyfun, init_args)
+
+    # for i in range(l * r):
+    #     diag_vec = vec[i, :s]
+    #     real_vec = vec[i, s : s*(s+1)//2]
+    #     imag_vec = vec[i, s*(s+1)//2:]
+
+    #     tensor_i = zeros_s
+    #     tensor_i = tensor_i.at[upper_diag_indices].set(real_vec + 1j * imag_vec)
+    #     tensor_i = tensor_i + tensor_i.conj().T
+    #     tensor_i = tensor_i.at[diag_indices].set(diag_vec)
+
+    #     tensor = tensor.at[i, :, :].set(tensor_i)
+    
+    tensor = jnp.reshape(tensor, (l, r, s, s))
+    tensor = jnp.transpose(tensor, (0, 2, 1, 3))
+
+    return tensor
+
+@partial(jit, static_argnames = ('shape',))
+def vec_to_herm_mpo(vec: jnp.array, shape: Tuple[Tuple[int]]):
+    t_vec_lengths = [s[0] * s[1] * s[2] * s[3] for s in shape]
+    t_vec_slice_indices = [0] + list(np.cumsum(t_vec_lengths))
+
+    mpo_tensors = []
+
+    for i, t_shape in enumerate(shape):
+        t_vec = vec[t_vec_slice_indices[i]:t_vec_slice_indices[i + 1]]
+        mpo_tensors.append(vec_to_herm_tensor(t_vec, t_shape))
+
+    return mpo_tensors
 
 
 

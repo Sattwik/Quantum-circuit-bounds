@@ -25,7 +25,7 @@ from fermions import gaussian, fermion_test_utils
 
 colorama.init()
 
-N = 20
+N = 10
 assert(N%2 == 0)
 d = 5
 local_d = 1
@@ -75,7 +75,7 @@ print(colorama.Style.RESET_ALL)
 #---------------------------------- DUAL SETUP --------------------------------#
 #------------------------------------------------------------------------------#
 
-k_dual = 20
+k_dual = 1
 
 lambda_lower_bounds = (0.0) * jnp.ones(d)
 dual_params = gaussian.DualParams(circ_params, p, k_dual, lambda_lower_bounds)
@@ -208,7 +208,7 @@ dual_params_purity_smooth = gaussian.DualParamsPuritySmooth(circ_params, p, k_du
 
 dual_vars_init_purity_smooth = jnp.zeros((dual_params_purity_smooth.total_num_dual_vars,))
 dual_vars_init_purity_smooth = dual_vars_init_purity_smooth.at[d:].set(proj_sigmas_vec)
-dual_vars_init_purity_smooth = dual_vars_init_purity_smooth.at[:d].set(2)
+dual_vars_init_purity_smooth = dual_vars_init_purity_smooth.at[:d].set(-4)
 
 # init_obj = gaussian.dual_obj_purity(dual_vars_init_purity, dual_params_purity)
 
