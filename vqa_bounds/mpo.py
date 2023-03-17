@@ -734,6 +734,7 @@ def vec_to_herm_mpo(vec: jnp.array, shape: Tuple[Tuple[int]]):
 
 
 
+
 # managing bond dims?
     # optimization will need fixed sizes for MPOs
 # dual circuit
