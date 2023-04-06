@@ -25,7 +25,7 @@ CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
                   '#999999', '#e41a1c', '#dede00']
 
 
-data_path = "./../vqa_data/0316/20230316-094139"
+data_path = "./../vqa_data/0320/20230320-124253"
 
 N_list = [20]
 p_list = [0.05]

@@ -16,16 +16,53 @@ from vqa_bounds import mpo
 
 num_sites = 4
 
+
+
+#-------------------------------------------#
+#----- mpo to (mpo + mpo_dag)/2 test -------#
+#-------------------------------------------#
+
+# tensors = [jax.random.normal(shape = (i + 1, 2, i + 2, 2), key = jax.random.PRNGKey(i), dtype = complex) for i in range(num_sites)]
+# lastshape = tensors[-1].shape[0:2] + (1,) + (tensors[-1].shape[3],)
+# tensors[-1] = jax.random.normal(shape = lastshape, key = jax.random.PRNGKey(num_sites + 1), dtype = complex)
+
+# T_full = mpo.full_contract(tensors)
+
+# T_herm_full = (T_full + T_full.conj().T)/2
+
+# herm_tensors = mpo.hermitize_mpo(tensors)
+
+# T_herm_contract = mpo.full_contract(herm_tensors)
+
+# print(jnp.linalg.norm(T_herm_full - T_herm_contract))
+
+
+#-------------------------------------------#
+#----------- mpo conjugate test ------------#
+#-------------------------------------------#
+
+# tensors = [jax.random.normal(shape = (i + 1, 2, i + 2, 2), key = jax.random.PRNGKey(i), dtype = complex) for i in range(num_sites)]
+# lastshape = tensors[-1].shape[0:2] + (1,) + (tensors[-1].shape[3],)
+# tensors[-1] = jax.random.normal(shape = lastshape, key = jax.random.PRNGKey(num_sites + 1), dtype = complex)
+
+# conj_tensors = mpo.conjugate_mpo(tensors)
+
+# T_full = mpo.full_contract(tensors)
+# T_dag_full = mpo.full_contract(conj_tensors)
+
+# print(jnp.linalg.norm(T_full.conj().T - T_dag_full))
+
+
 #-------------------------------------------#
 #------------ vec to mpo test --------------#
 #-------------------------------------------#
 
-shape = mpo.mpo_tensors_shape_from_bond_dim(N = num_sites, D = 6) 
-t_vec_lengths = [s[0] * s[1] * s[2] * s[3] for s in shape]
-vec_total_length = np.sum(t_vec_lengths)
-vec = jnp.arange(vec_total_length)
+# shape = mpo.mpo_tensors_shape_from_bond_dim(N = num_sites, D = 6) 
+# t_vec_lengths = [s[0] * s[1] * s[2] * s[3] for s in shape]
+# vec_total_length = np.sum(t_vec_lengths)
+# vec = jnp.arange(vec_total_length)
 
-mpo_tensors = mpo.vec_to_herm_mpo(vec, tuple(shape))
+# mpo_tensors = mpo.vec_to_herm_mpo(vec, tuple(shape))
 
 
 #-------------------------------------------#

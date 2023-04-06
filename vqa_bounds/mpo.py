@@ -344,6 +344,33 @@ def trace_two_MPOs(A_tensors: List[jnp.array], B_tensors: List[jnp.array]):
 
     return res
 
+def conjugate_mpo(mpo_tensors: List[jnp.array]):
+    conj_mpo_tensors = []
+    num_sites = len(mpo_tensors)
+
+    for i in range(num_sites):
+        tensor = mpo_tensors[i]
+        tensor = jnp.conjugate(tensor)
+        tensor = jnp.swapaxes(tensor, 1, 3)
+        conj_mpo_tensors.append(tensor)
+
+    return conj_mpo_tensors
+
+def negate_mpo(mpo_tensors: List[jnp.array]):
+    return [-tensor for tensor in mpo_tensors] 
+
+def scale_mpo(mpo_tensors: List[jnp.array], s: float):
+    scaled_tensors = [tensor for tensor in mpo_tensors] 
+    scaled_tensors[0] = s * scaled_tensors[0]
+    return scaled_tensors
+
+def hermitize_mpo(mpo_tensors: List[jnp.array]):
+    minus_conj_mpo_tensors = negate_mpo(conjugate_mpo(mpo_tensors))
+    herm_mpo_tensors = subtract_MPO(mpo_tensors, minus_conj_mpo_tensors)
+    herm_mpo_tensors = scale_mpo(herm_mpo_tensors, 0.5)
+
+    return herm_mpo_tensors
+
 #------------------------------------------------------------------------------#
 # Models and circuits
 #------------------------------------------------------------------------------#
@@ -731,6 +758,48 @@ def vec_to_herm_mpo(vec: jnp.array, shape: Tuple[Tuple[int]]):
         mpo_tensors.append(vec_to_herm_tensor(t_vec, t_shape))
 
     return mpo_tensors
+
+#------------------------------------------------------------------------------#
+# Methods for SOCP
+#------------------------------------------------------------------------------#
+
+def gen_overlap_ham(mpo_tensors: List[jnp.array], site_idx: int):
+
+    """
+    !! edge cases
+    !! check
+    """
+    num_sites = len(mpo_tensors)
+
+    tooth = mpo_tensors[0]
+    for i in range(0, site_idx - 1):
+        zip = jnp.tensordot(tooth, mpo_tensors[i], axes = ((0,1,3), (0,3,1)))
+        # Di (tooth), Di (tensor)
+        tooth = jnp.tensordot(zip, mpo_tensors[i+1], axes = ((0,),(0,)))
+        # Di (tooth), Di (tensor) tdot l,u,r,d -> Di (tensor), u,r,d
+
+    left_mat = jnp.tensordot(tooth, mpo_tensors[site_idx - 1], axes = ((0,1,3), (0,3,1)))
+    # Di (tooth), Di (tensor) = l l'
+
+    tooth = mpo_tensors[-1]
+    for i in range(num_sites - 1, site_idx + 1, -1):
+        zip = jnp.tensordot(tooth, mpo_tensors[i], axes = ((2,1,3), (2,3,1)))
+        # Di (tooth), Di (tensor)
+        tooth = jnp.tensordot(zip, mpo_tensors[i-1], axes = ((0,),(2,)))
+        # Di (tooth), Di (tensor) tdot l,u,r,d -> l, u, Di (tensor),d
+
+    right_mat = jnp.tensordot(tooth, mpo_tensors[site_idx + 1], axes = ((2,1,3), (2,3,1)))
+    # Di (tooth), Di (tensor) = r r'
+
+    
+
+
+
+
+
+
+# def gen_overlap_ham_layer(mpo_tensors: List[jnp.array], layer_tensors: List[jnp.array], site: int):
+    
 
 
 
