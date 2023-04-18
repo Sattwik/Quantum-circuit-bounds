@@ -27,7 +27,7 @@ colorama.init()
 
 N = 6
 assert(N%2 == 0)
-d = 9
+d = 17
 local_d = 1
 k = 1
 
@@ -75,7 +75,7 @@ print(colorama.Style.RESET_ALL)
 #---------------------------------- DUAL SETUP --------------------------------#
 #------------------------------------------------------------------------------#
 
-k_dual = 6
+k_dual = 2 * 6 - 2
 
 lambda_lower_bounds = (0.0) * jnp.ones(d)
 dual_params = gaussian2D.DualParams(circ_params, p, k_dual, lambda_lower_bounds)
@@ -107,7 +107,7 @@ dual_vars_init = dual_vars_init.at[d:].set(proj_sigmas_vec)
 _, sigmas_unwrapped = gaussian2D.unvec_and_process_dual_vars(dual_vars_init, dual_params)
 print(jnp.linalg.norm(sigmas_unwrapped - dual_params.sigmas_proj))
 
-lmbda_list = np.linspace(-6, 0, 100)
+lmbda_list = np.linspace(-7, 0, 100)
 nb_list = []
 
 for lmbda in lmbda_list:
