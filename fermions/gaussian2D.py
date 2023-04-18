@@ -153,6 +153,249 @@ def upper_tri_indices_to_fill(k: int, M: int, N: int):
 #-------------------- FGS tools -------------------#
 #--------------------------------------------------#
 
+def random_2D_NN_ver_odd_normal_hamiltonian_majorana(N: int, key: jnp.array):
+    """
+    Parameters
+    ----------
+    N, N: size of lattice
+
+    Returns
+    -------
+    A random k-local f.g.h. (2NN x 2NN) in Majorana representation
+    """
+
+    neighbors_list = []
+
+    for s in range(0, N * N):
+        i = s//N
+        j = s%N
+
+        if i%2 != 0 and i != N-1:
+            neighbors_of_s = [s, N * (i + 1) + j]
+            neighbors_list.append(neighbors_of_s)
+
+    row_indices = []
+    col_indices = []
+
+    for neighbors in neighbors_list:
+        s_0 = neighbors[0]
+        for s in neighbors[1:]:
+            if s > s_0:
+                row_indices.append(s_0)
+                col_indices.append(s)
+
+    utri_indices = (jnp.array(row_indices), jnp.array(col_indices))
+    utri_rows, utri_cols = utri_indices
+    ltri_indices = (utri_cols, utri_rows)
+    diag_indices = jnp.diag_indices(N * N)
+
+    num_utri_elements = len(utri_indices[0])
+    num_diag_elements = N * N
+
+    hxx = jnp.zeros((N*N, N*N))
+    key, subkey = jax.random.split(key)
+    hxx = hxx.at[utri_indices].set(jax.random.normal(subkey, (num_utri_elements,)))
+    hxx = hxx - hxx.T
+
+    hpp = jnp.zeros((N*N, N*N))
+    key, subkey = jax.random.split(key)
+    hpp = hpp.at[utri_indices].set(jax.random.normal(subkey, (num_utri_elements,)))
+    hpp = hpp - hpp.T
+
+    hxp = jnp.zeros((N*N, N*N))
+    key, subkey = jax.random.split(key)
+    hxp = hxp.at[utri_indices].set(jax.random.normal(subkey, (num_utri_elements,)))
+    key, subkey = jax.random.split(key)
+    hxp = hxp.at[ltri_indices].set(jax.random.normal(subkey, (num_utri_elements,)))
+    key, subkey = jax.random.split(key)
+    hxp = hxp.at[diag_indices].set(jax.random.normal(subkey, (num_diag_elements,)))
+
+    h = jnp.block([[hxx, hxp],
+                  [-hxp.T, hpp]])
+
+    return h, key
+
+def random_2D_NN_ver_even_normal_hamiltonian_majorana(N: int, key: jnp.array):
+    """
+    Parameters
+    ----------
+    N, N: size of lattice
+
+    Returns
+    -------
+    A random k-local f.g.h. (2NN x 2NN) in Majorana representation
+    """
+
+    neighbors_list = []
+
+    for s in range(0, N * N):
+        i = s//N
+        j = s%N
+
+        if i%2 == 0:
+            neighbors_of_s = [s, N * (i + 1) + j]
+            neighbors_list.append(neighbors_of_s)
+
+    row_indices = []
+    col_indices = []
+
+    for neighbors in neighbors_list:
+        s_0 = neighbors[0]
+        for s in neighbors[1:]:
+            if s > s_0:
+                row_indices.append(s_0)
+                col_indices.append(s)
+
+    utri_indices = (jnp.array(row_indices), jnp.array(col_indices))
+    utri_rows, utri_cols = utri_indices
+    ltri_indices = (utri_cols, utri_rows)
+    diag_indices = jnp.diag_indices(N * N)
+
+    num_utri_elements = len(utri_indices[0])
+    num_diag_elements = N * N
+
+    hxx = jnp.zeros((N*N, N*N))
+    key, subkey = jax.random.split(key)
+    hxx = hxx.at[utri_indices].set(jax.random.normal(subkey, (num_utri_elements,)))
+    hxx = hxx - hxx.T
+
+    hpp = jnp.zeros((N*N, N*N))
+    key, subkey = jax.random.split(key)
+    hpp = hpp.at[utri_indices].set(jax.random.normal(subkey, (num_utri_elements,)))
+    hpp = hpp - hpp.T
+
+    hxp = jnp.zeros((N*N, N*N))
+    key, subkey = jax.random.split(key)
+    hxp = hxp.at[utri_indices].set(jax.random.normal(subkey, (num_utri_elements,)))
+    key, subkey = jax.random.split(key)
+    hxp = hxp.at[ltri_indices].set(jax.random.normal(subkey, (num_utri_elements,)))
+    key, subkey = jax.random.split(key)
+    hxp = hxp.at[diag_indices].set(jax.random.normal(subkey, (num_diag_elements,)))
+
+    h = jnp.block([[hxx, hxp],
+                  [-hxp.T, hpp]])
+
+    return h, key
+
+def random_2D_NN_hor_odd_normal_hamiltonian_majorana(N: int, key: jnp.array):
+    """
+    Parameters
+    ----------
+    N, N: size of lattice
+
+    Returns
+    -------
+    A random k-local f.g.h. (2NN x 2NN) in Majorana representation
+    """
+
+    neighbors_list = []
+
+    for s in range(1, N * N, 2):
+        j_0 = s%N
+
+        if j_0 != N - 1:
+            neighbors_of_s = [s, s + 1]
+            neighbors_list.append(neighbors_of_s)
+
+    row_indices = []
+    col_indices = []
+
+    for neighbors in neighbors_list:
+        s_0 = neighbors[0]
+        for s in neighbors[1:]:
+            if s > s_0:
+                row_indices.append(s_0)
+                col_indices.append(s)
+
+    utri_indices = (jnp.array(row_indices), jnp.array(col_indices))
+    utri_rows, utri_cols = utri_indices
+    ltri_indices = (utri_cols, utri_rows)
+    diag_indices = jnp.diag_indices(N * N)
+
+    num_utri_elements = len(utri_indices[0])
+    num_diag_elements = N * N
+
+    hxx = jnp.zeros((N*N, N*N))
+    key, subkey = jax.random.split(key)
+    hxx = hxx.at[utri_indices].set(jax.random.normal(subkey, (num_utri_elements,)))
+    hxx = hxx - hxx.T
+
+    hpp = jnp.zeros((N*N, N*N))
+    key, subkey = jax.random.split(key)
+    hpp = hpp.at[utri_indices].set(jax.random.normal(subkey, (num_utri_elements,)))
+    hpp = hpp - hpp.T
+
+    hxp = jnp.zeros((N*N, N*N))
+    key, subkey = jax.random.split(key)
+    hxp = hxp.at[utri_indices].set(jax.random.normal(subkey, (num_utri_elements,)))
+    key, subkey = jax.random.split(key)
+    hxp = hxp.at[ltri_indices].set(jax.random.normal(subkey, (num_utri_elements,)))
+    key, subkey = jax.random.split(key)
+    hxp = hxp.at[diag_indices].set(jax.random.normal(subkey, (num_diag_elements,)))
+
+    h = jnp.block([[hxx, hxp],
+                  [-hxp.T, hpp]])
+
+    return h, key
+
+def random_2D_NN_hor_even_normal_hamiltonian_majorana(N: int, key: jnp.array):
+    """
+    Parameters
+    ----------
+    N, N: size of lattice
+
+    Returns
+    -------
+    A random k-local f.g.h. (2NN x 2NN) in Majorana representation
+    """
+
+    neighbors_list = []
+
+    for s in range(0, N * N, 2):
+        neighbors_of_s = [s, s + 1]
+        neighbors_list.append(neighbors_of_s)
+
+    row_indices = []
+    col_indices = []
+
+    for neighbors in neighbors_list:
+        s_0 = neighbors[0]
+        for s in neighbors[1:]:
+            if s > s_0:
+                row_indices.append(s_0)
+                col_indices.append(s)
+
+    utri_indices = (jnp.array(row_indices), jnp.array(col_indices))
+    utri_rows, utri_cols = utri_indices
+    ltri_indices = (utri_cols, utri_rows)
+    diag_indices = jnp.diag_indices(N * N)
+
+    num_utri_elements = len(utri_indices[0])
+    num_diag_elements = N * N
+
+    hxx = jnp.zeros((N*N, N*N))
+    key, subkey = jax.random.split(key)
+    hxx = hxx.at[utri_indices].set(jax.random.normal(subkey, (num_utri_elements,)))
+    hxx = hxx - hxx.T
+
+    hpp = jnp.zeros((N*N, N*N))
+    key, subkey = jax.random.split(key)
+    hpp = hpp.at[utri_indices].set(jax.random.normal(subkey, (num_utri_elements,)))
+    hpp = hpp - hpp.T
+
+    hxp = jnp.zeros((N*N, N*N))
+    key, subkey = jax.random.split(key)
+    hxp = hxp.at[utri_indices].set(jax.random.normal(subkey, (num_utri_elements,)))
+    key, subkey = jax.random.split(key)
+    hxp = hxp.at[ltri_indices].set(jax.random.normal(subkey, (num_utri_elements,)))
+    key, subkey = jax.random.split(key)
+    hxp = hxp.at[diag_indices].set(jax.random.normal(subkey, (num_diag_elements,)))
+
+    h = jnp.block([[hxx, hxp],
+                  [-hxp.T, hpp]])
+
+    return h, key
+
 def random_2D_k_local_normal_hamiltonian_majorana(M: int, N: int, k: int, key: jnp.array):
     """
     Parameters
@@ -195,6 +438,41 @@ def random_2D_k_local_normal_hamiltonian_majorana(M: int, N: int, k: int, key: j
 
     return h, key
 
+def k_local_hamiltonian_indicators(N: int, k: int):
+    """
+    Parameters
+    ----------
+    N: number of fermionic modes
+    k < N: range of interactions
+
+    Returns
+    -------
+    A matrix with ones where a k-nearest neighbours interaction
+    Hamiltonian can have elements
+    """
+
+    utri_indices = upper_tri_indices_to_fill(k, N, N)
+    utri_rows, utri_cols = utri_indices
+    ltri_indices = (utri_cols, utri_rows)
+    diag_indices = jnp.diag_indices(N * N)
+
+    hxx = jnp.zeros((N*N, N*N))
+    hxx = hxx.at[utri_indices].set(1.0)
+    hxx = hxx + hxx.T
+
+    hpp = jnp.zeros((N*N, N*N))
+    hpp = hpp.at[utri_indices].set(1.0)
+    hpp = hpp + hpp.T
+
+    hxp = jnp.zeros((N*N, N*N))
+    hxp = hxp.at[utri_indices].set(1.0)
+    hxp = hxp.at[ltri_indices].set(1.0)
+    hxp = hxp.at[diag_indices].set(1.0)
+
+    h = jnp.block([[hxx, hxp],
+                  [hxp.T, hpp]])
+
+    return h
 
 def Omega(N: int) -> jnp.array:
     return jnp.sqrt(1/2) * jnp.block(
@@ -322,6 +600,36 @@ class PrimalParams():
                 random_2D_k_local_normal_hamiltonian_majorana(self.M, self.N, self.k, key)
                 self.layer_hamiltonians.append(random_local_h/self.M/self.N)
                 self.layer_hamiltonians.append(-random_local_h/self.M/self.N)
+        elif mode == "NN_k1":
+            print("NN circuit, k = 1 parent H")
+            self.layer_hamiltonians = []
+
+            for i in range(self.local_d):
+                random_even_h, key = random_2D_NN_hor_even_normal_hamiltonian_majorana(self.N, key)
+                self.layer_hamiltonians.append(random_even_h)
+
+            h_list = []
+            for i in range((self.d - self.local_d)//2):
+                if i%4 == 0:
+                    random_even_h, key = random_2D_NN_hor_even_normal_hamiltonian_majorana(self.N, key)
+                    self.layer_hamiltonians.append(random_even_h)
+                    h_list.append(random_even_h)
+                elif i%4 == 1:
+                    random_odd_h, key = random_2D_NN_hor_odd_normal_hamiltonian_majorana(self.N, key)
+                    self.layer_hamiltonians.append(random_odd_h)
+                    h_list.append(random_odd_h)
+                elif i%4 == 2:
+                    random_even_h, key = random_2D_NN_ver_even_normal_hamiltonian_majorana(self.N, key)
+                    self.layer_hamiltonians.append(random_even_h)
+                    h_list.append(random_even_h)
+                else:
+                    random_odd_h, key = random_2D_NN_ver_odd_normal_hamiltonian_majorana(self.N, key)
+                    self.layer_hamiltonians.append(random_odd_h)
+                    h_list.append(random_odd_h)
+
+            for i in range((self.d - self.local_d)//2):
+                self.layer_hamiltonians.append(-h_list[::-1][i])
+
         elif mode == 'block':
             h_list = []
             for i in range((self.d - self.local_d)//2):
@@ -434,6 +742,50 @@ class DualParams():
         self.total_num_dual_vars = self.circ_params.d + \
         self.circ_params.d * self.num_sigma_vars_layer
 
+def sigmas_to_vec(sigmas: jnp.array, dual_params:DualParams):
+
+    N = dual_params.circ_params.N
+    d = dual_params.circ_params.d
+    block_utri_indices = dual_params.block_utri_indices
+    xp_indices = dual_params.xp_indices
+
+    vars = jnp.zeros((dual_params.circ_params.d * dual_params.num_sigma_vars_layer,))
+
+    init_args = (vars, sigmas, block_utri_indices, xp_indices)
+
+    vars, _, _, _ = jax.lax.fori_loop(0, d, vec_layer_i, init_args)
+
+    return vars
+
+def vec_layer_i(i: int, args: Tuple):
+    vars, sigmas, block_utri_indices, xp_indices = args
+
+    # number of variables in blocks of the full sigma dual var
+    l_xx = block_utri_indices[0].shape[0]
+    l_pp = l_xx
+    l_xp = xp_indices[0].shape[0]
+
+    # total_num_vars
+    l = l_xp + l_xx + l_pp
+
+    sigma_layer = sigmas.at[:,:,i].get()
+
+    N_sq = sigmas.shape[0]//2
+
+    sigma_layer_xx = sigma_layer.at[:N_sq, :N_sq].get()
+    sigma_layer_xp = sigma_layer.at[:N_sq, N_sq:].get()
+    sigma_layer_pp = sigma_layer.at[N_sq:, N_sq:].get()
+
+    sigma_slice_xx = sigma_layer_xx.at[block_utri_indices].get()
+    sigma_slice_pp = sigma_layer_pp.at[block_utri_indices].get()
+    sigma_slice_xp = sigma_layer_xp.at[xp_indices].get()
+
+    sigma_slice = jnp.concatenate((sigma_slice_xx, sigma_slice_pp, sigma_slice_xp))
+
+    vars = jax.lax.dynamic_update_slice_in_dim(vars, sigma_slice, i * l, axis = 0)
+
+    return (vars, sigmas, block_utri_indices, xp_indices)
+
 def unvec_layer_i(i: int, args: Tuple):
     sigmas, sigma_vars, \
     block_utri_indices, block_ltri_indices, block_diag_indices, xp_indices, \
@@ -455,10 +807,12 @@ def unvec_layer_i(i: int, args: Tuple):
 
     # making block matrices
     sigma_layer_xx = zeros_MN.at[block_utri_indices].set(sigma_slice_xx)
-    sigma_layer_xx = sigma_layer_xx.at[block_ltri_indices].set(-sigma_slice_xx)
-
+    sigma_layer_xx = sigma_layer_xx-sigma_layer_xx.T
+    # sigma_layer_xx = sigma_layer_xx.at[block_ltri_indices].set(-sigma_slice_xx)
+    
     sigma_layer_pp = zeros_MN.at[block_utri_indices].set(sigma_slice_pp)
-    sigma_layer_pp = sigma_layer_pp.at[block_ltri_indices].set(-sigma_slice_pp)
+    sigma_layer_pp = sigma_layer_pp-sigma_layer_pp.T
+    # sigma_layer_pp = sigma_layer_pp.at[block_ltri_indices].set(-sigma_slice_pp)
 
     sigma_layer_xp = zeros_MN.at[xp_indices].set(sigma_slice_xp)
 
@@ -684,3 +1038,52 @@ def dual_obj_no_channel(dual_vars: jnp.array, dual_params: DualParams):
 @partial(jit, static_argnums = (1,))
 def dual_grad_no_channel(dual_vars: jnp.array, dual_params: DualParams):
     return grad(dual_obj_no_channel, argnums = 0)(dual_vars, dual_params)
+
+
+#--------------------------------------------------#
+#------- Sigma projection, scaling analysis -------#
+#--------------------------------------------------#
+
+def cond_fun(args):
+    i, _, _, _, _ = args
+    return i >= 0
+
+def set_ith_sigma_projected(args):
+    i, sigmas, layer_hamiltonians, p, proj = args
+
+    epsilon_dag_sigma_i_plus_1 = \
+    noisy_dual_layer(layer_hamiltonians.at[i+1, :, :].get(),
+                     sigmas.at[:,:,i+1].get(), p)
+
+    sigmas = sigmas.at[:, :, i].set(jnp.real(proj * jnp.real(epsilon_dag_sigma_i_plus_1)))
+
+    i = i - 1
+
+    return (i, sigmas, layer_hamiltonians, p, proj)
+
+def set_all_sigmas(dual_params: DualParams):
+    """
+    sets all sigmas to the appropriate local Hamiltonian projection of
+    the dual channel action on next sigma.
+    adds the sigma_proj variable to dual_params
+    """
+
+    N = dual_params.circ_params.N # assuming M = N
+    d = dual_params.circ_params.d
+    h_parent = dual_params.circ_params.h_parent
+    layer_hamiltonians = dual_params.circ_params.layer_hamiltonians
+    p = dual_params.p
+    k_dual = dual_params.k_dual
+
+    proj = k_local_hamiltonian_indicators(N, k_dual)
+
+    sigmas = jnp.zeros((2 * N * N, 2 * N * N, d))
+
+    # setting all the sigmas to the dual channel projected onto local Ham.
+    # last layer sigma is just -H_parent
+    sigmas = sigmas.at[:, :, d - 1].set(-jnp.real(h_parent))
+
+    init_args = (d - 2, sigmas, layer_hamiltonians, p, proj)
+    _, sigmas, _, _, _ = jax.lax.while_loop(cond_fun, set_ith_sigma_projected, init_args)
+
+    dual_params.sigmas_proj = sigmas

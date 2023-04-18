@@ -10,16 +10,21 @@ import qutip
 from matplotlib import rc
 import matplotlib
 
+from plotter import set_size
+
 # rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
 # rc('text', usetex=True)
 # rc('text.latex', preamble=r'\usepackage{amsmath}')
 matplotlib.rcParams["image.cmap"] = "inferno"
-matplotlib.rcParams["axes.titlesize"] = 16
-matplotlib.rcParams["axes.labelsize"] = 14
-matplotlib.rcParams["legend.fontsize"] = 10
-matplotlib.rcParams["font.size"] = 14
-matplotlib.rcParams["xtick.labelsize"] = 10
-matplotlib.rcParams["ytick.labelsize"] = 10
+matplotlib.rcParams["axes.titlesize"] = 25
+matplotlib.rcParams["axes.labelsize"] = 10
+matplotlib.rcParams["legend.fontsize"] = 7
+matplotlib.rcParams["font.size"] = 8
+matplotlib.rcParams["xtick.labelsize"] = 8
+matplotlib.rcParams["ytick.labelsize"] = 8
+rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
+rc('text', usetex=True)
+rc('text.latex', preamble=r'\usepackage{amsmath}')
 CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
                   '#f781bf', '#a65628', '#984ea3',
                   '#999999', '#e41a1c', '#dede00']
@@ -175,14 +180,14 @@ approx_ratio_noisy_bound_nc = noisy_bound_nc_list/clean_sol_list
 
 for i_N, N in enumerate(N_list):
     for i_p, p in enumerate(p_list):
-            
-        fig = plt.figure()
+        width = 510/2
+        fig = plt.figure(figsize=set_size(width, fraction = 1, subplots = (1,1)))
         ax = fig.add_subplot(111)
 
         mean_approx_noisy_sol = np.mean(approx_ratio_noisy_sol[i_N, :, :, i_p, 0], axis = 0)
         std_approx_noisy_sol = np.std(approx_ratio_noisy_sol[i_N, :, :, i_p, 0], axis = 0)
 
-        ax.plot(d_list, mean_approx_noisy_sol, marker = '^', color = 'C0', label = r'Primal')
+        ax.plot(d_list, mean_approx_noisy_sol, marker = '^', color = 'C0', label = r'Primal', markersize = 3, lw = 0.75)
         ax.fill_between(d_list,
                         (mean_approx_noisy_sol - std_approx_noisy_sol),
                         (mean_approx_noisy_sol + std_approx_noisy_sol),
@@ -191,36 +196,36 @@ for i_N, N in enumerate(N_list):
         mean_approx_noisy_bound_nc = np.mean(approx_ratio_noisy_bound_nc[i_N, :, :, i_p, 0], axis = 0)
         std_approx_noisy_bound_nc = np.std(approx_ratio_noisy_bound_nc[i_N, :, :, i_p, 0], axis = 0)
 
-        ax.plot(d_list, mean_approx_noisy_bound_nc, marker = 'D', color = 'C1', label = r'Dual (NC)')
+        ax.plot(d_list, mean_approx_noisy_bound_nc, marker = 'D', color = 'C1', label = r'Entropic', markersize = 3, lw = 0.75)
         ax.fill_between(d_list,
                         (mean_approx_noisy_bound_nc - std_approx_noisy_bound_nc),
                         (mean_approx_noisy_bound_nc + std_approx_noisy_bound_nc),
                         color = 'C1', alpha = 0.1)
 
         for i_k, k_dual in enumerate(k_dual_list):
-            # mean_approx_noisy_bound = np.mean(approx_ratio_noisy_bound[i_N, :, :, i_p, i_k], axis = 0)
-            # std_approx_noisy_bound = np.std(approx_ratio_noisy_bound[i_N, :, :, i_p, i_k], axis = 0)
+            mean_approx_noisy_bound = np.mean(approx_ratio_noisy_bound[i_N, :, :, i_p, i_k], axis = 0)
+            std_approx_noisy_bound = np.std(approx_ratio_noisy_bound[i_N, :, :, i_p, i_k], axis = 0)
 
-            # ax.plot(d_list, mean_approx_noisy_bound, marker = '.', color = 'C' + str(i_k + 2), ls = "--")
-            # ax.fill_between(d_list,
-            #                 (mean_approx_noisy_bound - std_approx_noisy_bound),
-            #                 (mean_approx_noisy_bound + std_approx_noisy_bound),
-            #                 color = 'C' + str(i_k + 2), alpha = 0.1)
-
-            mean_approx_noisy_bound_purity = np.mean(approx_ratio_noisy_bound_purity[i_N, :, :, i_p, i_k], axis = 0)
-            std_approx_noisy_bound_purity = np.std(approx_ratio_noisy_bound_purity[i_N, :, :, i_p, i_k], axis = 0)
-
-            ax.plot(d_list, mean_approx_noisy_bound_purity, marker = '.', color = 'C' + str(i_k + 2), label = r'k = ' + str(k_dual), ls = ":")
+            ax.plot(d_list, mean_approx_noisy_bound, marker = '.', color = 'C' + str(i_k + 2), ls = "--", label = r'k = ' + str(k_dual), markersize = 4, lw= 0.75)
             ax.fill_between(d_list,
-                            (mean_approx_noisy_bound_purity - std_approx_noisy_bound_purity),
-                            (mean_approx_noisy_bound_purity + std_approx_noisy_bound_purity),
+                            (mean_approx_noisy_bound - std_approx_noisy_bound),
+                            (mean_approx_noisy_bound + std_approx_noisy_bound),
                             color = 'C' + str(i_k + 2), alpha = 0.1)
+
+            # mean_approx_noisy_bound_purity = np.mean(approx_ratio_noisy_bound_purity[i_N, :, :, i_p, i_k], axis = 0)
+            # std_approx_noisy_bound_purity = np.std(approx_ratio_noisy_bound_purity[i_N, :, :, i_p, i_k], axis = 0)
+
+            # ax.plot(d_list, mean_approx_noisy_bound_purity, marker = '.', color = 'C' + str(i_k + 2), label = r'k = ' + str(k_dual), ls = ":")
+            # ax.fill_between(d_list,
+            #                 (mean_approx_noisy_bound_purity - std_approx_noisy_bound_purity),
+            #                 (mean_approx_noisy_bound_purity + std_approx_noisy_bound_purity),
+            #                 color = 'C' + str(i_k + 2), alpha = 0.1)
 
 
         ax.set_ylabel('Approx. ratio')
         ax.set_xlabel(r'd')
         ax.legend()
-        # plt.tight_layout()
+        plt.tight_layout()
         ax.set_yscale('log')
 
         figname = "approx_ratios_N_" + str(N) + "_p_" + str(p) + ".pdf"
