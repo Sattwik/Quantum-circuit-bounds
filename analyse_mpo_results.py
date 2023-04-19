@@ -32,7 +32,7 @@ with open(os.path.join(data_path, fname), 'rb') as result_file:
     data_dict = pickle.load(result_file)
 
 N = 32
-p = 0.1
+p = 0.3
 
 nb_reshaped_dict = tree()
 eb_reshaped_dict = tree()
@@ -62,21 +62,21 @@ for D, nb_dict_vs_d in nb_reshaped_dict.items():
         print(nb_list)
 
         ax.plot(d_list, np.real(nb_list), marker = '.', color = 'C' + str(i_D + 1), 
-                ls = "--", label = r'D = ' + str(D), markersize = 4, lw= 0.75)            
-
-        i_D += 1
+                ls = "--", label = r'D = ' + str(D), markersize = 4, lw= 0.75)
+    i_D += 1
 
 eb_dict_vs_d = eb_reshaped_dict[2]
 eb_list = [eb_dict_vs_d[d] for d in d_list]
 
-ax.plot(d_list, eb_list, marker = '.', color = 'C' + str(0), 
+ax.plot(d_list, [eb for eb in eb_list], marker = '.', color = 'C' + str(0), 
         label = r'Entropic', markersize = 4, lw= 0.75)
 
 ax.set_ylabel('Bound')
 ax.set_xlabel(r'd')
 ax.legend()
 plt.tight_layout()
-# ax.set_yscale('log')
+ax.set_ylim(top = 0.5)
+ax.set_yscale('symlog', linthresh = 1e-6)
 
 figname = "mpo_bounds_qaoa_N_" + str(N) + "_p_" + str(p) + ".pdf"
 plt.savefig(os.path.join(data_path, figname), format = 'pdf')
