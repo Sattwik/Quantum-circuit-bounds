@@ -232,7 +232,7 @@ def random_2D_NN_ver_even_normal_hamiltonian_majorana(N: int, key: jnp.array):
         i = s//N
         j = s%N
 
-        if i%2 == 0:
+        if i%2 == 0 and i != N - 1:
             neighbors_of_s = [s, N * (i + 1) + j]
             neighbors_list.append(neighbors_of_s)
 
@@ -352,8 +352,11 @@ def random_2D_NN_hor_even_normal_hamiltonian_majorana(N: int, key: jnp.array):
     neighbors_list = []
 
     for s in range(0, N * N, 2):
-        neighbors_of_s = [s, s + 1]
-        neighbors_list.append(neighbors_of_s)
+        j_0 = s%N
+
+        if j_0 != N - 1:
+            neighbors_of_s = [s, s + 1]
+            neighbors_list.append(neighbors_of_s)
 
     row_indices = []
     col_indices = []

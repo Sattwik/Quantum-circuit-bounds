@@ -25,9 +25,9 @@ from fermions import gaussian2D, fermion_test_utils
 
 colorama.init()
 
-N = 6
-assert(N%2 == 0)
-d = 17
+N = 5
+# assert(N%2 == 0)
+d = 9
 local_d = 1
 k = 1
 
@@ -66,7 +66,7 @@ print(colorama.Style.RESET_ALL)
 #---------------------------------- NOISY SOL ---------------------------------#
 #------------------------------------------------------------------------------#
 
-p = 0.05
+p = 0.0001
 noisy_sol = gaussian2D.noisy_primal(circ_params, p)
 print(colorama.Fore.GREEN + "noisy sol = ", noisy_sol)
 print(colorama.Style.RESET_ALL)
@@ -75,7 +75,7 @@ print(colorama.Style.RESET_ALL)
 #---------------------------------- DUAL SETUP --------------------------------#
 #------------------------------------------------------------------------------#
 
-k_dual = 2 * 6 - 2
+k_dual = 2 * 5 - 2
 
 lambda_lower_bounds = (0.0) * jnp.ones(d)
 dual_params = gaussian2D.DualParams(circ_params, p, k_dual, lambda_lower_bounds)

@@ -62,7 +62,7 @@ dual_vars_init = dual_vars_init.at[:d].set(-3)
 # key, subkey = jax.random.split(key)
 # dual_vars_init = jax.random.uniform(key, shape = (dual_params.total_num_dual_vars,))/N
 
-num_steps = int(10e3)
+num_steps = int(3e3)
 dual_obj_over_opti, dual_opt_result = \
     gaussian2D.optimize(dual_vars_init, dual_params,
                       gaussian2D.dual_obj, gaussian2D.dual_grad,
