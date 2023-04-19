@@ -33,6 +33,7 @@ with open(os.path.join(data_path, fname), 'rb') as result_file:
 
 N = 32
 p = 0.3
+clean_sol = -N
 
 nb_reshaped_dict = tree()
 eb_reshaped_dict = tree()
@@ -47,8 +48,8 @@ for key, value in data_dict.items():
         nb_reshaped_dict[D][d] = value[0]
         eb_reshaped_dict[D][d] = value[1]
 
-width = 510/2
-fig = plt.figure(figsize=set_size(width, fraction = 1, subplots = (1,1)))
+width = 510/3
+fig = plt.figure(figsize=set_size(width, fraction = 1, subplots = (1,1),  height_scale = 0.8))
 ax = fig.add_subplot(111)
 
 i_D = 0
@@ -61,24 +62,25 @@ for D, nb_dict_vs_d in nb_reshaped_dict.items():
         print('D = ', D)
         print(nb_list)
 
-        ax.plot(d_list, np.real(nb_list), marker = '.', color = 'C' + str(i_D + 1), 
+        ax.plot(d_list, np.real(nb_list)/clean_sol, marker = '.', color = 'C' + str(i_D + 1), 
                 ls = "--", label = r'D = ' + str(D), markersize = 4, lw= 0.75)
     i_D += 1
 
 eb_dict_vs_d = eb_reshaped_dict[2]
 eb_list = [eb_dict_vs_d[d] for d in d_list]
 
-ax.plot(d_list, [eb for eb in eb_list], marker = '.', color = 'C' + str(0), 
+ax.plot(d_list, [eb/clean_sol for eb in eb_list], marker = '.', color = 'C' + str(0), 
         label = r'Entropic', markersize = 4, lw= 0.75)
 
-ax.set_ylabel('Bound')
+ax.set_ylabel('Approx. ratio')
 ax.set_xlabel(r'd')
-ax.legend()
+ax.legend(bbox_to_anchor = (2, -1), ncol = 6)
 plt.tight_layout()
-ax.set_ylim(top = 0.5)
-ax.set_yscale('symlog', linthresh = 1e-6)
+# ax.set_ylim(top = 1e-5)
+# ax.set_yscale('symlog', linthresh = 1e-6)
+ax.set_yscale('log')
 
 figname = "mpo_bounds_qaoa_N_" + str(N) + "_p_" + str(p) + ".pdf"
-plt.savefig(os.path.join(data_path, figname), format = 'pdf')
+plt.savefig(os.path.join(data_path, figname), format = 'pdf', bbox_inches = 'tight')
 
-plt.show()
+# plt.show()

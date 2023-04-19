@@ -30,12 +30,12 @@ CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
                   '#999999', '#e41a1c', '#dede00']
 
 
-data_path = "./../vqa_data/0320/20230320-124253"
+data_path = "./../vqa_data/0419/20230419-002751"
 
-N_list = [20]
+N_list = [48]
 p_list = [0.05]
-k_dual_list = [1, 5, 10, 15, 20]
-d_list = np.arange(3, 43, 2)
+k_dual_list = [1, 12, 24, 36, 48]
+d_list = np.arange(3, 43, 4)
 
 num_k_duals = len(k_dual_list)
 num_N = len(N_list)
@@ -203,6 +203,9 @@ for i_N, N in enumerate(N_list):
                         color = 'C1', alpha = 0.1)
 
         for i_k, k_dual in enumerate(k_dual_list):
+
+            # if k_dual == 24:
+
             mean_approx_noisy_bound = np.mean(approx_ratio_noisy_bound[i_N, :, :, i_p, i_k], axis = 0)
             std_approx_noisy_bound = np.std(approx_ratio_noisy_bound[i_N, :, :, i_p, i_k], axis = 0)
 
@@ -231,7 +234,7 @@ for i_N, N in enumerate(N_list):
         figname = "approx_ratios_N_" + str(N) + "_p_" + str(p) + ".pdf"
         plt.savefig(os.path.join(data_path, figname), format = 'pdf')
 
-        plt.show()
+        # plt.show()
 
 
 # i_p = 2

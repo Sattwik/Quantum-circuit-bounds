@@ -30,12 +30,12 @@ CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
                   '#999999', '#e41a1c', '#dede00']
 
 
-data_path = "./../vqa_data/0418/20230418-114125"
+data_path = "./../vqa_data/0418/20230418-230933"
 
-N_list = [6]
+N_list = [7]
 p_list = [0.05]
 d_list = np.arange(1, 43, 8)
-k_dual_list = [1, 2, 4, 6]
+k_dual_list = [1, 3, 6, 9, 12]
 
 num_k_duals = len(k_dual_list)
 num_N = len(N_list)
