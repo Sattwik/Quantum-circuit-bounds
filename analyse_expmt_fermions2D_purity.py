@@ -22,7 +22,8 @@ matplotlib.rcParams["legend.fontsize"] = 7
 matplotlib.rcParams["font.size"] = 8
 matplotlib.rcParams["xtick.labelsize"] = 8
 matplotlib.rcParams["ytick.labelsize"] = 8
-rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
+matplotlib.rcParams["font.family"] = "Times New Roman"
+# rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
 rc('text', usetex=True)
 rc('text.latex', preamble=r'\usepackage{amsmath}')
 CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
@@ -187,7 +188,7 @@ for i_N, N in enumerate(N_list):
         mean_approx_noisy_sol = np.mean(approx_ratio_noisy_sol[i_N, :, :, i_p, 0], axis = 0)
         std_approx_noisy_sol = np.std(approx_ratio_noisy_sol[i_N, :, :, i_p, 0], axis = 0)
 
-        ax.plot(d_list, mean_approx_noisy_sol, marker = '^', color = 'C0', label = r'Primal', markersize = 3, lw = 0.75)
+        ax.plot(d_list, mean_approx_noisy_sol, marker = '^', color = 'C0', label = 'Output', markersize = 3, lw = 0.75)
         ax.fill_between(d_list,
                         (mean_approx_noisy_sol - std_approx_noisy_sol),
                         (mean_approx_noisy_sol + std_approx_noisy_sol),
@@ -196,7 +197,7 @@ for i_N, N in enumerate(N_list):
         mean_approx_noisy_bound_nc = np.mean(approx_ratio_noisy_bound_nc[i_N, :, :, i_p, 0], axis = 0)
         std_approx_noisy_bound_nc = np.std(approx_ratio_noisy_bound_nc[i_N, :, :, i_p, 0], axis = 0)
 
-        ax.plot(d_list, mean_approx_noisy_bound_nc, marker = 'D', color = 'C1', label = r'Entropic', markersize = 3, lw = 0.75)
+        ax.plot(d_list, mean_approx_noisy_bound_nc, marker = 'D', color = 'C1', label = 'Entropic', markersize = 3, lw = 0.75)
         ax.fill_between(d_list,
                         (mean_approx_noisy_bound_nc - std_approx_noisy_bound_nc),
                         (mean_approx_noisy_bound_nc + std_approx_noisy_bound_nc),
@@ -206,7 +207,7 @@ for i_N, N in enumerate(N_list):
             mean_approx_noisy_bound = np.mean(approx_ratio_noisy_bound[i_N, :, :, i_p, i_k], axis = 0)
             std_approx_noisy_bound = np.std(approx_ratio_noisy_bound[i_N, :, :, i_p, i_k], axis = 0)
 
-            ax.plot(d_list, mean_approx_noisy_bound, marker = '.', color = 'C' + str(i_k + 2), ls = "--", label = r'k = ' + str(k_dual), markersize = 4, lw= 0.75)
+            ax.plot(d_list, mean_approx_noisy_bound, marker = '.', color = 'C' + str(i_k + 2), ls = "--", label = r'$r = $' + str(k_dual), markersize = 4, lw= 0.75)
             ax.fill_between(d_list,
                             (mean_approx_noisy_bound - std_approx_noisy_bound),
                             (mean_approx_noisy_bound + std_approx_noisy_bound),
@@ -223,7 +224,7 @@ for i_N, N in enumerate(N_list):
 
 
         ax.set_ylabel('Approx. ratio')
-        ax.set_xlabel(r'd')
+        ax.set_xlabel('Circuit depth, ' + r'$d$')
         ax.legend()
         plt.tight_layout()
         ax.set_yscale('log')

@@ -32,7 +32,8 @@ matplotlib.rcParams["legend.fontsize"] = 7
 matplotlib.rcParams["font.size"] = 8
 matplotlib.rcParams["xtick.labelsize"] = 8
 matplotlib.rcParams["ytick.labelsize"] = 8
-rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
+matplotlib.rcParams["font.family"] = "Times New Roman"
+# rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
 rc('text', usetex=True)
 rc('text.latex', preamble=r'\usepackage{amsmath}')
 
@@ -161,13 +162,14 @@ duality_gap_list = primal_list - np.array(noisy_bound_list)
 width = 510/2
 fig = plt.figure(figsize=set_size(width, fraction = 1, subplots = (1,1)))
 ax = fig.add_subplot(111)
-ax.plot(theta_list/np.pi, noisy_bound_list, label = "Dual (von Neumann)")
+ax.plot(theta_list/np.pi, noisy_bound_list, label = "Circuit dual")
 # ax.plot(theta_list, primal_list, ls = '--', label = "Primal")
 # ax.plot(theta_list, [gap * p/2] * len(theta_list), label = "Dual (no channel)", ls = '--')
 # ax.plot(theta_list, [gap * (p-1)] * len(theta_list), label = "Dual (no channel)", ls = '--')
-ax.plot(theta_list/np.pi, noisy_nc_list, label = "Dual (no-channel)", ls = '--')
-ax.set_xlabel(r"$\theta/ \pi$")
+ax.plot(theta_list/np.pi, noisy_nc_list, label = "Entropic", ls = '--')
+ax.set_xlabel('Rotation angle, ' + r"$\theta/ \pi$")
 ax.legend()
+ax.set_ylabel('Bound')
 # ax.set_ylim((0, np.max(primal_list) + 0.2))
 ax.set_yticks([-gap*(1-p), 0, gap * (1-p)])
 ax.set_xticks([0, 0.5, 1])
