@@ -35,6 +35,7 @@ with open(os.path.join(data_path, fname), 'rb') as result_file:
 N = 32
 p = 0.3
 clean_sol = -N
+norm = 2 * N
 
 fname = "entropic_bound_noise" + str(p) + ".npy"
 with open(os.path.join(data_path, fname), 'rb') as result_file:
@@ -62,31 +63,63 @@ ax = fig.add_subplot(111)
 i_D = 0
 
 for D, nb_dict_vs_d in nb_reshaped_dict.items():
-    if D != 2 and D != 4 and D != 8:
-        d_list = sorted(nb_dict_vs_d.keys())
-        nb_list = [nb_dict_vs_d[d] for d in d_list]
+    if p == 0.3:
+        if D == 4 or D == 8 or D == 16:
+            d_list = sorted(nb_dict_vs_d.keys())
+            nb_list = [nb_dict_vs_d[d] for d in d_list]
 
-        print('D = ', D)
-        print(nb_list)
+            print('D = ', D)
+            print(nb_list)
 
-        ax.plot([2 + 2 * d for d in d_list], np.real(nb_list)/clean_sol, marker = '.', color = 'C' + str(i_D + 1), 
-                ls = "--", label = r'D = ' + str(D), markersize = 4, lw= 0.75)
+            ax.plot([2 + 2 * d for d in d_list], (np.real(nb_list) - clean_sol)/norm, marker = '.', color = 'C' + str(i_D + 1), 
+                    label = r'D = ' + str(D), markersize = 4, lw = 0.75)
+    elif p == 0.1:
+        if D != 2 and D != 4 and D != 8:
+            d_list = sorted(nb_dict_vs_d.keys())
+            nb_list = [nb_dict_vs_d[d] for d in d_list]
+
+            print('D = ', D)
+            print(nb_list)
+
+            ax.plot([2 + 2 * d for d in d_list], (np.real(nb_list) - clean_sol)/norm, marker = '.', color = 'C' + str(i_D + 1), 
+                    label = r'D = ' + str(D), markersize = 4, lw = 0.75)
+    else: 
+        if D == 64 or D == 128 or D == 256:
+            d_list = sorted(nb_dict_vs_d.keys())
+            nb_list = [nb_dict_vs_d[d] for d in d_list]
+
+            print('D = ', D)
+            print(nb_list)
+
+            ax.plot([2 + 2 * d for d in d_list], (np.real(nb_list) - clean_sol)/norm, marker = '.', color = 'C' + str(i_D + 1), 
+                    label = r'D = ' + str(D), markersize = 4, lw = 0.75)
     i_D += 1
 
 # eb_dict_vs_d = eb_reshaped_dict[2]
 # eb_list = [eb_dict_vs_d[d] for d in d_list]
 
-ax.plot([2 + 2 * d for d in d_list], [eb_tuple[1]/clean_sol for eb_tuple in eb_array], marker = '.', color = 'C' + str(0), 
-        label = r'Entropic', markersize = 4, lw= 0.75)
+ax.plot([2 + 2 * d for d in d_list], [(eb_tuple[1]-clean_sol)/norm for eb_tuple in eb_array], marker = 'D', color = 'k', ls = '--',
+        label = r'Entropic', markersize = 3, lw = 0.75)
 
-ax.set_ylabel('Approx. ratio')
+ax.set_ylabel('Lower bound')
 ax.set_xlabel('Circuit depth, ' + r'$d$')
-ax.legend(loc = 'upper right', bbox_to_anchor = (1, 1), ncol = 2, fontsize = 7, 
-            columnspacing = 0.7, labelspacing = 0.4, handletextpad = 0.65)
+
 plt.tight_layout()
-# ax.set_ylim(top = 1e-5)
+
+if p == 0.1:
+    ax.set_ylim(bottom = -0.6, top = 0.6)
+    ax.legend(loc = 'lower right', bbox_to_anchor = (1, 0), ncol = 2, fontsize = 10, 
+            columnspacing = 0.7, labelspacing = 0.4, handletextpad = 0.65)
+elif p == 0.3:
+    ax.set_ylim(bottom = 0.39, top = 0.51)
+    ax.legend(loc = 'lower right', bbox_to_anchor = (1, 0), ncol = 2, fontsize = 10, 
+            columnspacing = 0.7, labelspacing = 0.4, handletextpad = 0.65)
+else:
+    # ax.set_ylim(bottom = -600/norm, top = 33/norm)
+    ax.legend(loc = 'lower right', bbox_to_anchor = (1, 0), ncol = 1, fontsize = 10, 
+            columnspacing = 0.7, labelspacing = 0.4, handletextpad = 0.65)
 # ax.set_yscale('symlog', linthresh = 1e-6)
-ax.set_yscale('log')
+# ax.set_yscale('log')
 ax.set_title('Noise rate, ' + r'$p = \ $' + str(p * 100) + '\%')
 # ax.text(0.1, 0.1, r'$p = $' + str(p))
 

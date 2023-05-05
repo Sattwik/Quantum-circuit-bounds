@@ -36,7 +36,8 @@ data_path = "./../vqa_data/0418/20230418-230933"
 N_list = [7]
 p_list = [0.05]
 d_list = np.arange(1, 43, 8)
-k_dual_list = [1, 3, 6, 9, 12]
+k_dual_list = [1, 3, 4, 5, 7, 6, 9, 12]
+k_dual_list = k_dual_list[::-1]
 
 num_k_duals = len(k_dual_list)
 num_N = len(N_list)
@@ -71,10 +72,15 @@ for i_N, N in enumerate(N_list):
                         noisy_bound_nc_list[i_N, i_seed, i_d, i_p, i_k] = noisy_bound_nc
 
 
-approx_ratio_noisy_sol = noisy_sol_list/clean_sol_list
-approx_ratio_noisy_bound = noisy_bound_list/clean_sol_list
-approx_ratio_noisy_bound_purity = noisy_bound_purity_list/clean_sol_list
-approx_ratio_noisy_bound_nc = noisy_bound_nc_list/clean_sol_list
+# approx_ratio_noisy_sol = noisy_sol_list/clean_sol_list
+# approx_ratio_noisy_bound = noisy_bound_list/clean_sol_list
+# approx_ratio_noisy_bound_purity = noisy_bound_purity_list/clean_sol_list
+# approx_ratio_noisy_bound_nc = noisy_bound_nc_list/clean_sol_list
+
+scaled_noisy_sol = (noisy_sol_list - clean_sol_list)/(-clean_sol_list)
+scaled_noisy_bound = (noisy_bound_list - clean_sol_list)/(-clean_sol_list)
+scaled_noisy_bound_purity = (noisy_bound_purity_list - clean_sol_list)/(-clean_sol_list)
+scaled_noisy_bound_nc = (noisy_bound_nc_list - clean_sol_list)/(-clean_sol_list)
 
 # ---- Plotting the approximation ratios ----- #
 
@@ -185,33 +191,37 @@ for i_N, N in enumerate(N_list):
         fig = plt.figure(figsize=set_size(width, fraction = 1, subplots = (1,1)))
         ax = fig.add_subplot(111)
 
-        mean_approx_noisy_sol = np.mean(approx_ratio_noisy_sol[i_N, :, :, i_p, 0], axis = 0)
-        std_approx_noisy_sol = np.std(approx_ratio_noisy_sol[i_N, :, :, i_p, 0], axis = 0)
+        # mean_approx_noisy_sol = np.mean(approx_ratio_noisy_sol[i_N, :, :, i_p, 0], axis = 0)
+        # std_approx_noisy_sol = np.std(approx_ratio_noisy_sol[i_N, :, :, i_p, 0], axis = 0)
 
-        ax.plot(d_list, mean_approx_noisy_sol, marker = '^', color = 'C0', label = 'Output', markersize = 3, lw = 0.75)
-        ax.fill_between(d_list,
-                        (mean_approx_noisy_sol - std_approx_noisy_sol),
-                        (mean_approx_noisy_sol + std_approx_noisy_sol),
-                        color = 'C0', alpha = 0.1)
+        # ax.plot(d_list, mean_approx_noisy_sol - clean_sol, marker = '^', color = 'C0', label = 'Output', markersize = 3, lw = 0.75)
+        
+        # ax.fill_between(d_list,
+        #                 (mean_approx_noisy_sol - std_approx_noisy_sol),
+        #                 (mean_approx_noisy_sol + std_approx_noisy_sol),
+        #                 color = 'C0', alpha = 0.1)
 
-        mean_approx_noisy_bound_nc = np.mean(approx_ratio_noisy_bound_nc[i_N, :, :, i_p, 0], axis = 0)
-        std_approx_noisy_bound_nc = np.std(approx_ratio_noisy_bound_nc[i_N, :, :, i_p, 0], axis = 0)
+        # mean_approx_noisy_bound_nc = np.mean(approx_ratio_noisy_bound_nc[i_N, :, :, i_p, 0], axis = 0)
+        # std_approx_noisy_bound_nc = np.std(approx_ratio_noisy_bound_nc[i_N, :, :, i_p, 0], axis = 0)
 
-        ax.plot(d_list, mean_approx_noisy_bound_nc, marker = 'D', color = 'C1', label = 'Entropic', markersize = 3, lw = 0.75)
-        ax.fill_between(d_list,
-                        (mean_approx_noisy_bound_nc - std_approx_noisy_bound_nc),
-                        (mean_approx_noisy_bound_nc + std_approx_noisy_bound_nc),
-                        color = 'C1', alpha = 0.1)
+        ax.plot(d_list, scaled_noisy_sol[i_N, 0, :, i_p, 0], marker = '^', color = 'k', label = 'Output', markersize = 3.5, lw = 0.75)
+
+        # ax.fill_between(d_list,
+        #                 (mean_approx_noisy_bound_nc - std_approx_noisy_bound_nc),
+        #                 (mean_approx_noisy_bound_nc + std_approx_noisy_bound_nc),
+        #                 color = 'C1', alpha = 0.1)
 
         for i_k, k_dual in enumerate(k_dual_list):
-            mean_approx_noisy_bound = np.mean(approx_ratio_noisy_bound[i_N, :, :, i_p, i_k], axis = 0)
-            std_approx_noisy_bound = np.std(approx_ratio_noisy_bound[i_N, :, :, i_p, i_k], axis = 0)
+            # mean_approx_noisy_bound = np.mean(approx_ratio_noisy_bound[i_N, :, :, i_p, i_k], axis = 0)
+            # std_approx_noisy_bound = np.std(approx_ratio_noisy_bound[i_N, :, :, i_p, i_k], axis = 0)
 
-            ax.plot(d_list, mean_approx_noisy_bound, marker = '.', color = 'C' + str(i_k + 2), ls = "--", label = r'$r = $' + str(k_dual), markersize = 4, lw= 0.75)
-            ax.fill_between(d_list,
-                            (mean_approx_noisy_bound - std_approx_noisy_bound),
-                            (mean_approx_noisy_bound + std_approx_noisy_bound),
-                            color = 'C' + str(i_k + 2), alpha = 0.1)
+            # ax.plot(d_list, mean_approx_noisy_bound, marker = '.', color = 'C' + str(i_k + 2), ls = "--", label = r'$r = $' + str(k_dual), markersize = 4, lw= 0.75)
+            # ax.fill_between(d_list,
+            #                 (mean_approx_noisy_bound - std_approx_noisy_bound),
+            #                 (mean_approx_noisy_bound + std_approx_noisy_bound),
+            #                 color = 'C' + str(i_k + 2), alpha = 0.1)
+
+            ax.plot(d_list, scaled_noisy_bound[i_N, 0, :, i_p, i_k], marker = '.', color = 'C' + str(i_k + 2), label = r'$r = $' + str(k_dual), markersize = 4, lw= 0.75)
 
             # mean_approx_noisy_bound_purity = np.mean(approx_ratio_noisy_bound_purity[i_N, :, :, i_p, i_k], axis = 0)
             # std_approx_noisy_bound_purity = np.std(approx_ratio_noisy_bound_purity[i_N, :, :, i_p, i_k], axis = 0)
@@ -222,17 +232,18 @@ for i_N, N in enumerate(N_list):
             #                 (mean_approx_noisy_bound_purity + std_approx_noisy_bound_purity),
             #                 color = 'C' + str(i_k + 2), alpha = 0.1)
 
+        ax.plot(d_list, scaled_noisy_bound_nc[i_N, 0, :, i_p, 0], marker = 'D', color = 'k', label = 'Entropic', markersize = 3, lw = 0.75, ls = '--')
 
-        ax.set_ylabel('Approx. ratio')
+        ax.set_ylabel('Lower bounds')
         ax.set_xlabel('Circuit depth, ' + r'$d$')
-        ax.legend()
+        ax.legend(loc = 'upper left', fontsize = 7, ncol = 1, bbox_to_anchor = (1, 1))
         plt.tight_layout()
-        ax.set_yscale('log')
+        # ax.set_yscale('log')
 
-        figname = "approx_ratios_N_" + str(N) + "_p_" + str(p) + ".pdf"
+        figname = "lower_bounds_N_" + str(N) + "_p_" + str(p) + ".pdf"
         plt.savefig(os.path.join(data_path, figname), format = 'pdf')
 
-        plt.show()
+        # plt.show()
 
 
 # i_p = 2

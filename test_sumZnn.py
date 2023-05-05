@@ -20,7 +20,7 @@ import jax
 config.update("jax_enable_x64", True)
 
 from vqa_bounds import graphs, circuit_utils, dual_utils
-from vqa_bounds import sumsigma1DNN
+from vqa_bounds import sumZnn
 
 m = 4
 lattice = graphs.define_lattice((m,))
@@ -33,8 +33,8 @@ p = 0.1
 
 key = jax.random.PRNGKey(59)
 # sys_obj_nc = maxcut1D.MaxCut1DNoChannel(graph, lattice, d, p)
-sys_obj_local_pur = sumsigma1DNN.SumSigma1DNN(key, lattice, d_purity, d_vne, p, mode = 'local', bc = 'pbc')
-sys_obj_nc = sumsigma1DNN.SumSigma1DNN(key, lattice, d_purity, d_vne, p, mode = 'nc')
+sys_obj_local = sumZnn.SumSigma1DNN(key, lattice, d_purity, d_vne, p, mode = 'local', bc = 'pbc')
+sys_obj_nc = sumZnn.SumSigma1DNN(key, lattice, d_purity, d_vne, p, mode = 'nc')
 
 a_bound = -10.0
 sigma_bound = 100.0
@@ -58,15 +58,15 @@ a_nc = dual_opt_result_nc.x[0]
 # dual_vars_init_pur = dual_vars_init_pur.at[0].set(a_nc)
 #
 # sys_obj_local_pur.a_vars = dual_opt_result_nc.x
-sys_obj_local_pur.a_vars = jnp.array(dual_opt_result_nc.x).at[0].set(a_nc)
-sys_obj_local_pur.Lambdas = jnp.exp(sys_obj_local_pur.a_vars)
-dual_vars_init_local_pur = 1e-9 * jnp.ones(sys_obj_local_pur.total_num_vars)
+# sys_obj_local_pur.a_vars = jnp.array(dual_opt_result_nc.x).at[0].set(a_nc)
+# sys_obj_local_pur.Lambdas = jnp.exp(sys_obj_local_pur.a_vars)
+# dual_vars_init_local_pur = 1e-9 * jnp.ones(sys_obj_local_pur.total_num_vars)
 # dual_vars_init_local_pur = dual_vars_init_local_pur.at[0].set(a_nc)
 
-# key = jax.random.PRNGKey(87)
-# dual_vars_init_local_pur = jax.random.normal(key, shape = (sys_obj_local_pur.total_num_vars,))
-# dual_vars_init_local_pur = dual_vars_init_local_pur.at[0].set(a_nc)
-#
+key = jax.random.PRNGKey(87)
+dual_vars_init_local_pur = jax.random.normal(key, shape = (sys_obj_local.total_num_vars,))
+dual_vars_init_local_pur = dual_vars_init_local_pur.at[:d].set(a_nc-2)
+
 # # dual_vars_init_local_pur_lambda = jnp.zeros(sys_obj_local_pur_lambda.total_num_vars)
 # # dual_vars_init_local_pur_lambda = dual_vars_init_local_pur_lambda.at[d-1].set(a_nc)
 # # dual_vars_init_local_pur_lambda = dual_vars_init_local_pur_lambda.at[:d-1].set(a_nc - 2)
@@ -92,7 +92,7 @@ dual_vars_init_local_pur = 1e-9 * jnp.ones(sys_obj_local_pur.total_num_vars)
 # dual_obj_over_opti_pur, dual_opt_result_pur = dual_utils.optimize_dual(dual_vars_init_pur, sys_obj_pur, num_iters, a_bound, sigma_bound, opt_method = 'L-BFGS-B', use_bounds = False)
 #
 num_iters = 1500
-dual_obj_over_opti_local_pur, dual_opt_result_local_pur = dual_utils.optimize_dual(dual_vars_init_local_pur, sys_obj_local_pur, num_iters, a_bound, sigma_bound, use_bounds = False, opt_method = 'L-BFGS-B')
+dual_obj_over_opti_local_pur, dual_opt_result_local_pur = dual_utils.optimize_dual(dual_vars_init_local_pur, sys_obj_local, num_iters, a_bound, sigma_bound, use_bounds = False, opt_method = 'L-BFGS-B')
 #
 # alpha = 0.1
 # # eta = 1.0
@@ -114,14 +114,14 @@ dual_obj_over_opti_local_pur, dual_opt_result_local_pur = dual_utils.optimize_du
 #
 # print("Runtime (s) = ", end - start)
 #
-actual_sol = np.min(sys_obj_local_pur.H.full())
+actual_sol = np.min(sys_obj_local.H.full())
 # clean_sol = circ_obj_over_opti[-1]
-noisy_sol = sys_obj_local_pur.primal_noisy()
+noisy_sol = sys_obj_local.primal_noisy()
 # # noisy_bound = -sys_obj.dual_obj(jnp.array(dual_opt_result.x))
 noisy_bound_nc = -sys_obj_nc.dual_obj(jnp.array(dual_opt_result_nc.x))
 # # noisy_bound_local = -sys_obj_local.dual_obj(jnp.array(dual_opt_result_local.x))
 # # noisy_bound_local_pur_lambda = -sys_obj_local_pur_lambda.dual_obj(jnp.array(dual_opt_result_local_pur_lambda.x))
-noisy_bound_local_pur = -sys_obj_local_pur.dual_obj(jnp.array(dual_opt_result_local_pur.x))
+noisy_bound_local_pur = -sys_obj_local.dual_obj(jnp.array(dual_opt_result_local_pur.x))
 # noisy_bound_pur = -sys_obj_pur.dual_obj(jnp.array(dual_opt_result_pur.x))
 #
 print("actual_sol = ", actual_sol)
