@@ -585,17 +585,17 @@ def noise_layer(tensors: List[jnp.array], p: float):
 #------------------------------------------------------------------------------#
 
 class SumZ_RXX():
-    def __init__(self, N: int, d: int, p: float, key):
+    def __init__(self, N: int, d: int, p: float, theta: float, seed: int):
         self.N = N
-        self.d = d
+        self.d = d 
+        self.depth = 2 + 2 * self.d 
         self.p = p
         self.H, self.H_tensors = HamSumZ(self.N)
 
+        self.theta = theta
+
         self.site_tuple_list = list(zip(range(0, self.N, 2), range(1, self.N, 2))) + list(zip(range(1, self.N, 2), range(2, self.N, 2)))
         self.site_tuple_list_inverted = list(zip(range(1, self.N, 2), range(2, self.N, 2))) + list(zip(range(0, self.N, 2), range(1, self.N, 2)))
-
-        theta_half = jax.random.normal(key, shape = (len(self.site_tuple_list), self.d//2))
-        self.theta = jnp.column_stack((theta_half, -jnp.roll(theta_half[:, ::-1], (self.N - 2)//2, axis = 0)))   
 
         self.psi_init = jnp.zeros((2 ** self.N,), dtype = complex)
         self.psi_init = self.psi_init.at[-1].set(1.0)
@@ -608,23 +608,36 @@ class SumZ_RXX():
         self.Y = jnp.array([[0,-1j],[1j,0]], dtype = complex) # u, d
         self.Z = jnp.array([[1,0],[0,-1]], dtype = complex) # u, d
 
+        key = jax.random.PRNGKey(seed)
+        self.sq_gates = {}
+
+        for i_d in range(2):
+            for i in range(self.N):
+                self.sq_gates[i_d, i], key = HaarSQ(key)
+
+        for i_d in range(2, 2 + self.d):
+            for i in range(N):
+                U, key = HaarSQ(key)
+                self.sq_gates[i_d, i] = U
+                self.sq_gates[2 + 2 * self.d - 1 - (i_d - 2), i] = U.conj().T
+
+        self.U2q, self.U2q_tensors = RXX(self.theta)
+        self.U2q_dagger, self.U2q_dagger_tensors = RXX(-self.theta)
+
     def primal_noisy(self):
         rho_init = jnp.outer(self.psi_init, self.psi_init.conj().T)
 
         rho_after_step = rho_init
 
-        for layer_num in range(0, self.d):
-            if layer_num < self.d//2:
+        for layer_num in range(self.depth):
+            if layer_num < 2 + self.d: 
                 gate_tuples = self.site_tuple_list
+                U_2site = self.U2q
             else:
                 gate_tuples = self.site_tuple_list_inverted
+                U_2site = self.U2q_dagger
 
-            # nn unitaries
             for i_tuple, site_tuple in enumerate(gate_tuples):
-                theta = self.theta.at[i_tuple, layer_num].get()
-
-                U_2site, _ = RXX(theta)
-
                 dim_left = 2 ** site_tuple[0]
                 dim_right = 2 ** (self.N - site_tuple[-1] - 1)
 
@@ -632,10 +645,17 @@ class SumZ_RXX():
                 identity_right = jnp.identity(dim_right)
 
                 U_2site_full = jnp.kron(identity_left, jnp.kron(U_2site, identity_right))
-
                 rho_after_step = jnp.matmul(U_2site_full, jnp.matmul(rho_after_step, U_2site_full.conj().T)) 
+            
+            for i in range(self.N):
+                dim_left = 2 ** i
+                dim_right = 2 ** (self.N - i)
+                identity_left = jnp.identity(dim_left)
+                identity_right = jnp.identity(dim_right)
 
-            # noise
+                U_1site_full = jnp.kron(identity_left, jnp.kron(self.sq_gates[layer_num, i], identity_right))
+                rho_after_step = jnp.matmul(U_1site_full, jnp.matmul(rho_after_step, U_1site_full.conj().T)) 
+            
             for site in range(self.N):
                 dim_left = 2 ** site
                 dim_right = 2 ** (self.N - site - 1)
@@ -691,6 +711,114 @@ class SumZ_RXX():
             mpo_tensors = left_canonicalize(tensors = mpo_tensors, compressed_dims = compressed_dims)
 
         return mpo_tensors
+
+# class SumZ_RXX():
+#     def __init__(self, N: int, d: int, p: float, key):
+#         self.N = N
+#         self.d = d
+#         self.p = p
+#         self.H, self.H_tensors = HamSumZ(self.N)
+
+#         self.site_tuple_list = list(zip(range(0, self.N, 2), range(1, self.N, 2))) + list(zip(range(1, self.N, 2), range(2, self.N, 2)))
+#         self.site_tuple_list_inverted = list(zip(range(1, self.N, 2), range(2, self.N, 2))) + list(zip(range(0, self.N, 2), range(1, self.N, 2)))
+
+#         theta_half = jax.random.normal(key, shape = (len(self.site_tuple_list), self.d//2))
+#         self.theta = jnp.column_stack((theta_half, -jnp.roll(theta_half[:, ::-1], (self.N - 2)//2, axis = 0)))   
+
+#         self.psi_init = jnp.zeros((2 ** self.N,), dtype = complex)
+#         self.psi_init = self.psi_init.at[-1].set(1.0)
+
+#         psi_init_local_tensor = jnp.array([[0, 0],[0, 1]], dtype = complex)
+#         psi_init_local_tensor = jnp.expand_dims(psi_init_local_tensor, axis = (0,2))
+#         self.psi_init_tensors = [psi_init_local_tensor] * self.N
+
+#         self.X = jnp.array([[0,1],[1,0]], dtype = complex) # u, d
+#         self.Y = jnp.array([[0,-1j],[1j,0]], dtype = complex) # u, d
+#         self.Z = jnp.array([[1,0],[0,-1]], dtype = complex) # u, d
+
+#     def primal_noisy(self):
+#         rho_init = jnp.outer(self.psi_init, self.psi_init.conj().T)
+
+#         rho_after_step = rho_init
+
+#         for layer_num in range(0, self.d):
+#             if layer_num < self.d//2:
+#                 gate_tuples = self.site_tuple_list
+#             else:
+#                 gate_tuples = self.site_tuple_list_inverted
+
+#             # nn unitaries
+#             for i_tuple, site_tuple in enumerate(gate_tuples):
+#                 theta = self.theta.at[i_tuple, layer_num].get()
+
+#                 U_2site, _ = RXX(theta)
+
+#                 dim_left = 2 ** site_tuple[0]
+#                 dim_right = 2 ** (self.N - site_tuple[-1] - 1)
+
+#                 identity_left = jnp.identity(dim_left)
+#                 identity_right = jnp.identity(dim_right)
+
+#                 U_2site_full = jnp.kron(identity_left, jnp.kron(U_2site, identity_right))
+
+#                 rho_after_step = jnp.matmul(U_2site_full, jnp.matmul(rho_after_step, U_2site_full.conj().T)) 
+
+#             # noise
+#             for site in range(self.N):
+#                 dim_left = 2 ** site
+#                 dim_right = 2 ** (self.N - site - 1)
+
+#                 identity_left = jnp.identity(dim_left)
+#                 identity_right = jnp.identity(dim_right)
+
+#                 X_full = jnp.kron(identity_left, jnp.kron(self.X, identity_right))
+#                 Y_full = jnp.kron(identity_left, jnp.kron(self.Y, identity_right))
+#                 Z_full = jnp.kron(identity_left, jnp.kron(self.Z, identity_right))
+
+#                 rho_after_step = (1 - 3 * self.p/4) * rho_after_step \
+#                 + (self.p/4) * (jnp.matmul(X_full, jnp.matmul(rho_after_step, X_full)) + \
+#                                 jnp.matmul(Y_full, jnp.matmul(rho_after_step, Y_full)) + \
+#                                 jnp.matmul(Z_full, jnp.matmul(rho_after_step, Z_full)))
+
+#         return jnp.trace(jnp.matmul(self.H.full_ham(), rho_after_step))
+
+#     def dual_unitary_layer_on_mpo(self, layer_num: int, mpo_tensors: List[jnp.array]):
+#         if layer_num < self.d//2:
+#             gate_tuples = self.site_tuple_list
+#         else:
+#             gate_tuples = self.site_tuple_list_inverted
+
+#         for i_tuple, gate_tuple in enumerate(gate_tuples):
+#             theta = self.theta.at[i_tuple, layer_num].get() 
+#             _, gate_tensors = RXX(-theta) #conjugate the gate
+
+#             res_tensors = twoq_gate(gate_tensors, [mpo_tensors[site] for site in gate_tuple])
+#             mpo_tensors[gate_tuple[0]] = res_tensors[0]
+#             mpo_tensors[gate_tuple[1]] = res_tensors[1]
+        
+#         return mpo_tensors
+    
+#     def noisy_dual_layer_on_mpo(self, layer_num: int, mpo_tensors: List[jnp.array]):
+#         mpo_tensors = noise_layer(mpo_tensors, self.p)
+#         mpo_tensors = self.dual_unitary_layer_on_mpo(layer_num, mpo_tensors)
+
+#         return mpo_tensors
+    
+#     def init_mpo(self, D: int):
+#         mpo_tensors = self.H_tensors
+
+#         for i in range(self.d-1, -1, -1):
+#             mpo_tensors = self.noisy_dual_layer_on_mpo(i, mpo_tensors)
+            
+#             # canonicalize
+#             compressed_dims = tuple(bond_dims(mpo_tensors)[1:-1])
+#             mpo_tensors = right_canonicalize(tensors = mpo_tensors, compressed_dims = compressed_dims)
+
+#             # compress
+#             compressed_dims = gen_compression_dims(D, self.N)
+#             mpo_tensors = left_canonicalize(tensors = mpo_tensors, compressed_dims = compressed_dims)
+
+#         return mpo_tensors
     
 
 # #------------------------------------------------------------------------------#
