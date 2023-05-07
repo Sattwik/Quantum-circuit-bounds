@@ -163,7 +163,7 @@ width = 510/2
 fig = plt.figure(figsize=set_size(width, fraction = 1, subplots = (1,1)))
 ax = fig.add_subplot(111)
 ax.plot(theta_list/np.pi, noisy_bound_list, label = "Circuit dual")
-# ax.plot(theta_list, primal_list, ls = '--', label = "Primal")
+ax.plot(theta_list, primal_list, ls = '--', label = "Circuit output")
 # ax.plot(theta_list, [gap * p/2] * len(theta_list), label = "Dual (no channel)", ls = '--')
 # ax.plot(theta_list, [gap * (p-1)] * len(theta_list), label = "Dual (no channel)", ls = '--')
 ax.plot(theta_list/np.pi, noisy_nc_list, label = "Entropic", ls = '--', color = 'k')

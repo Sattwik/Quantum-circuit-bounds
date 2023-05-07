@@ -466,6 +466,21 @@ def gate_to_MPO(gate: jnp.array, num_sites: int, D: int = None):
 # Common gates
 #------------------------------------------------------------------------------#
 
+@jit 
+def HaarSQ(key: jnp.array):
+    N = 2
+
+    key, subkey = jax.random.split(key)
+    A = jax.random.normal(subkey, (N, N))
+    key, subkey = jax.random.split(key)
+    B = jax.random.normal(subkey, (N, N))
+    Z = A + 1j * B
+
+    Q, R = jnp.linalg.qr(Z)
+    Lambda = jnp.diag(jnp.diag(R)/jnp.abs(jnp.diag(R)))
+
+    return jnp.matmul(Q, Lambda), key
+
 @jit
 def RX(theta:float):
     X = jnp.array([[0, 1],[1, 0]], dtype = complex)
@@ -571,7 +586,6 @@ def noise_layer(tensors: List[jnp.array], p: float):
 
 class SumZ_RXX():
     def __init__(self, N: int, d: int, p: float, key):
-
         self.N = N
         self.d = d
         self.p = p
@@ -679,117 +693,117 @@ class SumZ_RXX():
         return mpo_tensors
     
 
-#------------------------------------------------------------------------------#
-# Vectorization and unvectorization
-#------------------------------------------------------------------------------#
+# #------------------------------------------------------------------------------#
+# # Vectorization and unvectorization
+# #------------------------------------------------------------------------------#
 
-def tensor_shape_to_vec_shape(t_shape: Tuple[int]):
-    l, u, r, d = t_shape
-    s = u # assuming u = d = s
+# def tensor_shape_to_vec_shape(t_shape: Tuple[int]):
+#     l, u, r, d = t_shape
+#     s = u # assuming u = d = s
 
-    vec_shape = (l*r*s*s,)
-    return vec_shape
+#     vec_shape = (l*r*s*s,)
+#     return vec_shape
 
-def vec_to_herm_tensor_bodyfun(i, args):
-    vec, tensor, upper_diag_indices, diag_indices, ones_l, ones_r, zeros_s = args
+# def vec_to_herm_tensor_bodyfun(i, args):
+#     vec, tensor, upper_diag_indices, diag_indices, ones_l, ones_r, zeros_s = args
 
-    l = ones_l.shape[0]
-    r = ones_r.shape[0]
-    s = zeros_s.shape[0]
+#     l = ones_l.shape[0]
+#     r = ones_r.shape[0]
+#     s = zeros_s.shape[0]
 
-    diag_vec = jax.lax.dynamic_slice_in_dim(vec, i*s*s, s)
-    real_vec = jax.lax.dynamic_slice_in_dim(vec, i*s*s + s, s * (s - 1)//2)
-    imag_vec = jax.lax.dynamic_slice_in_dim(vec, i*s*s + s * (s + 1)//2, s * (s - 1)//2)
+#     diag_vec = jax.lax.dynamic_slice_in_dim(vec, i*s*s, s)
+#     real_vec = jax.lax.dynamic_slice_in_dim(vec, i*s*s + s, s * (s - 1)//2)
+#     imag_vec = jax.lax.dynamic_slice_in_dim(vec, i*s*s + s * (s + 1)//2, s * (s - 1)//2)
     
-    tensor_i = zeros_s
-    tensor_i = tensor_i.at[upper_diag_indices].set(real_vec + 1j * imag_vec)
-    tensor_i = tensor_i + tensor_i.conj().T
-    tensor_i = tensor_i.at[diag_indices].set(diag_vec)
+#     tensor_i = zeros_s
+#     tensor_i = tensor_i.at[upper_diag_indices].set(real_vec + 1j * imag_vec)
+#     tensor_i = tensor_i + tensor_i.conj().T
+#     tensor_i = tensor_i.at[diag_indices].set(diag_vec)
 
-    tensor = tensor.at[i, :, :].set(tensor_i)
+#     tensor = tensor.at[i, :, :].set(tensor_i)
 
-    return (vec, tensor, upper_diag_indices, diag_indices, ones_l, ones_r, zeros_s)
+#     return (vec, tensor, upper_diag_indices, diag_indices, ones_l, ones_r, zeros_s)
 
-@partial(jit, static_argnames = ('shape',))
-def vec_to_herm_tensor(vec: jnp.array, shape: Tuple[int]):
-    l, s, r, _ = shape # u, d = s 
+# @partial(jit, static_argnames = ('shape',))
+# def vec_to_herm_tensor(vec: jnp.array, shape: Tuple[int]):
+#     l, s, r, _ = shape # u, d = s 
 
-    # vec = jnp.reshape(vec, (l * r, s * s))
+#     # vec = jnp.reshape(vec, (l * r, s * s))
 
-    tensor = jnp.zeros((l * r, s, s), dtype = complex)
-    zeros_s = jnp.zeros((s,s), dtype = complex)
+#     tensor = jnp.zeros((l * r, s, s), dtype = complex)
+#     zeros_s = jnp.zeros((s,s), dtype = complex)
 
-    ones_l = jnp.ones((l,))
-    ones_r = jnp.ones((l,))
+#     ones_l = jnp.ones((l,))
+#     ones_r = jnp.ones((l,))
 
-    upper_diag_indices = jnp.triu_indices(s, 1)
-    diag_indices = jnp.diag_indices(s)
+#     upper_diag_indices = jnp.triu_indices(s, 1)
+#     diag_indices = jnp.diag_indices(s)
 
-    init_args = (vec, tensor, upper_diag_indices, diag_indices, ones_l, ones_r, zeros_s)
+#     init_args = (vec, tensor, upper_diag_indices, diag_indices, ones_l, ones_r, zeros_s)
 
-    _, tensor, _, _, _, _, _ = jax.lax.fori_loop(0, l*r, vec_to_herm_tensor_bodyfun, init_args)
+#     _, tensor, _, _, _, _, _ = jax.lax.fori_loop(0, l*r, vec_to_herm_tensor_bodyfun, init_args)
 
-    # for i in range(l * r):
-    #     diag_vec = vec[i, :s]
-    #     real_vec = vec[i, s : s*(s+1)//2]
-    #     imag_vec = vec[i, s*(s+1)//2:]
+#     # for i in range(l * r):
+#     #     diag_vec = vec[i, :s]
+#     #     real_vec = vec[i, s : s*(s+1)//2]
+#     #     imag_vec = vec[i, s*(s+1)//2:]
 
-    #     tensor_i = zeros_s
-    #     tensor_i = tensor_i.at[upper_diag_indices].set(real_vec + 1j * imag_vec)
-    #     tensor_i = tensor_i + tensor_i.conj().T
-    #     tensor_i = tensor_i.at[diag_indices].set(diag_vec)
+#     #     tensor_i = zeros_s
+#     #     tensor_i = tensor_i.at[upper_diag_indices].set(real_vec + 1j * imag_vec)
+#     #     tensor_i = tensor_i + tensor_i.conj().T
+#     #     tensor_i = tensor_i.at[diag_indices].set(diag_vec)
 
-    #     tensor = tensor.at[i, :, :].set(tensor_i)
+#     #     tensor = tensor.at[i, :, :].set(tensor_i)
     
-    tensor = jnp.reshape(tensor, (l, r, s, s))
-    tensor = jnp.transpose(tensor, (0, 2, 1, 3))
+#     tensor = jnp.reshape(tensor, (l, r, s, s))
+#     tensor = jnp.transpose(tensor, (0, 2, 1, 3))
 
-    return tensor
+#     return tensor
 
-@partial(jit, static_argnames = ('shape',))
-def vec_to_herm_mpo(vec: jnp.array, shape: Tuple[Tuple[int]]):
-    t_vec_lengths = [s[0] * s[1] * s[2] * s[3] for s in shape]
-    t_vec_slice_indices = [0] + list(np.cumsum(t_vec_lengths))
+# @partial(jit, static_argnames = ('shape',))
+# def vec_to_herm_mpo(vec: jnp.array, shape: Tuple[Tuple[int]]):
+#     t_vec_lengths = [s[0] * s[1] * s[2] * s[3] for s in shape]
+#     t_vec_slice_indices = [0] + list(np.cumsum(t_vec_lengths))
 
-    mpo_tensors = []
+#     mpo_tensors = []
 
-    for i, t_shape in enumerate(shape):
-        t_vec = vec[t_vec_slice_indices[i]:t_vec_slice_indices[i + 1]]
-        mpo_tensors.append(vec_to_herm_tensor(t_vec, t_shape))
+#     for i, t_shape in enumerate(shape):
+#         t_vec = vec[t_vec_slice_indices[i]:t_vec_slice_indices[i + 1]]
+#         mpo_tensors.append(vec_to_herm_tensor(t_vec, t_shape))
 
-    return mpo_tensors
+#     return mpo_tensors
 
-#------------------------------------------------------------------------------#
-# Methods for SOCP
-#------------------------------------------------------------------------------#
+# #------------------------------------------------------------------------------#
+# # Methods for SOCP
+# #------------------------------------------------------------------------------#
 
-def gen_overlap_ham(mpo_tensors: List[jnp.array], site_idx: int):
+# def gen_overlap_ham(mpo_tensors: List[jnp.array], site_idx: int):
 
-    """
-    !! edge cases
-    !! check
-    """
-    num_sites = len(mpo_tensors)
+#     """
+#     !! edge cases
+#     !! check
+#     """
+#     num_sites = len(mpo_tensors)
 
-    tooth = mpo_tensors[0]
-    for i in range(0, site_idx - 1):
-        zip = jnp.tensordot(tooth, mpo_tensors[i], axes = ((0,1,3), (0,3,1)))
-        # Di (tooth), Di (tensor)
-        tooth = jnp.tensordot(zip, mpo_tensors[i+1], axes = ((0,),(0,)))
-        # Di (tooth), Di (tensor) tdot l,u,r,d -> Di (tensor), u,r,d
+#     tooth = mpo_tensors[0]
+#     for i in range(0, site_idx - 1):
+#         zip = jnp.tensordot(tooth, mpo_tensors[i], axes = ((0,1,3), (0,3,1)))
+#         # Di (tooth), Di (tensor)
+#         tooth = jnp.tensordot(zip, mpo_tensors[i+1], axes = ((0,),(0,)))
+#         # Di (tooth), Di (tensor) tdot l,u,r,d -> Di (tensor), u,r,d
 
-    left_mat = jnp.tensordot(tooth, mpo_tensors[site_idx - 1], axes = ((0,1,3), (0,3,1)))
-    # Di (tooth), Di (tensor) = l l'
+#     left_mat = jnp.tensordot(tooth, mpo_tensors[site_idx - 1], axes = ((0,1,3), (0,3,1)))
+#     # Di (tooth), Di (tensor) = l l'
 
-    tooth = mpo_tensors[-1]
-    for i in range(num_sites - 1, site_idx + 1, -1):
-        zip = jnp.tensordot(tooth, mpo_tensors[i], axes = ((2,1,3), (2,3,1)))
-        # Di (tooth), Di (tensor)
-        tooth = jnp.tensordot(zip, mpo_tensors[i-1], axes = ((0,),(2,)))
-        # Di (tooth), Di (tensor) tdot l,u,r,d -> l, u, Di (tensor),d
+#     tooth = mpo_tensors[-1]
+#     for i in range(num_sites - 1, site_idx + 1, -1):
+#         zip = jnp.tensordot(tooth, mpo_tensors[i], axes = ((2,1,3), (2,3,1)))
+#         # Di (tooth), Di (tensor)
+#         tooth = jnp.tensordot(zip, mpo_tensors[i-1], axes = ((0,),(2,)))
+#         # Di (tooth), Di (tensor) tdot l,u,r,d -> l, u, Di (tensor),d
 
-    right_mat = jnp.tensordot(tooth, mpo_tensors[site_idx + 1], axes = ((2,1,3), (2,3,1)))
-    # Di (tooth), Di (tensor) = r r'
+#     right_mat = jnp.tensordot(tooth, mpo_tensors[site_idx + 1], axes = ((2,1,3), (2,3,1)))
+#     # Di (tooth), Di (tensor) = r r'
 
     
 

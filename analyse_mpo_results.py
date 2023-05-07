@@ -5,7 +5,7 @@ from collections import defaultdict
 import numpy as np
 import matplotlib.pyplot as plt
 
-from plotter import set_size
+# from plotter import set_size
 from matplotlib import rc
 import matplotlib
 
@@ -37,7 +37,7 @@ p = 0.3
 clean_sol = -N
 norm = 2 * N
 
-fname = "entropic_bound_noise" + str(p) + ".npy"
+fname = "entropic_bound_noise_bounded_temp_" + str(p) + ".npy"
 with open(os.path.join(data_path, fname), 'rb') as result_file:
     eb_array = np.load(result_file)
 
@@ -57,7 +57,8 @@ for key, value in data_dict.items():
         # eb_reshaped_dict[D][d] = value[1]
 
 width = 510/2
-fig = plt.figure(figsize=set_size(width, fraction = 1, subplots = (1,1),  height_scale = 0.7))
+# fig = plt.figure(figsize=set_size(width, fraction = 1, subplots = (1,1),  height_scale = 0.7))
+fig = plt.figure(figsize=(3.5284350352843505, 2.469904524699045))
 ax = fig.add_subplot(111)
 
 i_D = 0
@@ -98,7 +99,10 @@ for D, nb_dict_vs_d in nb_reshaped_dict.items():
 # eb_dict_vs_d = eb_reshaped_dict[2]
 # eb_list = [eb_dict_vs_d[d] for d in d_list]
 
-ax.plot([2 + 2 * d for d in d_list], [(eb_tuple[1]-clean_sol)/norm for eb_tuple in eb_array], marker = 'D', color = 'k', ls = '--',
+# ax.plot([2 + 2 * d for d in d_list], [(eb_tuple[1]-clean_sol)/norm for eb_tuple in eb_array], marker = 'D', color = 'k', ls = '--',
+#         label = r'Entropic', markersize = 3, lw = 0.75)
+
+ax.plot([2 + 2 * d for d in d_list], (eb_array-clean_sol)/norm, marker = 'D', color = 'k', ls = '--',
         label = r'Entropic', markersize = 3, lw = 0.75)
 
 ax.set_ylabel('Lower bound')
