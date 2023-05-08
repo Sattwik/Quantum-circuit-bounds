@@ -147,7 +147,7 @@ def left_split_lurd_tensor(tensor: jnp.array, D: int):
 
     return u, s, vh
 
-@partial(jit, static_argnames = ('compressed_dims',))
+# @partial(jit, static_argnames = ('compressed_dims',))
 def left_canonicalize(tensors: List[jnp.array], compressed_dims:Tuple[int]):
     """
     Left canonicalize (leave last site uncanonicalized)
@@ -210,7 +210,7 @@ def right_split_lurd_tensor(tensor: jnp.array, D: int):
 
     return u, s, vh
 
-@partial(jit, static_argnames = ('compressed_dims',))
+# @partial(jit, static_argnames = ('compressed_dims',))
 def right_canonicalize(tensors: List[jnp.array], compressed_dims:Tuple[int]):
     """
     Right canonicalize (leave first site uncanonicalized)
@@ -239,7 +239,7 @@ def right_canonicalize(tensors: List[jnp.array], compressed_dims:Tuple[int]):
 
     return tensors
 
-@partial(jit, static_argnames = ('canon',))
+# @partial(jit, static_argnames = ('canon',))
 def check_canon(tensors: List[jnp.array], canon = "left"):
     num_sites = len(tensors)
     norm_list = []
@@ -306,7 +306,7 @@ def check_canon(tensors: List[jnp.array], canon = "left"):
 
 #     return sum_tensors
 
-@jit
+# @jit
 def trace_MPO_squared(tensors: List[jnp.array]):
     """
     checked through full_contract.
@@ -327,7 +327,7 @@ def trace_MPO_squared(tensors: List[jnp.array]):
 
     return res
 
-@jit
+# @jit
 def trace_two_MPOs(A_tensors: List[jnp.array], B_tensors: List[jnp.array]):
     """
     checked through full_contract.
@@ -409,7 +409,7 @@ def HamSumZ(num_sites: int):
 
     return H, arrs
 
-@partial(jit, static_argnums=(1,2))
+# @partial(jit, static_argnums=(1,2))
 def gate_to_MPO(gate: jnp.array, num_sites: int, D: int = None):
     """
     this is just general tensor decomposition into MPO. 
@@ -571,7 +571,7 @@ def twoq_gate(gates: List[jnp.array], tensors: List[jnp.array]):
 
     return res_tensors
 
-@jit
+# @jit
 def noise_layer(tensors: List[jnp.array], p: float):
     X = jnp.array([[0,1],[1,0]], dtype = complex) # u, d
     Y = jnp.array([[0,-1j],[1j,0]], dtype = complex) # u, d
@@ -746,7 +746,7 @@ class SumZ_RXX():
 
         return jnp.trace(jnp.matmul(target_H, rho_after_step))
     
-    @partial(jit, static_argnums=(0,1))
+    # @partial(jit, static_argnums=(0,1))
     def dual_unitary_layer_on_mpo(self, layer_num: int, mpo_tensors: List[jnp.array]):
         if layer_num < self.d_compute + self.d:
             for i in range(self.N):
@@ -775,7 +775,7 @@ class SumZ_RXX():
 
         return mpo_tensors
     
-    @partial(jit, static_argnums=(0,1))
+    # @partial(jit, static_argnums=(0,1))
     def noisy_dual_layer_on_mpo(self, layer_num: int, mpo_tensors: List[jnp.array]):
         mpo_tensors = noise_layer(mpo_tensors, self.p)
         mpo_tensors = self.dual_unitary_layer_on_mpo(layer_num, mpo_tensors)
