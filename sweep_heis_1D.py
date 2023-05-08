@@ -30,13 +30,13 @@ def sweep_heis(N_list, p_list, theta_list, d_list, D_list):
     with concurrent.futures.ThreadPoolExecutor(max_workers = max_threads) as executor:
         for N in N_list:
             seed_list = N + np.array(range(1))
-            for seed in seed_list:
-                for d in d_list: 
+            for seed in seed_list: 
                     for p in p_list:
                         for D in D_list:
                             for theta in theta_list:
-                                executor.submit(submit_simulation,
-                                str(N), str(d), str(seed), str(p), str(D), str(theta), result_save_path)
+                                for d in d_list:
+                                    executor.submit(submit_simulation,
+                                    str(N), str(d), str(seed), str(p), str(D), str(theta), result_save_path)
 
 def submit_simulation(N, d, seed, p, D, theta, result_save_path):
     '''
@@ -68,8 +68,8 @@ def submit_simulation(N, d, seed, p, D, theta, result_save_path):
 
 N_list = [16]
 p_list = [0.03, 0.1, 0.3]
-d_list = [4, 6, 8, 10, 12, 20]
+d_list = [8, 10, 12, 20]
 D_list = [2, 8, 32, 64, 128]
-theta_list = [0.01, 0.1, 1.0]
+theta_list = [0.1, 1.0]
 
 sweep_heis(N_list, p_list, theta_list, d_list, D_list)
