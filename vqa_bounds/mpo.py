@@ -836,6 +836,7 @@ class SumZ_RXX():
         Ht_norms = [0.0,]
 
         for i in range(self.depth-1, -1, -1):
+            print(i)
             sigma_new = self.noisy_dual_layer_on_mpo(i, sigma)
             sigma_new_proj = copy.deepcopy(sigma_new)
             
