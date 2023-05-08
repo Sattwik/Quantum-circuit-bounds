@@ -31,8 +31,8 @@ def sweep_heis(N_list, p_list, theta_list, d_list, D_list):
         for N in N_list:
             seed_list = N + np.array(range(1))
             for seed in seed_list: 
-                    for p in p_list:
-                        for D in D_list:
+                    for D in D_list:
+                        for p in p_list:
                             for theta in theta_list:
                                 for d in d_list:
                                     executor.submit(submit_simulation,
@@ -63,13 +63,12 @@ def submit_simulation(N, d, seed, p, D, theta, result_save_path):
                 "-p-" + str(p) + "-D-" + str(D) + ".txt"
     
     with open(os.path.join(result_save_path, fname), "w+") as f_for_stdout:
-        print("here")
         subprocess.run(params, stdout = f_for_stdout, stderr = subprocess.STDOUT)
 
-N_list = [16]
+N_list = [32]
 p_list = [0.03, 0.1, 0.3]
-d_list = [8, 10, 12, 20]
-D_list = [2, 8, 32, 64, 128]
-theta_list = [0.1, 1.0]
+d_list = [4, 6, 8, 10, 12, 20, 24]
+D_list = [2, 8, 16, 32, 64, 128, 256]
+theta_list = [0.01, 0.1, 1.0]
 
 sweep_heis(N_list, p_list, theta_list, d_list, D_list)
