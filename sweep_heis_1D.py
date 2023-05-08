@@ -54,16 +54,17 @@ def submit_simulation(N, d, seed, p, D, theta, result_save_path):
               '--theta', theta,
               '--D', D,
               '--result_save_path', result_save_path]
-
+    
     if not os.path.exists(result_save_path):
         os.makedirs(result_save_path)
 
     fname = "heis1D-N-" + str(N) + "-d-" + str(d) + "-seed-" + \
-                seed + "-theta-" + f'{theta:.4f}' + \
+                str(seed) + "-theta-" + str(theta) + \
                 "-p-" + str(p) + "-D-" + str(D) + ".txt"
+    
     with open(os.path.join(result_save_path, fname), "w+") as f_for_stdout:
+        print("here")
         subprocess.run(params, stdout = f_for_stdout, stderr = subprocess.STDOUT)
-
 
 N_list = [16]
 p_list = [0.03, 0.1, 0.3]
