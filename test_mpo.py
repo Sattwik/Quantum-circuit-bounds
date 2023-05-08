@@ -2,6 +2,7 @@ import abc
 from typing import List, Tuple, Callable, Dict
 from functools import partial
 import copy
+import os
 
 import numpy as np
 import jax
@@ -12,6 +13,23 @@ import tensornetwork as tn
 tn.set_default_backend("jax")
 config.update("jax_enable_x64", True)
 import matplotlib.pyplot as plt
+from matplotlib import rc
+import matplotlib
+
+matplotlib.rcParams["image.cmap"] = "inferno"
+matplotlib.rcParams["axes.titlesize"] = 10
+matplotlib.rcParams["axes.labelsize"] = 10
+matplotlib.rcParams["legend.fontsize"] = 7
+matplotlib.rcParams["font.size"] = 8
+matplotlib.rcParams["xtick.labelsize"] = 8
+matplotlib.rcParams["ytick.labelsize"] = 8
+matplotlib.rcParams["font.family"] = "Times New Roman"
+# rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
+rc('text', usetex=True)
+rc('text.latex', preamble=r'\usepackage{amsmath}')
+CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
+                  '#f781bf', '#a65628', '#984ea3',
+                  '#999999', '#e41a1c', '#dede00']
 
 from vqa_bounds import mpo
 
@@ -21,28 +39,83 @@ num_sites = 4
 #---------- error dynamics test ------------#
 #-------------------------------------------#
 
-d = 15
-p = 0.01
-theta = np.pi/7
-seed = 69
+# d = 15
+# p = 0.01
+# theta = np.pi/7
+# seed = 69
 
-circ = mpo.SumZ_RXX(num_sites, d, p, theta, seed)
+# circ = mpo.SumZ_RXX(num_sites, d, p, theta, seed)
 
-primal1 = circ.primal_noisy()
-print(primal1)
+# primal1 = circ.primal_noisy()
+# print(primal1)
 
-init_mpo_tensors = circ.init_mpo(D = 2 ** num_sites)
+# init_mpo_tensors = circ.init_mpo(D = 2 ** num_sites)
 
-primal2 = mpo.trace_two_MPOs(circ.psi_init_tensors, init_mpo_tensors)
+# primal2 = mpo.trace_two_MPOs(circ.psi_init_tensors, init_mpo_tensors)
 
-print(np.abs(primal1 - primal2))
+# print(np.abs(primal1 - primal2))
 
 
-# error_list = circ.error_dynamics(D = 5)
-# plt.plot(list(range(circ.depth))[::-1], error_list)
-# plt.show()
+# # error_list = circ.error_dynamics(D = 5)
+# # plt.plot(list(range(circ.depth))[::-1], error_list)
+# # plt.show()
 
-heis_bound, dual_bound = circ.bounds(D = 2 ** num_sites)
+# heis_bound, dual_bound = circ.bounds(D = 2 ** num_sites)
+
+p = 0.1
+theta = 0.2
+
+d_list = list(range(15))
+D_list = [2, 6, 10, 16]
+
+heis_bounds = np.zeros((len(d_list), len(D_list)), dtype = complex)
+dual_bounds = np.zeros((len(d_list), len(D_list)), dtype = complex)
+heis_vals = np.zeros((len(d_list), len(D_list)), dtype = complex)
+outputs = np.zeros((len(d_list),), dtype = complex)
+
+for i_d, d in enumerate(d_list):
+
+    print('d = ', d)
+    seed = np.random.randint(low = 1, high = 100)
+    circ = mpo.SumZ_RXX(num_sites, d, p, theta, seed)
+    outputs[i_d] = complex(circ.primal_noisy())
+
+    for i_D, D in enumerate(D_list):
+        print('D = ', d)
+        hval, hb, db = circ.bounds(D = D)
+
+        # TODO: check if imaginary parts zero
+        heis_vals[i_d, i_D] = complex(hval)
+        heis_bounds[i_d, i_D] = complex(hb)
+        dual_bounds[i_d, i_D] = complex(db)
+
+data_path = "../vqa_data/heisenberg_tests/"
+
+N = num_sites
+clean_sol = -N
+norm = 2 * N
+
+fig = plt.figure(figsize=(3.5284350352843505, 2.469904524699045))
+ax = fig.add_subplot(111)
+
+# ax.axhline(y = -num_sites, color = 'k', label = "GSE", ls = "--")
+for i_D, D in enumerate(D_list):
+    if i_D >= 1:
+        ax.plot([1 + 2 * d for d in d_list], (heis_bounds[:, i_D] - clean_sol)/norm, ls = "--", 
+                label = "Heis.,  D = " + str(D), color = 'C' + str(i_D), lw = 0.75, 
+                marker = 'D', markersize = 3)
+        ax.plot([1 + 2 * d for d in d_list], (dual_bounds[:, i_D] - clean_sol)/norm, 
+                label = "Dual, D = " + str(D), color = 'C' + str(i_D), lw = 0.75, 
+                marker = '.', markersize = 4)
+
+ax.plot([1 + 2 * d for d in d_list], (outputs - clean_sol)/norm, label = "Output", 
+        color = 'k', ls = ":")
+ax.set_yscale('log')
+ax.legend()
+ax.set_title("N = " + str(N) + r", $\theta$ = " + f'{theta:.2f}' + r"$p$ = " + str(p))
+plt.tight_layout()
+figname = "heis_test_N_" + str(num_sites) + "_p_" + str(p) + "_theta_" + f'{theta:.2f}' + ".pdf"
+plt.savefig(os.path.join(data_path, figname), bbox_inches = 'tight', format = 'pdf')
 
 #-------------------------------------------#
 #------------- circuit test ----------------#

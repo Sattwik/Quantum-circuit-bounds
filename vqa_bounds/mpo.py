@@ -76,6 +76,9 @@ def bond_dims(tensors: List[jnp.array]):
     return bdims
 
 def gen_compression_dims(D: int, N: int):
+    """
+    only implemented for N = even
+    """
     dims_max = (2 * 2) ** np.concatenate((np.arange(1, N//2 + 1),
                                      np.arange(N//2 - 1, 0, -1)))
 
@@ -823,7 +826,7 @@ class SumZ_RXX():
 
     #         print(error)
 
-    #     return error_list
+        # return error_list
     
     def bounds(self, D: int):
         sigma = self.target_H()
@@ -854,16 +857,16 @@ class SumZ_RXX():
         
         init_state_term = -trace_two_MPOs(self.psi_init_tensors, sigma)
 
-        print('init_state_term = ', init_state_term)
+        # print('init_state_term = ', init_state_term)
 
         Ht_norms = jnp.array(Ht_norms[:-1][::-1])
 
-        print('Ht_norms = ', Ht_norms)
+        # print('Ht_norms = ', Ht_norms)
 
         heis_bound = init_state_term - jnp.sum(Ht_norms)
         dual_bound = init_state_term - jnp.dot(jnp.sqrt(self.purity_bounds), Ht_norms)
 
-        return heis_bound, dual_bound
+        return init_state_term, heis_bound, dual_bound
 
     def init_mpo(self, D: int):
         mpo_tensors = self.target_H()
