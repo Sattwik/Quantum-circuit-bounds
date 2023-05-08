@@ -523,7 +523,9 @@ def CNOT():
 #------------------------------------------------------------------------------#
 @jit
 def singleq_gate(gate: jnp.array, tensor: jnp.array):
-    """checked."""
+    """checked.
+    U \rho U^{\dagger}
+    """
 
     res = jnp.tensordot(gate, tensor, axes = ((1), (1)))
     # u,d tdot l,u,r,d -> u,l,r,d
@@ -536,7 +538,9 @@ def singleq_gate(gate: jnp.array, tensor: jnp.array):
 
 @jit
 def twoq_gate(gates: List[jnp.array], tensors: List[jnp.array]):
-    """checked."""
+    """checked.
+    U \rho U^{\dagger}
+    """
     res_tensors = []
 
     num_sites = len(gates)
@@ -623,6 +627,8 @@ class SumZ_RXX():
 
         self.U2q, self.U2q_tensors = RXX(self.theta)
         self.U2q_dagger, self.U2q_dagger_tensors = RXX(-self.theta)
+        
+        self.target_H()
 
     def primal_noisy(self):
         rho_init = jnp.outer(self.psi_init, self.psi_init.conj().T)
@@ -630,32 +636,55 @@ class SumZ_RXX():
         rho_after_step = rho_init
 
         for layer_num in range(self.depth):
+            # two qubit gates
             if layer_num < 2 + self.d: 
                 gate_tuples = self.site_tuple_list
                 U_2site = self.U2q
+
+                for i_tuple, site_tuple in enumerate(gate_tuples):
+                    dim_left = 2 ** site_tuple[0]
+                    dim_right = 2 ** (self.N - site_tuple[-1] - 1)
+
+                    identity_left = jnp.identity(dim_left)
+                    identity_right = jnp.identity(dim_right)
+
+                    U_2site_full = jnp.kron(identity_left, jnp.kron(U_2site, identity_right))
+                    rho_after_step = jnp.matmul(U_2site_full, jnp.matmul(rho_after_step, U_2site_full.conj().T)) 
+
+                # # single qubit gates            
+                # for i in range(self.N):
+                #     dim_left = 2 ** i
+                #     dim_right = 2 ** (self.N - i - 1)
+                #     identity_left = jnp.identity(dim_left)
+                #     identity_right = jnp.identity(dim_right)
+
+                #     U_1site_full = jnp.kron(identity_left, jnp.kron(self.sq_gates[layer_num, i], identity_right))
+                #     rho_after_step = jnp.matmul(U_1site_full, jnp.matmul(rho_after_step, U_1site_full.conj().T)) 
             else:
+                # # single qubit gates            
+                # for i in range(self.N):
+                #     dim_left = 2 ** i
+                #     dim_right = 2 ** (self.N - i - 1)
+                #     identity_left = jnp.identity(dim_left)
+                #     identity_right = jnp.identity(dim_right)
+
+                #     U_1site_full = jnp.kron(identity_left, jnp.kron(self.sq_gates[layer_num, i], identity_right))
+                #     rho_after_step = jnp.matmul(U_1site_full, jnp.matmul(rho_after_step, U_1site_full.conj().T)) 
+
                 gate_tuples = self.site_tuple_list_inverted
                 U_2site = self.U2q_dagger
 
-            for i_tuple, site_tuple in enumerate(gate_tuples):
-                dim_left = 2 ** site_tuple[0]
-                dim_right = 2 ** (self.N - site_tuple[-1] - 1)
+                for i_tuple, site_tuple in enumerate(gate_tuples):
+                    dim_left = 2 ** site_tuple[0]
+                    dim_right = 2 ** (self.N - site_tuple[-1] - 1)
 
-                identity_left = jnp.identity(dim_left)
-                identity_right = jnp.identity(dim_right)
+                    identity_left = jnp.identity(dim_left)
+                    identity_right = jnp.identity(dim_right)
 
-                U_2site_full = jnp.kron(identity_left, jnp.kron(U_2site, identity_right))
-                rho_after_step = jnp.matmul(U_2site_full, jnp.matmul(rho_after_step, U_2site_full.conj().T)) 
-            
-            for i in range(self.N):
-                dim_left = 2 ** i
-                dim_right = 2 ** (self.N - i)
-                identity_left = jnp.identity(dim_left)
-                identity_right = jnp.identity(dim_right)
+                    U_2site_full = jnp.kron(identity_left, jnp.kron(U_2site, identity_right))
+                    rho_after_step = jnp.matmul(U_2site_full, jnp.matmul(rho_after_step, U_2site_full.conj().T)) 
 
-                U_1site_full = jnp.kron(identity_left, jnp.kron(self.sq_gates[layer_num, i], identity_right))
-                rho_after_step = jnp.matmul(U_1site_full, jnp.matmul(rho_after_step, U_1site_full.conj().T)) 
-            
+            # noise            
             for site in range(self.N):
                 dim_left = 2 ** site
                 dim_right = 2 ** (self.N - site - 1)
@@ -671,23 +700,62 @@ class SumZ_RXX():
                 + (self.p/4) * (jnp.matmul(X_full, jnp.matmul(rho_after_step, X_full)) + \
                                 jnp.matmul(Y_full, jnp.matmul(rho_after_step, Y_full)) + \
                                 jnp.matmul(Z_full, jnp.matmul(rho_after_step, Z_full)))
-
-        return jnp.trace(jnp.matmul(self.H.full_ham(), rho_after_step))
-
-    def dual_unitary_layer_on_mpo(self, layer_num: int, mpo_tensors: List[jnp.array]):
-        if layer_num < self.d//2:
-            gate_tuples = self.site_tuple_list
-        else:
-            gate_tuples = self.site_tuple_list_inverted
-
-        for i_tuple, gate_tuple in enumerate(gate_tuples):
-            theta = self.theta.at[i_tuple, layer_num].get() 
-            _, gate_tensors = RXX(-theta) #conjugate the gate
-
-            res_tensors = twoq_gate(gate_tensors, [mpo_tensors[site] for site in gate_tuple])
-            mpo_tensors[gate_tuple[0]] = res_tensors[0]
-            mpo_tensors[gate_tuple[1]] = res_tensors[1]
         
+        target_H = self.H.full_ham()
+
+        for layer_num in range(2):
+            # two qubit gates
+            gate_tuples = self.site_tuple_list
+            U_2site = self.U2q
+
+            for i_tuple, site_tuple in enumerate(gate_tuples):
+                dim_left = 2 ** site_tuple[0]
+                dim_right = 2 ** (self.N - site_tuple[-1] - 1)
+
+                identity_left = jnp.identity(dim_left)
+                identity_right = jnp.identity(dim_right)
+
+                U_2site_full = jnp.kron(identity_left, jnp.kron(U_2site, identity_right))
+                target_H = jnp.matmul(U_2site_full, jnp.matmul(target_H, U_2site_full.conj().T)) 
+
+            # # single qubit gates            
+            # for i in range(self.N):
+            #     dim_left = 2 ** i
+            #     dim_right = 2 ** (self.N - i - 1)
+            #     identity_left = jnp.identity(dim_left)
+            #     identity_right = jnp.identity(dim_right)
+
+            #     U_1site_full = jnp.kron(identity_left, jnp.kron(self.sq_gates[layer_num, i], identity_right))
+            #     target_H = jnp.matmul(U_1site_full, jnp.matmul(target_H, U_1site_full.conj().T)) 
+
+        return jnp.trace(jnp.matmul(target_H, rho_after_step))
+    
+    def dual_unitary_layer_on_mpo(self, layer_num: int, mpo_tensors: List[jnp.array]):
+        if layer_num < 2 + self.d:
+            gate_tuples = self.site_tuple_list_inverted
+            gate_tensors = self.U2q_dagger_tensors
+
+            for i_tuple, gate_tuple in enumerate(gate_tuples):
+                res_tensors = twoq_gate(gate_tensors, [mpo_tensors[site] for site in gate_tuple])
+                mpo_tensors[gate_tuple[0]] = res_tensors[0]
+                mpo_tensors[gate_tuple[1]] = res_tensors[1]
+
+            # for i in range(self.N):
+            #     res = singleq_gate(self.sq_gates[layer_num, i].conj().T, mpo_tensors[i])
+            #     mpo_tensors[i] = res
+        else:
+            # for i in range(self.N):
+            #     res = singleq_gate(self.sq_gates[layer_num, i].conj().T, mpo_tensors[i])
+            #     mpo_tensors[i] = res
+
+            gate_tuples = self.site_tuple_list
+            gate_tensors = self.U2q_tensors
+
+            for i_tuple, gate_tuple in enumerate(gate_tuples):
+                res_tensors = twoq_gate(gate_tensors, [mpo_tensors[site] for site in gate_tuple])
+                mpo_tensors[gate_tuple[0]] = res_tensors[0]
+                mpo_tensors[gate_tuple[1]] = res_tensors[1]
+
         return mpo_tensors
     
     def noisy_dual_layer_on_mpo(self, layer_num: int, mpo_tensors: List[jnp.array]):
@@ -695,20 +763,37 @@ class SumZ_RXX():
         mpo_tensors = self.dual_unitary_layer_on_mpo(layer_num, mpo_tensors)
 
         return mpo_tensors
-    
-    def init_mpo(self, D: int):
-        mpo_tensors = self.H_tensors
 
-        for i in range(self.d-1, -1, -1):
+    def target_H(self):
+        target_H_tensors = self.H_tensors
+        for layer_num in range(2):
+            gate_tuples = self.site_tuple_list
+            gate_tensors = self.U2q_tensors
+
+            for i_tuple, gate_tuple in enumerate(gate_tuples):
+                res_tensors = twoq_gate(gate_tensors, [target_H_tensors[site] for site in gate_tuple])
+                target_H_tensors[gate_tuple[0]] = res_tensors[0]
+                target_H_tensors[gate_tuple[1]] = res_tensors[1]
+            
+            # for i in range(self.N):
+            #     res = singleq_gate(self.sq_gates[layer_num, i], target_H_tensors[i])
+            #     target_H_tensors[i] = res
+        
+        self.target_H_tensors = target_H_tensors
+
+    def init_mpo(self, D: int):
+        mpo_tensors = self.target_H_tensors
+
+        for i in range(self.depth-1, -1, -1):
             mpo_tensors = self.noisy_dual_layer_on_mpo(i, mpo_tensors)
             
-            # canonicalize
-            compressed_dims = tuple(bond_dims(mpo_tensors)[1:-1])
-            mpo_tensors = right_canonicalize(tensors = mpo_tensors, compressed_dims = compressed_dims)
+            # # canonicalize
+            # compressed_dims = tuple(bond_dims(mpo_tensors)[1:-1])
+            # mpo_tensors = right_canonicalize(tensors = mpo_tensors, compressed_dims = compressed_dims)
 
-            # compress
-            compressed_dims = gen_compression_dims(D, self.N)
-            mpo_tensors = left_canonicalize(tensors = mpo_tensors, compressed_dims = compressed_dims)
+            # # compress
+            # compressed_dims = gen_compression_dims(D, self.N)
+            # mpo_tensors = left_canonicalize(tensors = mpo_tensors, compressed_dims = compressed_dims)
 
         return mpo_tensors
 

@@ -15,9 +15,29 @@ import matplotlib.pyplot as plt
 
 from vqa_bounds import mpo
 
-num_sites = 4
+num_sites = 2
 
 
+#-------------------------------------------#
+#------------- circuit test ----------------#
+#-------------------------------------------#
+
+d = 0
+p = 0.01
+theta = 5 * np.pi/2
+seed = 69
+
+circ = mpo.SumZ_RXX(num_sites, d, p, theta, seed)
+
+print(circ.primal_noisy())
+
+primal1 = circ.primal_noisy()
+
+init_mpo_tensors = circ.init_mpo(D = 2 ** 4)
+
+primal2 = mpo.trace_two_MPOs(circ.psi_init_tensors, init_mpo_tensors)
+
+print(np.abs(primal1 - primal2))
 
 #-------------------------------------------#
 #--------------- Haar test -----------------#
