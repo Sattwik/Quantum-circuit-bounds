@@ -606,8 +606,9 @@ class SumZ_RXX():
         self.site_tuple_list = list(zip(range(0, self.N, 2), range(1, self.N, 2))) + list(zip(range(1, self.N, 2), range(2, self.N, 2)))
         self.site_tuple_list_inverted = list(zip(range(1, self.N, 2), range(2, self.N, 2))) + list(zip(range(0, self.N, 2), range(1, self.N, 2)))
 
-        self.psi_init = jnp.zeros((2 ** self.N,), dtype = complex)
-        self.psi_init = self.psi_init.at[-1].set(1.0)
+        if N <= 6:
+            self.psi_init = jnp.zeros((2 ** self.N,), dtype = complex)
+            self.psi_init = self.psi_init.at[-1].set(1.0)
 
         psi_init_local_tensor = jnp.array([[0, 0],[0, 1]], dtype = complex)
         psi_init_local_tensor = jnp.expand_dims(psi_init_local_tensor, axis = (0,2))
