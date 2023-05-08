@@ -78,13 +78,22 @@ def submit_simulation(N, d, seed, p, D, theta, result_save_path):
 # theta_list = [0.03, 0.1, 1.0]
 
 
-# informed sweep
+# informed 2D sweep
+# N_list = [32]
+# # p_list = [0.03, 0.1, 0.3]
+# p_list = np.linspace(0.03, 0.3, 10)
+# theta_list = np.linspace(0.01, 1.50, 11)
+# # [0.01, 0.1, 1.0]
+# d_list = [6, 12, 20]
+# D_list = [16, 32, 64]
+
+# informed depth plots
 N_list = [32]
 # p_list = [0.03, 0.1, 0.3]
 p_list = np.linspace(0.03, 0.3, 10)
-theta_list = np.linspace(0.01, 1.50, 11)
+theta_list = [0.5]
 # [0.01, 0.1, 1.0]
-d_list = [6, 12, 20]
+d_list = np.array(np.linspace(4, 24, 11), dtype = int)
 D_list = [16, 32, 64]
 
 sweep_heis(N_list, p_list, theta_list, d_list, D_list)
