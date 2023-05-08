@@ -59,5 +59,5 @@ data_file_name = "heis1D-N-" + str(N) + "-d-" + str(d) + "-seed-" + \
                 cliargs.seed + "-theta-" + f'{theta:.4f}' + \
                 "-p-" + str(p) + "-D-" + str(D) + ".pkl"
 
-# with open(os.path.join(cliargs.result_save_path, data_file_name), "wb") as f_for_pkl:
-#     pickle.dump(data_list, f_for_pkl)
+with open(os.path.join(cliargs.result_save_path, data_file_name), "wb") as f_for_pkl:
+    pickle.dump(data_list, f_for_pkl)

@@ -499,6 +499,7 @@ def RX(theta:float):
 def RXX(theta: float):
     # not clifford
     # D = 2
+    # period = 2 \pi
     c = jnp.cos(theta)
     s = jnp.sin(theta)
 
@@ -745,6 +746,7 @@ class SumZ_RXX():
 
         return jnp.trace(jnp.matmul(target_H, rho_after_step))
     
+    @partial(jit, static_argnums=(0,1))
     def dual_unitary_layer_on_mpo(self, layer_num: int, mpo_tensors: List[jnp.array]):
         if layer_num < self.d_compute + self.d:
             for i in range(self.N):
@@ -773,6 +775,7 @@ class SumZ_RXX():
 
         return mpo_tensors
     
+    @partial(jit, static_argnums=(0,1))
     def noisy_dual_layer_on_mpo(self, layer_num: int, mpo_tensors: List[jnp.array]):
         mpo_tensors = noise_layer(mpo_tensors, self.p)
         mpo_tensors = self.dual_unitary_layer_on_mpo(layer_num, mpo_tensors)
