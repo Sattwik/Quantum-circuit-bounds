@@ -27,7 +27,7 @@ N = int(cliargs.N)
 d = int(cliargs.d)
 D = int(cliargs.D)
 p = float(cliargs.p)
-theta = float(cliargs.p)
+theta = float(cliargs.theta)
 seed = int(cliargs.seed)
 
 print('N = ', N)
