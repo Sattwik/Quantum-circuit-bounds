@@ -15,29 +15,55 @@ import matplotlib.pyplot as plt
 
 from vqa_bounds import mpo
 
-num_sites = 2
+num_sites = 4
 
+#-------------------------------------------#
+#---------- error dynamics test ------------#
+#-------------------------------------------#
+
+d = 15
+p = 0.01
+theta = np.pi/7
+seed = 69
+
+circ = mpo.SumZ_RXX(num_sites, d, p, theta, seed)
+
+primal1 = circ.primal_noisy()
+print(primal1)
+
+init_mpo_tensors = circ.init_mpo(D = 2 ** num_sites)
+
+primal2 = mpo.trace_two_MPOs(circ.psi_init_tensors, init_mpo_tensors)
+
+print(np.abs(primal1 - primal2))
+
+
+# error_list = circ.error_dynamics(D = 5)
+# plt.plot(list(range(circ.depth))[::-1], error_list)
+# plt.show()
+
+heis_bound, dual_bound = circ.bounds(D = 2 ** num_sites)
 
 #-------------------------------------------#
 #------------- circuit test ----------------#
 #-------------------------------------------#
 
-d = 0
-p = 0.01
-theta = 5 * np.pi/2
-seed = 69
+# d = 3
+# p = 0.0
+# theta = np.pi/7
+# seed = 69
 
-circ = mpo.SumZ_RXX(num_sites, d, p, theta, seed)
+# circ = mpo.SumZ_RXX(num_sites, d, p, theta, seed)
 
-print(circ.primal_noisy())
+# print(circ.primal_noisy())
 
-primal1 = circ.primal_noisy()
+# primal1 = circ.primal_noisy()
 
-init_mpo_tensors = circ.init_mpo(D = 2 ** 4)
+# init_mpo_tensors = circ.init_mpo(D = 10)
 
-primal2 = mpo.trace_two_MPOs(circ.psi_init_tensors, init_mpo_tensors)
+# primal2 = mpo.trace_two_MPOs(circ.psi_init_tensors, init_mpo_tensors)
 
-print(np.abs(primal1 - primal2))
+# print(np.abs(primal1 - primal2))
 
 #-------------------------------------------#
 #--------------- Haar test -----------------#

@@ -255,52 +255,53 @@ def check_canon(tensors: List[jnp.array], canon = "left"):
         raise ValueError
     return norm_list
 
-@jit
-def subtract_MPO(tensorsA: List[jnp.array], tensorsB: List[jnp.array]):
-    """
-    Direct sum.
+# @jit
+# def subtract_MPO(tensorsA: List[jnp.array], tensorsB: List[jnp.array]):
+#     """
+#     Direct sum.
 
-    checked through full_contract.
-    """
-    num_sites = len(tensorsA)
+#     checked through full_contract.
+#     !!!!! 
+#     """
+#     num_sites = len(tensorsA)
 
-    sum_tensors = []
+#     sum_tensors = []
 
-    i = 0
-    tA = tensorsA[i]
-    tB = tensorsB[i]
+#     i = 0
+#     tA = tensorsA[i]
+#     tB = tensorsB[i]
 
-    new_tensor = jnp.zeros((tA.shape[0], tA.shape[1],
-    tA.shape[2] + tB.shape[2], tA.shape[3]), dtype = complex)
+#     new_tensor = jnp.zeros((tA.shape[0], tA.shape[1],
+#     tA.shape[2] + tB.shape[2], tA.shape[3]), dtype = complex)
 
-    new_tensor = new_tensor.at[:, :, :tA.shape[2], :].set(tA)
-    new_tensor = new_tensor.at[:, :, tA.shape[2]:, :].set(-tB)
-    sum_tensors.append(new_tensor)
+#     new_tensor = new_tensor.at[:, :, :tA.shape[2], :].set(tA)
+#     new_tensor = new_tensor.at[:, :, tA.shape[2]:, :].set(-tB)
+#     sum_tensors.append(new_tensor)
 
-    for i in range(1, num_sites - 1):
-        tA = tensorsA[i]
-        tB = tensorsB[i]
+#     for i in range(1, num_sites - 1):
+#         tA = tensorsA[i]
+#         tB = tensorsB[i]
 
-        new_tensor = jnp.zeros((tA.shape[0] + tB.shape[0], tA.shape[1],
-        tA.shape[2] + tB.shape[2], tA.shape[3]), dtype = complex)
+#         new_tensor = jnp.zeros((tA.shape[0] + tB.shape[0], tA.shape[1],
+#         tA.shape[2] + tB.shape[2], tA.shape[3]), dtype = complex)
 
-        new_tensor = new_tensor.at[:tA.shape[0], :, :tA.shape[2], :].set(tA)
-        new_tensor = new_tensor.at[tA.shape[0]:, :, tA.shape[2]:, :].set(-tB)
+#         new_tensor = new_tensor.at[:tA.shape[0], :, :tA.shape[2], :].set(tA)
+#         new_tensor = new_tensor.at[tA.shape[0]:, :, tA.shape[2]:, :].set(-tB)
 
-        sum_tensors.append(new_tensor)
+#         sum_tensors.append(new_tensor)
 
-    i = num_sites - 1
-    tA = tensorsA[i]
-    tB = tensorsB[i]
+#     i = num_sites - 1
+#     tA = tensorsA[i]
+#     tB = tensorsB[i]
 
-    new_tensor = jnp.zeros((tA.shape[0] + tB.shape[0], tA.shape[1],
-    tA.shape[2], tA.shape[3]), dtype = complex)
+#     new_tensor = jnp.zeros((tA.shape[0] + tB.shape[0], tA.shape[1],
+#     tA.shape[2], tA.shape[3]), dtype = complex)
 
-    new_tensor = new_tensor.at[:tA.shape[0], :, :, :].set(tA)
-    new_tensor = new_tensor.at[tA.shape[0]:, :, :, :].set(-tB)
-    sum_tensors.append(new_tensor)
+#     new_tensor = new_tensor.at[:tA.shape[0], :, :, :].set(tA)
+#     new_tensor = new_tensor.at[tA.shape[0]:, :, :, :].set(-tB)
+#     sum_tensors.append(new_tensor)
 
-    return sum_tensors
+#     return sum_tensors
 
 @jit
 def trace_MPO_squared(tensors: List[jnp.array]):
@@ -356,20 +357,20 @@ def conjugate_mpo(mpo_tensors: List[jnp.array]):
 
     return conj_mpo_tensors
 
-def negate_mpo(mpo_tensors: List[jnp.array]):
-    return [-tensor for tensor in mpo_tensors] 
+# def negate_mpo(mpo_tensors: List[jnp.array]):
+#     return [-tensor for tensor in mpo_tensors] 
 
 def scale_mpo(mpo_tensors: List[jnp.array], s: float):
     scaled_tensors = [tensor for tensor in mpo_tensors] 
     scaled_tensors[0] = s * scaled_tensors[0]
     return scaled_tensors
 
-def hermitize_mpo(mpo_tensors: List[jnp.array]):
-    minus_conj_mpo_tensors = negate_mpo(conjugate_mpo(mpo_tensors))
-    herm_mpo_tensors = subtract_MPO(mpo_tensors, minus_conj_mpo_tensors)
-    herm_mpo_tensors = scale_mpo(herm_mpo_tensors, 0.5)
+# def hermitize_mpo(mpo_tensors: List[jnp.array]):
+#     minus_conj_mpo_tensors = scale_mpo(conjugate_mpo(mpo_tensors), -1.0)
+#     herm_mpo_tensors = subtract_MPO(mpo_tensors, minus_conj_mpo_tensors)
+#     herm_mpo_tensors = scale_mpo(herm_mpo_tensors, 0.5)
 
-    return herm_mpo_tensors
+#     return herm_mpo_tensors
 
 #------------------------------------------------------------------------------#
 # Models and circuits
@@ -591,8 +592,9 @@ def noise_layer(tensors: List[jnp.array], p: float):
 class SumZ_RXX():
     def __init__(self, N: int, d: int, p: float, theta: float, seed: int):
         self.N = N
-        self.d = d 
-        self.depth = 2 + 2 * self.d 
+        self.d = d
+        self.d_compute = 1
+        self.depth = self.d_compute + 2 * self.d 
         self.p = p
         self.H, self.H_tensors = HamSumZ(self.N)
 
@@ -615,20 +617,27 @@ class SumZ_RXX():
         key = jax.random.PRNGKey(seed)
         self.sq_gates = {}
 
-        for i_d in range(2):
+        for i_d in range(self.d_compute):
             for i in range(self.N):
                 self.sq_gates[i_d, i], key = HaarSQ(key)
 
-        for i_d in range(2, 2 + self.d):
+        for i_d in range(self.d_compute, self.d_compute + self.d):
             for i in range(N):
                 U, key = HaarSQ(key)
                 self.sq_gates[i_d, i] = U
-                self.sq_gates[2 + 2 * self.d - 1 - (i_d - 2), i] = U.conj().T
+                self.sq_gates[self.d_compute + 2 * self.d - 1 - (i_d - self.d_compute), i] = U.conj().T
 
         self.U2q, self.U2q_tensors = RXX(self.theta)
         self.U2q_dagger, self.U2q_dagger_tensors = RXX(-self.theta)
         
         self.target_H()
+
+        q = 1 - self.p
+        q_powers = jnp.array([q**i for i in range(self.depth)])
+
+        self.entropy_bounds = self.N * self.p * jnp.log(2) * \
+                jnp.array([jnp.sum(q_powers.at[:i+1].get()) for i in range(self.depth)])
+        self.purity_bounds = jnp.exp(-self.entropy_bounds)
 
     def primal_noisy(self):
         rho_init = jnp.outer(self.psi_init, self.psi_init.conj().T)
@@ -637,7 +646,7 @@ class SumZ_RXX():
 
         for layer_num in range(self.depth):
             # two qubit gates
-            if layer_num < 2 + self.d: 
+            if layer_num < self.d_compute + self.d: 
                 gate_tuples = self.site_tuple_list
                 U_2site = self.U2q
 
@@ -651,25 +660,25 @@ class SumZ_RXX():
                     U_2site_full = jnp.kron(identity_left, jnp.kron(U_2site, identity_right))
                     rho_after_step = jnp.matmul(U_2site_full, jnp.matmul(rho_after_step, U_2site_full.conj().T)) 
 
-                # # single qubit gates            
-                # for i in range(self.N):
-                #     dim_left = 2 ** i
-                #     dim_right = 2 ** (self.N - i - 1)
-                #     identity_left = jnp.identity(dim_left)
-                #     identity_right = jnp.identity(dim_right)
+                # single qubit gates            
+                for i in range(self.N):
+                    dim_left = 2 ** i
+                    dim_right = 2 ** (self.N - i - 1)
+                    identity_left = jnp.identity(dim_left)
+                    identity_right = jnp.identity(dim_right)
 
-                #     U_1site_full = jnp.kron(identity_left, jnp.kron(self.sq_gates[layer_num, i], identity_right))
-                #     rho_after_step = jnp.matmul(U_1site_full, jnp.matmul(rho_after_step, U_1site_full.conj().T)) 
+                    U_1site_full = jnp.kron(identity_left, jnp.kron(self.sq_gates[layer_num, i], identity_right))
+                    rho_after_step = jnp.matmul(U_1site_full, jnp.matmul(rho_after_step, U_1site_full.conj().T)) 
             else:
-                # # single qubit gates            
-                # for i in range(self.N):
-                #     dim_left = 2 ** i
-                #     dim_right = 2 ** (self.N - i - 1)
-                #     identity_left = jnp.identity(dim_left)
-                #     identity_right = jnp.identity(dim_right)
+                # single qubit gates            
+                for i in range(self.N):
+                    dim_left = 2 ** i
+                    dim_right = 2 ** (self.N - i - 1)
+                    identity_left = jnp.identity(dim_left)
+                    identity_right = jnp.identity(dim_right)
 
-                #     U_1site_full = jnp.kron(identity_left, jnp.kron(self.sq_gates[layer_num, i], identity_right))
-                #     rho_after_step = jnp.matmul(U_1site_full, jnp.matmul(rho_after_step, U_1site_full.conj().T)) 
+                    U_1site_full = jnp.kron(identity_left, jnp.kron(self.sq_gates[layer_num, i], identity_right))
+                    rho_after_step = jnp.matmul(U_1site_full, jnp.matmul(rho_after_step, U_1site_full.conj().T)) 
 
                 gate_tuples = self.site_tuple_list_inverted
                 U_2site = self.U2q_dagger
@@ -703,7 +712,7 @@ class SumZ_RXX():
         
         target_H = self.H.full_ham()
 
-        for layer_num in range(2):
+        for layer_num in range(self.d_compute):
             # two qubit gates
             gate_tuples = self.site_tuple_list
             U_2site = self.U2q
@@ -718,20 +727,26 @@ class SumZ_RXX():
                 U_2site_full = jnp.kron(identity_left, jnp.kron(U_2site, identity_right))
                 target_H = jnp.matmul(U_2site_full, jnp.matmul(target_H, U_2site_full.conj().T)) 
 
-            # # single qubit gates            
-            # for i in range(self.N):
-            #     dim_left = 2 ** i
-            #     dim_right = 2 ** (self.N - i - 1)
-            #     identity_left = jnp.identity(dim_left)
-            #     identity_right = jnp.identity(dim_right)
+            # single qubit gates            
+            for i in range(self.N):
+                dim_left = 2 ** i
+                dim_right = 2 ** (self.N - i - 1)
+                identity_left = jnp.identity(dim_left)
+                identity_right = jnp.identity(dim_right)
 
-            #     U_1site_full = jnp.kron(identity_left, jnp.kron(self.sq_gates[layer_num, i], identity_right))
-            #     target_H = jnp.matmul(U_1site_full, jnp.matmul(target_H, U_1site_full.conj().T)) 
+                U_1site_full = jnp.kron(identity_left, jnp.kron(self.sq_gates[layer_num, i], identity_right))
+                target_H = jnp.matmul(U_1site_full, jnp.matmul(target_H, U_1site_full.conj().T)) 
+
+        self.target_H_exact = target_H
 
         return jnp.trace(jnp.matmul(target_H, rho_after_step))
     
     def dual_unitary_layer_on_mpo(self, layer_num: int, mpo_tensors: List[jnp.array]):
-        if layer_num < 2 + self.d:
+        if layer_num < self.d_compute + self.d:
+            for i in range(self.N):
+                res = singleq_gate(self.sq_gates[layer_num, i].conj().T, mpo_tensors[i])
+                mpo_tensors[i] = res
+
             gate_tuples = self.site_tuple_list_inverted
             gate_tensors = self.U2q_dagger_tensors
 
@@ -739,15 +754,7 @@ class SumZ_RXX():
                 res_tensors = twoq_gate(gate_tensors, [mpo_tensors[site] for site in gate_tuple])
                 mpo_tensors[gate_tuple[0]] = res_tensors[0]
                 mpo_tensors[gate_tuple[1]] = res_tensors[1]
-
-            # for i in range(self.N):
-            #     res = singleq_gate(self.sq_gates[layer_num, i].conj().T, mpo_tensors[i])
-            #     mpo_tensors[i] = res
         else:
-            # for i in range(self.N):
-            #     res = singleq_gate(self.sq_gates[layer_num, i].conj().T, mpo_tensors[i])
-            #     mpo_tensors[i] = res
-
             gate_tuples = self.site_tuple_list
             gate_tensors = self.U2q_tensors
 
@@ -755,6 +762,10 @@ class SumZ_RXX():
                 res_tensors = twoq_gate(gate_tensors, [mpo_tensors[site] for site in gate_tuple])
                 mpo_tensors[gate_tuple[0]] = res_tensors[0]
                 mpo_tensors[gate_tuple[1]] = res_tensors[1]
+            
+            for i in range(self.N):
+                res = singleq_gate(self.sq_gates[layer_num, i].conj().T, mpo_tensors[i])
+                mpo_tensors[i] = res
 
         return mpo_tensors
     
@@ -765,8 +776,8 @@ class SumZ_RXX():
         return mpo_tensors
 
     def target_H(self):
-        target_H_tensors = self.H_tensors
-        for layer_num in range(2):
+        _, target_H_tensors = HamSumZ(self.N)
+        for layer_num in range(self.d_compute):
             gate_tuples = self.site_tuple_list
             gate_tensors = self.U2q_tensors
 
@@ -775,25 +786,98 @@ class SumZ_RXX():
                 target_H_tensors[gate_tuple[0]] = res_tensors[0]
                 target_H_tensors[gate_tuple[1]] = res_tensors[1]
             
-            # for i in range(self.N):
-            #     res = singleq_gate(self.sq_gates[layer_num, i], target_H_tensors[i])
-            #     target_H_tensors[i] = res
+            for i in range(self.N):
+                res = singleq_gate(self.sq_gates[layer_num, i], target_H_tensors[i])
+                target_H_tensors[i] = res
+
+        return target_H_tensors
+    
+    # def error_dynamics(self, D: int):
+    #     error_list = []
         
-        self.target_H_tensors = target_H_tensors
+    #     mpo_tensors_exact = self.target_H()
+    #     mpo_tensors = self.target_H()
+
+    #     for i in range(self.depth-1, -1, -1):
+    #         mpo_tensors = self.noisy_dual_layer_on_mpo(i, mpo_tensors)
+    #         # canonicalize
+    #         compressed_dims = tuple(bond_dims(mpo_tensors)[1:-1])
+    #         mpo_tensors = right_canonicalize(tensors = mpo_tensors, compressed_dims = compressed_dims)
+
+    #         # compress
+    #         compressed_dims = gen_compression_dims(D, self.N)
+    #         mpo_tensors = left_canonicalize(tensors = mpo_tensors, compressed_dims = compressed_dims)
+
+    #         mpo_tensors_exact = self.noisy_dual_layer_on_mpo(i, mpo_tensors_exact)
+    #         # canonicalize
+    #         compressed_dims = tuple(bond_dims(mpo_tensors_exact)[1:-1])
+    #         mpo_tensors_exact = right_canonicalize(tensors = mpo_tensors_exact, compressed_dims = compressed_dims)
+
+    #         # compress
+    #         compressed_dims = gen_compression_dims(2 ** self.N, self.N)
+    #         mpo_tensors_exact = left_canonicalize(tensors = mpo_tensors_exact, compressed_dims = compressed_dims)
+
+    #         diff_tensors = subtract_MPO(mpo_tensors, mpo_tensors_exact)
+    #         error = trace_MPO_squared(diff_tensors)
+    #         error_list.append(error)
+
+    #         print(error)
+
+    #     return error_list
+    
+    def bounds(self, D: int):
+        sigma = self.target_H()
+        sigma = scale_mpo(sigma, -1.0)
+
+        Ht_norms = [0.0,]
+
+        for i in range(self.depth-1, -1, -1):
+            sigma_new = self.noisy_dual_layer_on_mpo(i, sigma)
+            sigma_new_proj = copy.deepcopy(sigma_new)
+            
+            # canonicalize
+            compressed_dims = tuple(bond_dims(sigma_new_proj)[1:-1])
+            sigma_new_proj = right_canonicalize(tensors = sigma_new_proj, compressed_dims = compressed_dims)
+
+            # compress
+            compressed_dims = gen_compression_dims(D, self.N)
+            sigma_new_proj = left_canonicalize(tensors = sigma_new_proj, compressed_dims = compressed_dims)
+
+            Ht_norm_sq = trace_two_MPOs(sigma_new, sigma_new) + trace_two_MPOs(sigma_new_proj, sigma_new_proj) \
+                         - 2 * trace_two_MPOs(sigma_new, sigma_new_proj)
+
+            # Ht = subtract_MPO(sigma_new_proj, sigma_new)
+            Ht_norm = jnp.sqrt(Ht_norm_sq)
+            Ht_norms.append(Ht_norm)
+
+            sigma = sigma_new_proj
+        
+        init_state_term = -trace_two_MPOs(self.psi_init_tensors, sigma)
+
+        print('init_state_term = ', init_state_term)
+
+        Ht_norms = jnp.array(Ht_norms[:-1][::-1])
+
+        print('Ht_norms = ', Ht_norms)
+
+        heis_bound = init_state_term - jnp.sum(Ht_norms)
+        dual_bound = init_state_term - jnp.dot(jnp.sqrt(self.purity_bounds), Ht_norms)
+
+        return heis_bound, dual_bound
 
     def init_mpo(self, D: int):
-        mpo_tensors = self.target_H_tensors
+        mpo_tensors = self.target_H()
 
         for i in range(self.depth-1, -1, -1):
             mpo_tensors = self.noisy_dual_layer_on_mpo(i, mpo_tensors)
             
-            # # canonicalize
-            # compressed_dims = tuple(bond_dims(mpo_tensors)[1:-1])
-            # mpo_tensors = right_canonicalize(tensors = mpo_tensors, compressed_dims = compressed_dims)
+            # canonicalize
+            compressed_dims = tuple(bond_dims(mpo_tensors)[1:-1])
+            mpo_tensors = right_canonicalize(tensors = mpo_tensors, compressed_dims = compressed_dims)
 
-            # # compress
-            # compressed_dims = gen_compression_dims(D, self.N)
-            # mpo_tensors = left_canonicalize(tensors = mpo_tensors, compressed_dims = compressed_dims)
+            # compress
+            compressed_dims = gen_compression_dims(D, self.N)
+            mpo_tensors = left_canonicalize(tensors = mpo_tensors, compressed_dims = compressed_dims)
 
         return mpo_tensors
 
