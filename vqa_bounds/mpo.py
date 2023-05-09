@@ -485,6 +485,17 @@ def HaarSQ(key: jnp.array):
 
     return jnp.matmul(Q, Lambda), key
 
+@jit 
+def SWAP():
+    U = jnp.array([[1, 0, 0, 0],
+                   [0, 0, 1, 0],
+                   [0, 1, 0, 0],
+                   [0, 0, 0, 1]], dtype = complex)
+
+    tensors, _ = gate_to_MPO(U, num_sites = 2)
+
+    return U, tensors
+
 @jit
 def RX(theta:float):
     X = jnp.array([[0, 1],[1, 0]], dtype = complex)
@@ -851,8 +862,7 @@ class SumZ_RXX():
             compressed_dims = gen_compression_dims(D, self.N)
             sigma_new_proj = left_canonicalize(tensors = sigma_new_proj, compressed_dims = compressed_dims)
 
-            Ht_norm_sq = trace_two_MPOs(sigma_new, sigma_new) + trace_two_MPOs(sigma_new_proj, sigma_new_proj) \
-                         - 2 * trace_two_MPOs(sigma_new, sigma_new_proj)
+            Ht_norm_sq = trace_two_MPOs(sigma_new, sigma_new) + trace_two_MPOs(sigma_new_proj, sigma_new_proj) - 2 * trace_two_MPOs(sigma_new, sigma_new_proj)
 
             # Ht = subtract_MPO(sigma_new_proj, sigma_new)
             Ht_norm = jnp.sqrt(Ht_norm_sq)
