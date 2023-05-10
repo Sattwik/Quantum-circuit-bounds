@@ -54,7 +54,7 @@ p_list = [0.05]
 d_list = np.array(np.linspace(4, 24, 11), dtype = int)
 depth_list = [1 + 2 * d for d in d_list]
 
-data_path = "../vqa_data/0509/20230509-144732/"
+data_path = "../vqa_data/0510/20230510-143449/"
 
 for p in p_list:
     entropic_bounds_new = []
