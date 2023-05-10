@@ -47,9 +47,12 @@ CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
 # d_list = np.array(np.linspace(4, 24, 11), dtype = int)
 # D_list = [16, 32, 64]
 
-data_path = "../vqa_data/0509/20230509-144732/"
+# data_path = "../vqa_data/0509/20230509-144732/"
+data_path = "./20230509-144732/"
 N_list = [32]
 p_list = np.linspace(0.03, 0.3, 5)
+p_list = np.append(p_list, 0.05)
+p_list = np.sort(p_list)
 theta_list = [0.159]
 d_list = np.array(np.linspace(4, 24, 11), dtype = int)
 D_list = [16, 32, 64]
@@ -102,6 +105,8 @@ scaled_heis_bound_list = (heis_bound_list - clean_sol)/norm
 scaled_dual_bound_list = (dual_bound_list - clean_sol)/norm
 scaled_heis_val_list = (heis_val_list - clean_sol)/norm
 
+# bound vs depth plots
+
 for i_N, N in enumerate(N_list):
     for i_seed, seed in enumerate(N + np.array(range(num_seeds))):
         for i_p, p in enumerate(p_list):
@@ -147,10 +152,64 @@ for i_N, N in enumerate(N_list):
                 # ax.legend()
                 ax.set_title("N = " + str(N) + r", $\theta$ = " + f'{theta:.2f}' + r", \ $p$ = " + str(p))
                 plt.tight_layout()
-                figname = str(i_p) + str(i_theta) + "_heis_test_N_" + str(N) + "_p_" + str(p) + "_theta_" + f'{theta:.2f}' + ".pdf"
+                figname = str(i_theta) + str(i_p) + "_heis_test_N_" + str(N) + "_p_" + str(p) + "_theta_" + f'{theta:.2f}' + ".pdf"
                 plt.savefig(os.path.join(data_path, figname), bbox_inches = 'tight', format = 'pdf')
                 plt.close()
 
+# bound vs p plots
+
+i_d = 4
+d = d_list[i_d]
+
+entropic_bound_vs_p = []
+
+for p in p_list:
+    with open(os.path.join(data_path, "entropic_bound_noise_bounded_temp_" + str(p) + ".npy"), 'rb') as f:
+        entropic_bound_list = np.load(f)
+    entropic_bound_vs_p.append(entropic_bound_list[i_d])
+entropic_bound_vs_p = np.array(entropic_bound_vs_p)
+
+for i_N, N in enumerate(N_list):
+    for i_seed, seed in enumerate(N + np.array(range(num_seeds))):
+        for i_theta, theta in enumerate(theta_list):
+            for i_D, D in enumerate(D_list):
+            
+                fig = plt.figure(figsize=(3.5284350352843505, 2.469904524699045))
+                ax = fig.add_subplot(111)
+
+                ax.plot(p_list, (entropic_bound_vs_p - clean_sol)/norm, 
+                            ls = "--", 
+                            label = "Entropic", color = 'k', lw = 0.75, 
+                            marker = '^', markersize = 3)
+
+                ax.plot(p_list, (dual_bound_list[i_N, i_seed, :, i_D, i_theta, i_d] - clean_sol)/norm, 
+                        label = "Dual, D = " + str(D), color = 'C' + str(i_D), lw = 0.75, 
+                        marker = '.', markersize = 4)
+                ax.plot(p_list, (heis_bound_list[i_N, i_seed, :, i_D, i_theta, i_d] - clean_sol)/norm, 
+                        ls = ":", 
+                        label = "Heis.,  D = " + str(D), color = 'C' + str(i_D), lw = 0.75, 
+                        marker = '+', markersize = 3)
+
+                legend_elements_2 = [Line2D([0], [0], marker='.', color='w', label='Dual', markerfacecolor='k'),
+                             Line2D([0], [0], marker='+', color='w', label='Heisenberg', markerfacecolor='k'),
+                             Line2D([0], [0], marker='^', color='w', label='Entropic', markerfacecolor='k')]
+
+                # first_legend = ax.legend(handles = legend_elements_1, loc='lower left', frameon = True)
+                ax.legend(handles = legend_elements_2, loc='lower left', bbox_to_anchor = (0.27, 0), frameon = True)
+                # ax.add_artist(first_legend)
+
+                ax.set_ylim(bottom = 0.0, top = 0.55)
+                ax.set_ylabel('Lower bounds')
+                ax.set_xlabel('Noise rate, ' + r'$p$')
+                # ax.set_yscale('log')
+                # ax.legend()
+                ax.set_title("N = " + str(N) + r", $\theta$ = " + f'{theta:.2f}' + r", \ $D$ = " + str(D))
+                plt.tight_layout()
+                figname = str(i_theta + 1) + str(i_D) + "_heis_test_N_" + str(N) + "_D_" + str(D) + "_theta_" + f'{theta:.2f}' + ".pdf"
+                plt.savefig(os.path.join(data_path, figname), bbox_inches = 'tight', format = 'pdf')
+                plt.close()
+
+# bound vs depth plot variants
 
 # for i_N, N in enumerate(N_list):
 #     for i_seed, seed in enumerate(N + np.array(range(num_seeds))):

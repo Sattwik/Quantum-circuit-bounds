@@ -49,7 +49,8 @@ def dual_grad_nc(dual_vars: np.array, dual_params: NCDualParams):
     return grad(dual_obj_nc, argnums = 0)(dual_vars, dual_params)
 
 N = 32
-p_list = np.linspace(0.03, 0.3, 5)
+# p_list = np.linspace(0.03, 0.3, 5)
+p_list = [0.05]
 d_list = np.array(np.linspace(4, 24, 11), dtype = int)
 depth_list = [1 + 2 * d for d in d_list]
 

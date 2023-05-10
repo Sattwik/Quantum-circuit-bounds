@@ -26,7 +26,8 @@ CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
                   '#999999', '#e41a1c', '#dede00']
 
 
-data_path = "../vqa_data/0508/20230508-123611/"
+# data_path = "../vqa_data/0508/20230508-123611/"
+data_path = "20230508-123611/"
 N_list = [32]
 p_list = np.linspace(0.03, 0.3, 10)
 theta_list = np.linspace(0.01, 1.50, 11)

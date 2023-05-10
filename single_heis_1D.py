@@ -9,7 +9,7 @@ import jax
 import jax.numpy as jnp
 from jax.config import config
 config.update("jax_enable_x64", True)
-from fermions import gaussian
+from vqa_bounds import mpo_numpy
 
 parser = argparse.ArgumentParser(description='System size(N), noise probability(p), seed')
 parser.add_argument('--N', type = str)
@@ -20,8 +20,6 @@ parser.add_argument('--theta', type = str)
 parser.add_argument('--D', type = str)
 parser.add_argument('--result_save_path', type = str)
 cliargs = parser.parse_args()
-
-from vqa_bounds import mpo
 
 N = int(cliargs.N)
 d = int(cliargs.d)
@@ -35,7 +33,7 @@ print('d = ', d)
 print('p = ', p)
 print('theta = ', theta)
 
-circ = mpo.SumZ_RXX(N, d, p, theta, seed)
+circ = mpo_numpy.SumZ_RXX(N, d, p, theta, seed)
 
 hval, hb, db = circ.bounds(D = D)
 
