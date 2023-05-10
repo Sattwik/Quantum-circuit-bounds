@@ -3,6 +3,7 @@ from typing import List, Tuple, Callable, Dict
 from functools import partial
 import copy
 import os
+import time
 
 import numpy as np
 import jax
@@ -31,20 +32,82 @@ CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
                   '#f781bf', '#a65628', '#984ea3',
                   '#999999', '#e41a1c', '#dede00']
 
-from vqa_bounds import mpo
+from vqa_bounds import mpo, mpo_numpy
 
-num_sites = 4
+num_sites = 32
+
+#-------------------------------------------#
+#----- circuit bounds test with numba ------#
+#-------------------------------------------#
+
+d = 12
+p = 0.01
+theta = np.pi/7
+seed = 69
+
+start = time.time()
+circ = mpo_numpy.SumZ_RXX(num_sites, d, p, theta, seed)
+heis_val, heis_bound, dual_bound = circ.bounds(D = 16)
+end = time.time()
+
+print("numpy time = ", end - start)
+
+# primal1 = circ.primal_noisy()
+# print(primal1)
+
+# init_mpo_tensors = circ.init_mpo(D = 2 ** num_sites)
+
+# primal2 = mpo_numpy.trace_two_MPOs(circ.psi_init_tensors, init_mpo_tensors)
+
+# print(np.abs(primal1 - primal2))
+
+
+# error_list = circ.error_dynamics(D = 5)
+# plt.plot(list(range(circ.depth))[::-1], error_list)
+# plt.show()
+
+start = time.time()
+circ2 = mpo.SumZ_RXX(num_sites, d, p, theta, seed)
+
+for key, value in circ2.sq_gates.items():
+    circ2.sq_gates[key] = jnp.array(circ.sq_gates[key])
+
+heis_val2, heis_bound2, dual_bound2 = circ2.bounds(D = 16)
+end = time.time()
+
+print("jax time = ", end - start)
+
+print(heis_val - heis_val2)
+print(heis_bound - heis_bound2)
+print(dual_bound - dual_bound2)
+
+#-------------------------------------------#
+#-------- canon test with fori_loop --------#
+#-------------------------------------------#
+
+# tensors = [jax.random.normal(shape = (i + 1, 2, i + 2, 2), key = jax.random.PRNGKey(i), dtype = complex) for i in range(num_sites)]
+# lastshape = tensors[-1].shape[0:2] + (1,) + (tensors[-1].shape[3],)
+# tensors[-1] = jax.random.normal(shape = lastshape, key = jax.random.PRNGKey(num_sites + 1), dtype = complex)
+
+# ctensors = mpo.left_canonicalize(tensors, compressed_dims = tuple(mpo.bond_dims(tensors)[1:-1]))
+# # # ctensors = mpo.right_canonicalize(tensors)
+# norms = mpo.check_canon(ctensors, canon = "left")
+
+# T_full = mpo.full_contract(tensors)
+# CT_full = mpo.full_contract(ctensors)
+
+# print(np.linalg.norm(T_full - CT_full))
 
 #-------------------------------------------#
 #------------- swap gate test --------------#
 #-------------------------------------------#
 
-U, swap_tensors = mpo.SWAP()
+# U, swap_tensors = mpo.SWAP()
 
-_, s = mpo.gate_to_MPO(U, num_sites = 2)
+# _, s = mpo.gate_to_MPO(U, num_sites = 2)
 
-cnot, _ = mpo.CNOT()
-_, s2 = mpo.gate_to_MPO(cnot, num_sites=2)
+# cnot, _ = mpo.CNOT()
+# _, s2 = mpo.gate_to_MPO(cnot, num_sites=2)
 
 #-------------------------------------------#
 #---------- circuit bounds test ------------#
