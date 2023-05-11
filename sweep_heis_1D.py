@@ -87,23 +87,24 @@ def submit_simulation(N, d, seed, p, D, theta, result_save_path):
 # d_list = [6, 12, 20]
 # D_list = [16, 32, 64]
 
-# informed depth plots
+# # informed depth plots
 # N_list = [32]
 # # p_list = [0.03, 0.1, 0.3]
 # p_list = np.linspace(0.03, 0.3, 10)
 # theta_list = [0.01, 0.05, 0.1, 0.159]
 # d_list = np.array(np.linspace(4, 24, 11), dtype = int)
+# # d_list = np.array(np.linspace(24, 240, 11), dtype = int)
 # D_list = [16, 24, 32, 48, 64]
 
 # informed depth plots round 2
-# N_list = [32]
-# # p_list = [0.03, 0.1, 0.3]
-# # p_list = np.linspace(0.03, 0.3, 5)
-# p_list = [0.03, 0.05]
-# theta_list = [0.159]
-# # [0.01, 0.1, 1.0]
-# d_list = np.array(np.linspace(24, 240, 11), dtype = int)
-# D_list = [32]
+N_list = [32]
+# p_list = [0.03, 0.1, 0.3]
+# p_list = np.linspace(0.03, 0.3, 5)
+p_list = [0.03, 0.05]
+theta_list = [0.159]
+# [0.01, 0.1, 1.0]
+d_list = np.concatenate((np.array(np.linspace(4, 24, 11), dtype = int) , np.array(np.linspace(24, 240, 11), dtype = int)))
+D_list = [64]
 
 # informed depth plots round 3
 # N_list = [32]
@@ -116,13 +117,22 @@ def submit_simulation(N, d, seed, p, D, theta, result_save_path):
 # D_list = [32]
 
 # informed depth plots round 3
-N_list = [40, 50]
-# p_list = [0.03, 0.1, 0.3]
-# p_list = np.linspace(0.03, 0.3, 5)
-p_list = [0.03, 0.05, 0.1]
-theta_list = [0.05, 0.1, 0.159]
-# [0.01, 0.1, 1.0]
-d_list = np.concatenate((np.array(np.linspace(4, 24, 11), dtype = int) , np.array(np.linspace(24, 240, 11), dtype = int)))
-D_list = [16, 24, 32, 48, 64]
+# N_list = [40, 50]
+# # p_list = [0.03, 0.1, 0.3]
+# # p_list = np.linspace(0.03, 0.3, 5)
+# p_list = [0.03, 0.05, 0.1]
+# theta_list = [0.05, 0.1, 0.159]
+# # [0.01, 0.1, 1.0]
+# d_list = np.concatenate((np.array(np.linspace(4, 24, 11), dtype = int) , np.array(np.linspace(24, 240, 11), dtype = int)))
+# D_list = [16, 24, 32, 48, 64]
+
+# informed depth plots round 4
+# N_list = [32]
+# # p_list = [0.03, 0.1, 0.3]
+# p_list = np.linspace(0.03, 0.3, 10)
+# theta_list = [0.01, 0.05, 0.1, 0.159]
+# d_list = np.array(np.linspace(4, 24, 11), dtype = int)
+# # d_list = np.array(np.linspace(24, 240, 11), dtype = int)
+# D_list = [16, 24, 32, 48, 64]
 
 sweep_heis(N_list, p_list, theta_list, d_list, D_list)
