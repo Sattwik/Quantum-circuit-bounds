@@ -57,15 +57,33 @@ CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
 # d_list = np.array(np.linspace(4, 24, 11), dtype = int)
 # D_list = [16, 32, 64]
 
-data_path = "../vqa_data/0510/20230510-143449/"
+# data_path = "../vqa_data/0510/20230510-143449/"
+# N_list = [32]
+# # p_list = [0.03, 0.1, 0.3]
+# # p_list = np.linspace(0.03, 0.3, 5)
+# p_list = [0.05]
+# theta_list = [0.159]
+# # [0.01, 0.1, 1.0]
+# d_list = np.array(np.linspace(4, 24, 11), dtype = int)
+# D_list = [16, 32, 64]
+
+# data_path = "../vqa_data/0510/20230510-183410/"
+# N_list = [32]
+# # p_list = [0.03, 0.1, 0.3]
+# # p_list = np.linspace(0.03, 0.3, 5)
+# p_list = [0.03]
+# theta_list = [0.159]
+# # [0.01, 0.1, 1.0]
+# d_list = np.concatenate((np.array(np.linspace(4, 24, 11), dtype = int), np.array(np.linspace(24, 240, 11), dtype = int)))
+# D_list = [32]
+
+data_path = "../vqa_data/0510/20230510-145039/"
 N_list = [32]
 # p_list = [0.03, 0.1, 0.3]
-# p_list = np.linspace(0.03, 0.3, 5)
-p_list = [0.05]
-theta_list = [0.159]
-# [0.01, 0.1, 1.0]
+p_list = np.linspace(0.03, 0.3, 10)
+theta_list = [0.01, 0.05, 0.1, 0.159]
 d_list = np.array(np.linspace(4, 24, 11), dtype = int)
-D_list = [16, 32, 64]
+D_list = [16, 24, 32, 48, 64]
 
 num_D = len(D_list)
 num_N = len(N_list)
@@ -129,6 +147,8 @@ for i_N, N in enumerate(N_list):
                 fig = plt.figure(figsize=(3.5284350352843505, 2.469904524699045))
                 ax = fig.add_subplot(111)
 
+                ax.axhline(y = 0, ls = '--', color = 'gray', lw = 0.75)
+
                 ax.plot([1 + 2 * d for d in d_list], (entropic_bound_list - clean_sol)/norm, 
                             ls = "--", 
                             label = "Entropic", color = 'k', lw = 0.75, 
@@ -140,22 +160,25 @@ for i_N, N in enumerate(N_list):
                     ax.plot([1 + 2 * d for d in d_list], (dual_bound_list[i_N, i_seed, i_p, i_D, i_theta, :] - clean_sol)/norm, 
                             label = "Dual, D = " + str(D), color = 'C' + str(i_D), lw = 0.75, 
                             marker = '.', markersize = 4)
-                    ax.plot([1 + 2 * d for d in d_list], (heis_bound_list[i_N, i_seed, i_p, i_D, i_theta, :] - clean_sol)/norm, 
-                            ls = ":", 
-                            label = "Heis.,  D = " + str(D), color = 'C' + str(i_D), lw = 0.75, 
-                            marker = '+', markersize = 3)
+                    # ax.plot([1 + 2 * d for d in d_list], (heis_bound_list[i_N, i_seed, i_p, i_D, i_theta, :] - clean_sol)/norm, 
+                    #         ls = ":", 
+                    #         label = "Heis.,  D = " + str(D), color = 'C' + str(i_D), lw = 0.75, 
+                    #         marker = '+', markersize = 3)
 
                     legend_elements_1.append(Line2D([0], [0], color='C' + str(i_D), lw=0.75, label=r'$D = \ ' + str(D) + '$'))
 
                 legend_elements_2 = [Line2D([0], [0], marker='.', color='w', label='Dual', markerfacecolor='k'),
                              Line2D([0], [0], marker='+', color='w', label='Heisenberg', markerfacecolor='k'),
                              Line2D([0], [0], marker='^', color='w', label='Entropic', markerfacecolor='k')]
+                
+                legend_elements_2 = [Line2D([0], [0], marker='.', color='w', label='Dual', markerfacecolor='k'),
+                             Line2D([0], [0], marker='^', color='w', label='Entropic', markerfacecolor='k')]
 
-                first_legend = ax.legend(handles = legend_elements_1, loc='lower left', frameon = True)
-                ax.legend(handles = legend_elements_2, loc='lower left', bbox_to_anchor = (0.27, 0), frameon = True)
+                first_legend = ax.legend(handles = legend_elements_1, loc='lower right', frameon = True)
+                ax.legend(handles = legend_elements_2, loc='lower left', bbox_to_anchor = (0.7, 0.12), frameon = True)
                 ax.add_artist(first_legend)
 
-                ax.set_ylim(bottom = 0.0, top = 0.55)
+                ax.set_ylim(bottom = 0.0, top = 0.8)
                 ax.set_ylabel('Lower bounds')
                 ax.set_xlabel('Circuit depth, ' + r'$d$')
                 # ax.set_yscale('log')
@@ -168,56 +191,56 @@ for i_N, N in enumerate(N_list):
 
 # bound vs p plots
 
-i_d = 4
-d = d_list[i_d]
+# i_d = 4
+# d = d_list[i_d]
 
-entropic_bound_vs_p = []
+# entropic_bound_vs_p = []
 
-for p in p_list:
-    with open(os.path.join(data_path, "entropic_bound_noise_bounded_temp_" + str(p) + ".npy"), 'rb') as f:
-        entropic_bound_list = np.load(f)
-    entropic_bound_vs_p.append(entropic_bound_list[i_d])
-entropic_bound_vs_p = np.array(entropic_bound_vs_p)
+# for p in p_list:
+#     with open(os.path.join(data_path, "entropic_bound_noise_bounded_temp_" + str(p) + ".npy"), 'rb') as f:
+#         entropic_bound_list = np.load(f)
+#     entropic_bound_vs_p.append(entropic_bound_list[i_d])
+# entropic_bound_vs_p = np.array(entropic_bound_vs_p)
 
-for i_N, N in enumerate(N_list):
-    for i_seed, seed in enumerate(N + np.array(range(num_seeds))):
-        for i_theta, theta in enumerate(theta_list):
-            for i_D, D in enumerate(D_list):
+# for i_N, N in enumerate(N_list):
+#     for i_seed, seed in enumerate(N + np.array(range(num_seeds))):
+#         for i_theta, theta in enumerate(theta_list):
+#             for i_D, D in enumerate(D_list):
             
-                fig = plt.figure(figsize=(3.5284350352843505, 2.469904524699045))
-                ax = fig.add_subplot(111)
+#                 fig = plt.figure(figsize=(3.5284350352843505, 2.469904524699045))
+#                 ax = fig.add_subplot(111)
 
-                ax.plot(p_list, (entropic_bound_vs_p - clean_sol)/norm, 
-                            ls = "--", 
-                            label = "Entropic", color = 'k', lw = 0.75, 
-                            marker = '^', markersize = 3)
+#                 ax.plot(p_list, (entropic_bound_vs_p - clean_sol)/norm, 
+#                             ls = "--", 
+#                             label = "Entropic", color = 'k', lw = 0.75, 
+#                             marker = '^', markersize = 3)
 
-                ax.plot(p_list, (dual_bound_list[i_N, i_seed, :, i_D, i_theta, i_d] - clean_sol)/norm, 
-                        label = "Dual, D = " + str(D), color = 'C' + str(i_D), lw = 0.75, 
-                        marker = '.', markersize = 4)
-                ax.plot(p_list, (heis_bound_list[i_N, i_seed, :, i_D, i_theta, i_d] - clean_sol)/norm, 
-                        ls = ":", 
-                        label = "Heis.,  D = " + str(D), color = 'C' + str(i_D), lw = 0.75, 
-                        marker = '+', markersize = 3)
+#                 ax.plot(p_list, (dual_bound_list[i_N, i_seed, :, i_D, i_theta, i_d] - clean_sol)/norm, 
+#                         label = "Dual, D = " + str(D), color = 'C' + str(i_D), lw = 0.75, 
+#                         marker = '.', markersize = 4)
+#                 ax.plot(p_list, (heis_bound_list[i_N, i_seed, :, i_D, i_theta, i_d] - clean_sol)/norm, 
+#                         ls = ":", 
+#                         label = "Heis.,  D = " + str(D), color = 'C' + str(i_D), lw = 0.75, 
+#                         marker = '+', markersize = 3)
 
-                legend_elements_2 = [Line2D([0], [0], marker='.', color='w', label='Dual', markerfacecolor='k'),
-                             Line2D([0], [0], marker='+', color='w', label='Heisenberg', markerfacecolor='k'),
-                             Line2D([0], [0], marker='^', color='w', label='Entropic', markerfacecolor='k')]
+#                 legend_elements_2 = [Line2D([0], [0], marker='.', color='w', label='Dual', markerfacecolor='k'),
+#                              Line2D([0], [0], marker='+', color='w', label='Heisenberg', markerfacecolor='k'),
+#                              Line2D([0], [0], marker='^', color='w', label='Entropic', markerfacecolor='k')]
 
-                # first_legend = ax.legend(handles = legend_elements_1, loc='lower left', frameon = True)
-                ax.legend(handles = legend_elements_2, loc='lower left', bbox_to_anchor = (0.27, 0), frameon = True)
-                # ax.add_artist(first_legend)
+#                 # first_legend = ax.legend(handles = legend_elements_1, loc='lower left', frameon = True)
+#                 ax.legend(handles = legend_elements_2, loc='lower left', bbox_to_anchor = (0.27, 0), frameon = True)
+#                 # ax.add_artist(first_legend)
 
-                ax.set_ylim(bottom = 0.0, top = 0.55)
-                ax.set_ylabel('Lower bounds')
-                ax.set_xlabel('Noise rate, ' + r'$p$')
-                # ax.set_yscale('log')
-                # ax.legend()
-                ax.set_title("N = " + str(N) + r", $\theta$ = " + f'{theta:.2f}' + r", \ $D$ = " + str(D))
-                plt.tight_layout()
-                figname = str(i_theta + 1) + str(i_D) + "_heis_test_N_" + str(N) + "_D_" + str(D) + "_theta_" + f'{theta:.2f}' + ".pdf"
-                plt.savefig(os.path.join(data_path, figname), bbox_inches = 'tight', format = 'pdf')
-                plt.close()
+#                 ax.set_ylim(bottom = 0.0, top = 0.55)
+#                 ax.set_ylabel('Lower bounds')
+#                 ax.set_xlabel('Noise rate, ' + r'$p$')
+#                 # ax.set_yscale('log')
+#                 # ax.legend()
+#                 ax.set_title("N = " + str(N) + r", $\theta$ = " + f'{theta:.2f}' + r", \ $D$ = " + str(D))
+#                 plt.tight_layout()
+#                 figname = str(i_theta + 1) + str(i_D) + "_heis_test_N_" + str(N) + "_D_" + str(D) + "_theta_" + f'{theta:.2f}' + ".pdf"
+#                 plt.savefig(os.path.join(data_path, figname), bbox_inches = 'tight', format = 'pdf')
+#                 plt.close()
 
 # bound vs depth plot variants
 
