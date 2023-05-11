@@ -160,10 +160,10 @@ for i_N, N in enumerate(N_list):
                     ax.plot([1 + 2 * d for d in d_list], (dual_bound_list[i_N, i_seed, i_p, i_D, i_theta, :] - clean_sol)/norm, 
                             label = "Dual, D = " + str(D), color = 'C' + str(i_D), lw = 0.75, 
                             marker = '.', markersize = 4)
-                    # ax.plot([1 + 2 * d for d in d_list], (heis_bound_list[i_N, i_seed, i_p, i_D, i_theta, :] - clean_sol)/norm, 
-                    #         ls = ":", 
-                    #         label = "Heis.,  D = " + str(D), color = 'C' + str(i_D), lw = 0.75, 
-                    #         marker = '+', markersize = 3)
+                    ax.plot([1 + 2 * d for d in d_list], (heis_bound_list[i_N, i_seed, i_p, i_D, i_theta, :] - clean_sol)/norm, 
+                            ls = ":", 
+                            label = "Heis.,  D = " + str(D), color = 'C' + str(i_D), lw = 0.75, 
+                            marker = '+', markersize = 3)
 
                     legend_elements_1.append(Line2D([0], [0], color='C' + str(i_D), lw=0.75, label=r'$D = \ ' + str(D) + '$'))
 
@@ -171,8 +171,8 @@ for i_N, N in enumerate(N_list):
                              Line2D([0], [0], marker='+', color='w', label='Heisenberg', markerfacecolor='k'),
                              Line2D([0], [0], marker='^', color='w', label='Entropic', markerfacecolor='k')]
                 
-                legend_elements_2 = [Line2D([0], [0], marker='.', color='w', label='Dual', markerfacecolor='k'),
-                             Line2D([0], [0], marker='^', color='w', label='Entropic', markerfacecolor='k')]
+                # legend_elements_2 = [Line2D([0], [0], marker='.', color='w', label='Dual', markerfacecolor='k'),
+                #              Line2D([0], [0], marker='^', color='w', label='Entropic', markerfacecolor='k')]
 
                 first_legend = ax.legend(handles = legend_elements_1, loc='lower right', frameon = True)
                 ax.legend(handles = legend_elements_2, loc='lower left', bbox_to_anchor = (0.7, 0.12), frameon = True)
