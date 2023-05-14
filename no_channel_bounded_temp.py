@@ -53,8 +53,12 @@ N = 32
 # p_list = [0.03, 0.05]
 # d_list = np.concatenate((np.array(np.linspace(4, 24, 11), dtype = int), np.array(np.linspace(24, 240, 11), dtype = int)))
 
-p_list = np.linspace(0.03, 0.3, 10)
-d_list = np.array(np.linspace(4, 24, 11), dtype = int)
+# p_list = np.linspace(0.03, 0.3, 10)
+# d_list = np.array(np.linspace(4, 24, 11), dtype = int)
+
+p_list = [0.03]
+
+d_list = np.linspace(4, 200, 80)
 
 depth_list = [1 + 2 * d for d in d_list]
 
@@ -77,11 +81,14 @@ for p in p_list:
         noisy_bound_nc = -dual_obj_nc(np.array(dual_opt_result.x), dual_params)
         entropic_bounds_new.append(noisy_bound_nc)
 
-    fname = "entropic_bound_noise_bounded_temp_" + str(p) + ".npy"
-    with open(os.path.join(data_path, fname), 'wb') as result_file:
-        np.save(result_file, np.array(entropic_bounds_new))
+    # fname = "entropic_bound_noise_bounded_temp_" + str(p) + ".npy"
+    # with open(os.path.join(data_path, fname), 'wb') as result_file:
+    #     np.save(result_file, np.array(entropic_bounds_new))
 
-# entropic_bounds_scaled = (np.array(entropic_bounds_new) - clean_sol)/norm
+entropic_bounds_scaled = (np.array(entropic_bounds_new) - clean_sol)/norm
+
+plt.plot(d_list, entropic_bounds_scaled)
+plt.show()
 
 # for p in p_list:
 #     data_path = "./../vqa_data/results_sattwik/results_quantumHamiltonian_cnot/"
