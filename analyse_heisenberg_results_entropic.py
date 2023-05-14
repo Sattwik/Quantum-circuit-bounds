@@ -67,15 +67,25 @@ CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
 # d_list = np.array(np.linspace(4, 24, 11), dtype = int)
 # D_list = [16, 32, 64]
 
-data_path = "../vqa_data/0510/20230510-183410/"
-N_list = [32]
+# data_path = "../vqa_data/0510/20230510-183410/"
+# N_list = [32]
+# # p_list = [0.03, 0.1, 0.3]
+# # p_list = np.linspace(0.03, 0.3, 5)
+# p_list = [0.03]
+# theta_list = [0.159]
+# # [0.01, 0.1, 1.0]
+# d_list = np.concatenate((np.array(np.linspace(4, 24, 11), dtype = int), np.array(np.linspace(24, 240, 11), dtype = int)))
+# D_list = [32, 64]
+
+data_path = "../vqa_data/0511/20230511-003116"
+N_list = [40, 50]
 # p_list = [0.03, 0.1, 0.3]
 # p_list = np.linspace(0.03, 0.3, 5)
-p_list = [0.03]
-theta_list = [0.159]
+p_list = [0.03, 0.05, 0.1]
+theta_list = [0.05, 0.1, 0.159]
 # [0.01, 0.1, 1.0]
-d_list = np.concatenate((np.array(np.linspace(4, 24, 11), dtype = int), np.array(np.linspace(24, 240, 11), dtype = int)))
-D_list = [32, 64]
+d_list = np.concatenate((np.array(np.linspace(4, 24, 11), dtype = int) , np.array(np.linspace(24, 240, 11), dtype = int)))
+D_list = [32, 48, 64]
 
 # data_path = "../vqa_data/0510/20230510-145039/"
 # N_list = [32]

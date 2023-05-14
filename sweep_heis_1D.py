@@ -78,7 +78,7 @@ def submit_simulation(N, d, seed, p, D, theta, result_save_path):
 # theta_list = [0.03, 0.1, 1.0]
 
 
-# informed 2D sweep
+# # informed 2D sweep
 # N_list = [32]
 # # p_list = [0.03, 0.1, 0.3]
 # p_list = np.linspace(0.03, 0.3, 10)
@@ -144,14 +144,23 @@ def submit_simulation(N, d, seed, p, D, theta, result_save_path):
 # d_list = np.concatenate((np.array(np.linspace(4, 24, 11), dtype = int), np.array(np.linspace(24, 54, 11), dtype = int)))
 # D_list = [32, 48, 64]
 
-N_list = [32]
+# N_list = [32]
+# # p_list = [0.03, 0.1, 0.3]
+# # p_list = np.linspace(0.03, 0.3, 5)
+# p_list = np.linspace(0.03, 0.3, 10)
+# p_list = [p_list[0], p_list[2]]
+# theta_list = [0.1]
+# # [0.01, 0.1, 1.0]
+# d_list = np.array(np.linspace(24, 64, 11), dtype = int)
+# D_list = [32, 48, 64]
+
+# informed 2D sweep
+N_list = [40]
 # p_list = [0.03, 0.1, 0.3]
-# p_list = np.linspace(0.03, 0.3, 5)
 p_list = np.linspace(0.03, 0.3, 10)
-p_list = [p_list[0], p_list[2]]
-theta_list = [0.1]
+theta_list = np.linspace(0.01, 1.50, 11)
 # [0.01, 0.1, 1.0]
-d_list = np.array(np.linspace(24, 64, 11), dtype = int)
-D_list = [32, 48, 64]
+d_list = [6, 12, 20]
+D_list = [16, 32, 64]
 
 sweep_heis(N_list, p_list, theta_list, d_list, D_list)
