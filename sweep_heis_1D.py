@@ -100,11 +100,11 @@ def submit_simulation(N, d, seed, p, D, theta, result_save_path):
 N_list = [32]
 # p_list = [0.03, 0.1, 0.3]
 # p_list = np.linspace(0.03, 0.3, 5)
-p_list = [0.03, 0.05]
+p_list = [0.03]
 theta_list = [0.159]
 # [0.01, 0.1, 1.0]
 d_list = np.concatenate((np.array(np.linspace(4, 24, 11), dtype = int) , np.array(np.linspace(24, 240, 11), dtype = int)))
-D_list = [64]
+D_list = [48]
 
 # informed depth plots round 3
 # N_list = [32]
