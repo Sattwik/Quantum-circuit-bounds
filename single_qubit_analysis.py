@@ -163,11 +163,12 @@ width = 510/2
 fig = plt.figure(figsize=set_size(width, fraction = 1, subplots = (1,1)))
 ax = fig.add_subplot(111)
 ax.plot(theta_list/np.pi, noisy_bound_list, label = "Circuit dual")
-ax.plot(theta_list, primal_list, ls = '--', label = "Circuit output")
+ax.plot(theta_list/np.pi, primal_list, color = 'C1', ls = '--', label = "Circuit output", lw = 0.75)
 # ax.plot(theta_list, [gap * p/2] * len(theta_list), label = "Dual (no channel)", ls = '--')
 # ax.plot(theta_list, [gap * (p-1)] * len(theta_list), label = "Dual (no channel)", ls = '--')
 ax.plot(theta_list/np.pi, noisy_nc_list, label = "Entropic", ls = '--', color = 'k')
 ax.set_xlabel('Rotation, ' + r"$\theta$")
+ax.set_ylabel('Lower bounds')
 ax.legend()
 # ax.set_ylabel('Bound')
 # ax.set_ylim((0, np.max(primal_list) + 0.2))
@@ -178,4 +179,35 @@ ax.set_yticklabels([r'$- \Delta (1 - p)$', r'$0$', r'$\Delta (1 - p)$'])
 plt.tight_layout()
 data_path = "./../vqa_data/"
 figname = "sq_analysis.pdf"
+plt.savefig(os.path.join(data_path, figname), bbox_inches = 'tight', format = 'pdf')
+
+
+width = 510/2
+fig = plt.figure(figsize=set_size(width, fraction = 1, subplots = (1,1)))
+ax = fig.add_subplot(111)
+
+h = 6.626e-34
+nu1 = 5e9
+nu2 = 230e12
+k = 1.380649e-23
+T_list = np.linspace(0,2,100)
+
+ax.plot(T_list, 1/(np.exp(h * nu1/k/T_list) - 1))
+# ax.plot(T_list, 1/(np.exp(h * nu2/k/T_list) - 1))
+
+# ax.plot(theta_list, [gap * p/2] * len(theta_list), label = "Dual (no channel)", ls = '--')
+# ax.plot(theta_list, [gap * (p-1)] * len(theta_list), label = "Dual (no channel)", ls = '--')
+# ax.plot(theta_list/np.pi, noisy_nc_list, label = "Entropic", ls = '--', color = 'k')
+ax.set_xlabel('Temperature, ' + r"$T$" + "(K)")
+ax.set_ylabel('Avg. photon number')
+# ax.legend()
+# ax.set_ylabel('Bound')
+# ax.set_ylim((0, np.max(primal_list) + 0.2))
+# ax.set_yticks([-gap*(1-p), 0, gap * (1-p)])
+# ax.set_xticks([0, 0.5, 1])
+# ax.set_xticklabels([r'$0$', r'$\pi/4$', r'$\pi/2$'])
+# ax.set_yticklabels([r'$- \Delta (1 - p)$', r'$0$', r'$\Delta (1 - p)$'])
+plt.tight_layout()
+data_path = "./../vqa_data/"
+figname = "mw.pdf"
 plt.savefig(os.path.join(data_path, figname), bbox_inches = 'tight', format = 'pdf')
