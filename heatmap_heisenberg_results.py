@@ -101,7 +101,8 @@ for i_N, N in enumerate(N_list):
                 ax.set_yticks(np.arange(len(p_list)), labels=[f'{p:.2f}' for p in p_list])
                 ax.set_ylabel(r'$p$')
                 ax.set_xlabel(r'$\theta/ \pi$')
-                ax.set_title("Dual, N = " + str(N) + r", $d$ = " + str(d) + r",\ $D$ = " + str(D))
+                # ax.set_title("Dual, N = " + str(N) + r", $d$ = " + str(d) + r",\ $D$ = " + str(D))
+                ax.set_title("Bond dimension" r",\ $D$ = " + str(D))
                 fig.colorbar(img)
                 plt.tight_layout()
                 figname = "0_dual_N_" + str(N) + "_d_" + str(d) + "_D_" + str(D) + ".pdf"

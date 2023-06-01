@@ -48,7 +48,7 @@ def dual_obj_nc(dual_vars: jnp.array, dual_params: NCDualParams):
 def dual_grad_nc(dual_vars: np.array, dual_params: NCDualParams):
     return grad(dual_obj_nc, argnums = 0)(dual_vars, dual_params)
 
-N = 50
+N = 40
 # p_list = np.linspace(0.03, 0.3, 5)
 # p_list = [0.03, 0.05]
 # d_list = np.concatenate((np.array(np.linspace(4, 24, 11), dtype = int), np.array(np.linspace(24, 240, 11), dtype = int)))
@@ -62,9 +62,9 @@ N = 50
 # d_list = np.concatenate((np.array(np.linspace(4, 24, 11), dtype = int), np.array(np.linspace(24, 54, 11), dtype = int)))
 # data_path = "../vqa_data/paper_figures/entropic_bounds_figure/"
 
-p_list = [0.03, 0.05, 0.1]
+p_list = [0.2]
 d_list = np.concatenate((np.array(np.linspace(4, 24, 11), dtype = int) , np.array(np.linspace(24, 240, 11), dtype = int)))
-data_path = "../vqa_data/0511/20230511-003116"
+data_path = "../vqa_data/0511/N_40_50"
 
 clean_sol = -N
 norm = 2 * N
