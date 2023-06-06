@@ -34,20 +34,22 @@ CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
 
 from vqa_bounds import mpo, mpo_numpy
 
-num_sites = 16
+num_sites = 4
 
 #-------------------------------------------#
 #----- circuit bounds test with numba ------#
 #-------------------------------------------#
 
-d = 12
+d = 6
 p = 0.01
 theta = np.pi/7
 seed = 69
 
 # start = time.time()
 circ = mpo_numpy.SumZ_RXX(num_sites, d, p, theta, seed)
-heis_val, heis_bound, dual_bound = circ.bounds(D = 16)
+heis_val, heis_bound, dual_bound = circ.bounds(D = 12)
+energy, schrod_bound = circ.schrod_bound(D = 12)
+primal = circ.primal_noisy()
 # end = time.time()
 
 # print("numpy time = ", end - start)

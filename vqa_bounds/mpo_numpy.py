@@ -736,6 +736,41 @@ class SumZ_RXX():
         mpo_tensors = self.dual_unitary_layer_on_mpo(layer_num, mpo_tensors)
 
         return mpo_tensors
+    
+    def unitary_layer_on_mpo(self, layer_num: int, mpo_tensors: List[np.array]):
+        if layer_num < self.d_compute + self.d:
+            gate_tuples = self.site_tuple_list
+            gate_tensors = self.U2q_tensors
+
+            for i_tuple, gate_tuple in enumerate(gate_tuples):
+                res_tensors = twoq_gate(gate_tensors, [mpo_tensors[site] for site in gate_tuple])
+                mpo_tensors[gate_tuple[0]] = res_tensors[0]
+                mpo_tensors[gate_tuple[1]] = res_tensors[1]
+
+            for i in range(self.N):
+                res = singleq_gate(self.sq_gates[layer_num, i], mpo_tensors[i])
+                mpo_tensors[i] = res
+
+        else:
+            gate_tuples = self.site_tuple_list_inverted
+            gate_tensors = self.U2q_dagger_tensors
+
+            for i in range(self.N):
+                res = singleq_gate(self.sq_gates[layer_num, i], mpo_tensors[i])
+                mpo_tensors[i] = res
+
+            for i_tuple, gate_tuple in enumerate(gate_tuples):
+                res_tensors = twoq_gate(gate_tensors, [mpo_tensors[site] for site in gate_tuple])
+                mpo_tensors[gate_tuple[0]] = res_tensors[0]
+                mpo_tensors[gate_tuple[1]] = res_tensors[1]
+            
+        return mpo_tensors
+
+    def noisy_layer_on_mpo(self, layer_num: int, mpo_tensors: List[np.array]):
+        mpo_tensors = self.unitary_layer_on_mpo(layer_num, mpo_tensors)
+        mpo_tensors = noise_layer(mpo_tensors, self.p)
+
+        return mpo_tensors
 
     def target_H(self):
         _, target_H_tensors = HamSumZ(self.N)
@@ -786,6 +821,39 @@ class SumZ_RXX():
     #         print(error)
 
         # return error_list
+
+    def schrod_bound(self, D: int):
+        rho = self.psi_init_tensors
+
+        errors = [0.0,]
+
+        for i in range(0, self.depth, 1):
+            print(i)
+            rho_new = self.noisy_layer_on_mpo(i, rho)
+            rho_new_proj = copy.deepcopy(rho_new)
+            
+            # canonicalize
+            compressed_dims = tuple(bond_dims(rho_new_proj)[1:-1])
+            rho_new_proj = right_canonicalize(tensors = rho_new_proj, compressed_dims = compressed_dims)
+
+            # compress
+            compressed_dims = gen_compression_dims(D, self.N)
+            rho_new_proj = left_canonicalize(tensors = rho_new_proj, compressed_dims = compressed_dims)
+
+            error_sq = trace_two_MPOs(rho_new, rho_new) + trace_two_MPOs(rho_new_proj, rho_new_proj) - \
+                2 * trace_two_MPOs(rho_new, rho_new_proj)
+
+            # Ht = subtract_MPO(sigma_new_proj, sigma_new)
+            error = np.sqrt(error_sq)
+            errors.append(error)
+
+            rho = rho_new_proj
+        
+        energy = trace_two_MPOs(self.target_H(), rho)
+
+        schrod_bound = energy - (2 ** self.N) * np.sqrt(self.N) * np.sum(errors)
+
+        return energy, schrod_bound
 
     def bounds(self, D: int):
         sigma = self.target_H()
