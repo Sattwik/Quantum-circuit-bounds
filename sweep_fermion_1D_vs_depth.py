@@ -74,9 +74,14 @@ def submit_simulation(N, d, seed, p, k_dual, result_save_path):
 # N_list = [32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 72]
 # p_list = [0.01, 0.05]
 
+# N_list = [48]
+# p_list = [0.05]
+# d_list = np.arange(3, 43, 4)
+# k_dual_list = [2, 4, 6, 8, 12, 14]
+
 N_list = [48]
 p_list = [0.05]
-d_list = np.arange(3, 43, 4)
-k_dual_list = [2, 4, 6, 8, 12, 14]
+d_list = np.arange(2, 42, 4)
+k_dual_list = [1, 2, 4, 6, 8, 10, 12, 14, 20]
 
 sweep_fermion(N_list, p_list, d_list, k_dual_list)

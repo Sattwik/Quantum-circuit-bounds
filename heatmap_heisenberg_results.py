@@ -32,7 +32,7 @@ N_list = [32]
 p_list = np.linspace(0.03, 0.3, 10)
 theta_list = np.linspace(0.01, 1.50, 11)
 d_list = [6, 12, 20]
-D_list = [16, 32, 64]
+D_list = [16, 32, 45, 64, 90, 128]
 
 num_D = len(D_list)
 num_N = len(N_list)
@@ -102,57 +102,57 @@ for i_N, N in enumerate(N_list):
                 ax.set_ylabel(r'$p$')
                 ax.set_xlabel(r'$\theta/ \pi$')
                 # ax.set_title("Dual, N = " + str(N) + r", $d$ = " + str(d) + r",\ $D$ = " + str(D))
-                ax.set_title("Bond dimension" r",\ $D$ = " + str(D))
+                ax.set_title("1D system, bond dimension" r"\ $D$ = " + str(D))
                 fig.colorbar(img)
                 plt.tight_layout()
                 figname = "0_dual_N_" + str(N) + "_d_" + str(d) + "_D_" + str(D) + ".pdf"
                 plt.savefig(os.path.join(data_path, figname), bbox_inches = 'tight', format = 'pdf')
                 plt.close()
 
-                fig = plt.figure(figsize=(3.5284350352843505, 2.469904524699045))
-                ax = fig.add_subplot(111)
-                # img = ax.imshow(np.real(scaled_heis_bound_list[i_N, i_seed, :, i_D, :, i_d]), 
-                #                 origin = 'lower', interpolation= 'none', rasterized = True, aspect = 'auto')
-                # img = ax.imshow(np.real(scaled_heis_bound_list[i_N, i_seed, :, i_D, :, i_d]), 
+                # fig = plt.figure(figsize=(3.5284350352843505, 2.469904524699045))
+                # ax = fig.add_subplot(111)
+                # # img = ax.imshow(np.real(scaled_heis_bound_list[i_N, i_seed, :, i_D, :, i_d]), 
+                # #                 origin = 'lower', interpolation= 'none', rasterized = True, aspect = 'auto')
+                # # img = ax.imshow(np.real(scaled_heis_bound_list[i_N, i_seed, :, i_D, :, i_d]), 
+                # #                 origin = 'lower', interpolation= 'none', rasterized = True, 
+                # #                 aspect = 'auto', norm='log', vmin = 1e-2, vmax = 0.55)
+                # # img = ax.imshow(np.real(scaled_heis_bound_list[i_N, i_seed, :, i_D, :, i_d]), 
+                # #                 origin = 'lower', interpolation= 'none', rasterized = True, 
+                # #                 aspect = 'auto', vmin = 5e-3, vmax = 0.55)
+                # img = ax.imshow(np.real(clipped_heis_bound_list[i_N, i_seed, :, i_D, :, i_d]), 
                 #                 origin = 'lower', interpolation= 'none', rasterized = True, 
-                #                 aspect = 'auto', norm='log', vmin = 1e-2, vmax = 0.55)
-                # img = ax.imshow(np.real(scaled_heis_bound_list[i_N, i_seed, :, i_D, :, i_d]), 
-                #                 origin = 'lower', interpolation= 'none', rasterized = True, 
-                #                 aspect = 'auto', vmin = 5e-3, vmax = 0.55)
-                img = ax.imshow(np.real(clipped_heis_bound_list[i_N, i_seed, :, i_D, :, i_d]), 
-                                origin = 'lower', interpolation= 'none', rasterized = True, 
-                                aspect = 'auto', vmin = 0, vmax = 0.55)
-                ax.set_xticks(np.arange(len(theta_list)), labels=[f'{theta/np.pi:.2f}' for theta in theta_list])
-                ax.set_yticks(np.arange(len(p_list)), labels=[f'{p:.2f}' for p in p_list])
-                ax.set_ylabel(r'$p$')
-                ax.set_xlabel(r'$\theta / \pi$')
-                ax.set_title("Heis. bound, N = " + str(N) + r", $d$ = " + str(d) + r",\ $D$ = " + str(D))
-                fig.colorbar(img)
-                plt.tight_layout()
-                figname = "1_heisbound_N_" + str(N) + "_d_" + str(d) + "_D_" + str(D) + ".pdf"
-                plt.savefig(os.path.join(data_path, figname), bbox_inches = 'tight', format = 'pdf')
-                plt.close()
+                #                 aspect = 'auto', vmin = 0, vmax = 0.55)
+                # ax.set_xticks(np.arange(len(theta_list)), labels=[f'{theta/np.pi:.2f}' for theta in theta_list])
+                # ax.set_yticks(np.arange(len(p_list)), labels=[f'{p:.2f}' for p in p_list])
+                # ax.set_ylabel(r'$p$')
+                # ax.set_xlabel(r'$\theta / \pi$')
+                # ax.set_title("Heis. bound, N = " + str(N) + r", $d$ = " + str(d) + r",\ $D$ = " + str(D))
+                # fig.colorbar(img)
+                # plt.tight_layout()
+                # figname = "1_heisbound_N_" + str(N) + "_d_" + str(d) + "_D_" + str(D) + ".pdf"
+                # plt.savefig(os.path.join(data_path, figname), bbox_inches = 'tight', format = 'pdf')
+                # plt.close()
 
-                fig = plt.figure(figsize=(3.5284350352843505, 2.469904524699045))
-                ax = fig.add_subplot(111)
-                # img = ax.imshow(np.real(scaled_heis_val_list[i_N, i_seed, :, i_D, :, i_d]), 
-                #                 origin = 'lower', interpolation= 'none', rasterized = True, aspect = 'auto')
-                # img = ax.imshow(np.real(scaled_heis_val_list[i_N, i_seed, :, i_D, :, i_d]), 
+                # fig = plt.figure(figsize=(3.5284350352843505, 2.469904524699045))
+                # ax = fig.add_subplot(111)
+                # # img = ax.imshow(np.real(scaled_heis_val_list[i_N, i_seed, :, i_D, :, i_d]), 
+                # #                 origin = 'lower', interpolation= 'none', rasterized = True, aspect = 'auto')
+                # # img = ax.imshow(np.real(scaled_heis_val_list[i_N, i_seed, :, i_D, :, i_d]), 
+                # #                 origin = 'lower', interpolation= 'none', rasterized = True, 
+                # #                 aspect = 'auto', norm='log', vmin = 1e-2, vmax = 0.55)
+                # # img = ax.imshow(np.real(scaled_heis_val_list[i_N, i_seed, :, i_D, :, i_d]), 
+                # #                 origin = 'lower', interpolation= 'none', rasterized = True, 
+                # #                 aspect = 'auto', vmin = 5e-3, vmax = 0.55)
+                # img = ax.imshow(np.real(clipped_heis_val_list[i_N, i_seed, :, i_D, :, i_d]), 
                 #                 origin = 'lower', interpolation= 'none', rasterized = True, 
-                #                 aspect = 'auto', norm='log', vmin = 1e-2, vmax = 0.55)
-                # img = ax.imshow(np.real(scaled_heis_val_list[i_N, i_seed, :, i_D, :, i_d]), 
-                #                 origin = 'lower', interpolation= 'none', rasterized = True, 
-                #                 aspect = 'auto', vmin = 5e-3, vmax = 0.55)
-                img = ax.imshow(np.real(clipped_heis_val_list[i_N, i_seed, :, i_D, :, i_d]), 
-                                origin = 'lower', interpolation= 'none', rasterized = True, 
-                                aspect = 'auto', vmin = 0, vmax = 0.55)
-                ax.set_xticks(np.arange(len(theta_list)), labels=[f'{theta/np.pi:.2f}' for theta in theta_list])
-                ax.set_yticks(np.arange(len(p_list)), labels=[f'{p:.2f}' for p in p_list])
-                ax.set_ylabel(r'$p$')
-                ax.set_xlabel(r'$\theta/ \pi$')
-                ax.set_title("Heis. val, N = " + str(N) + r", $d$ = " + str(d) + r",\ $D$ = " + str(D))
-                fig.colorbar(img)
-                plt.tight_layout()
-                figname = "2_heisval_N_" + str(N) + "_d_" + str(d) + "_D_" + str(D) + ".pdf"
-                plt.savefig(os.path.join(data_path, figname), bbox_inches = 'tight', format = 'pdf')
-                plt.close()
+                #                 aspect = 'auto', vmin = 0, vmax = 0.55)
+                # ax.set_xticks(np.arange(len(theta_list)), labels=[f'{theta/np.pi:.2f}' for theta in theta_list])
+                # ax.set_yticks(np.arange(len(p_list)), labels=[f'{p:.2f}' for p in p_list])
+                # ax.set_ylabel(r'$p$')
+                # ax.set_xlabel(r'$\theta/ \pi$')
+                # ax.set_title("Heis. val, N = " + str(N) + r", $d$ = " + str(d) + r",\ $D$ = " + str(D))
+                # fig.colorbar(img)
+                # plt.tight_layout()
+                # figname = "2_heisval_N_" + str(N) + "_d_" + str(d) + "_D_" + str(D) + ".pdf"
+                # plt.savefig(os.path.join(data_path, figname), bbox_inches = 'tight', format = 'pdf')
+                # plt.close()

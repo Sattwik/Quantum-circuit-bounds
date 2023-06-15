@@ -273,8 +273,6 @@ def trace_MPO_squared(tensors: List[np.array]):
 
     return res
 
-# @jit
-
 def trace_two_MPOs(A_tensors: List[np.array], B_tensors: List[np.array]):
     """
     checked through full_contract.
@@ -570,6 +568,10 @@ class SumZ_RXX():
         psi_init_local_tensor = np.array([[0, 0],[0, 1]], dtype = complex)
         psi_init_local_tensor = np.expand_dims(psi_init_local_tensor, axis = (0,2))
         self.psi_init_tensors = [psi_init_local_tensor] * self.N
+
+        id_local = np.array([[1, 0],[0, 1]], dtype = complex)
+        id_local = np.expand_dims(id_local, axis = (0,2))
+        self.identity_mpo = [id_local] * self.N
 
         self.X = np.array([[0,1],[1,0]], dtype = complex) # u, d
         self.Y = np.array([[0,-1j],[1j,0]], dtype = complex) # u, d
@@ -894,6 +896,55 @@ class SumZ_RXX():
         dual_bound = init_state_term - np.dot(np.sqrt(self.purity_bounds), Ht_norms)
 
         return init_state_term, heis_bound, dual_bound
+
+    def bounds_tr1(self, D: int):
+        sigma = self.target_H()
+        sigma = scale_mpo(sigma, -1.0)
+
+        Ht_norms = [0.0,]
+        Ht_traces = [0.0,]
+
+        e_inv = 2 ** (-self.N)
+
+        for i in range(self.depth-1, -1, -1):
+            print(i)
+            sigma_new = self.noisy_dual_layer_on_mpo(i, sigma)
+            sigma_new_proj = copy.deepcopy(sigma_new)
+            
+            # canonicalize
+            compressed_dims = tuple(bond_dims(sigma_new_proj)[1:-1])
+            sigma_new_proj = right_canonicalize(tensors = sigma_new_proj, compressed_dims = compressed_dims)
+
+            # compress
+            compressed_dims = gen_compression_dims(D, self.N)
+            sigma_new_proj = left_canonicalize(tensors = sigma_new_proj, compressed_dims = compressed_dims)
+
+            # h2
+            Ht_norm_sq = trace_two_MPOs(sigma_new, sigma_new) + trace_two_MPOs(sigma_new_proj, sigma_new_proj) - 2 * trace_two_MPOs(sigma_new, sigma_new_proj)
+
+            # h
+            Ht_trace = trace_two_MPOs(sigma_new_proj, self.identity_mpo) -  trace_two_MPOs(sigma_new, self.identity_mpo)
+
+            Ht_norm = np.sqrt(Ht_norm_sq)
+            Ht_norms.append(Ht_norm)
+            Ht_traces.append(Ht_trace)
+
+            sigma = sigma_new_proj
+        
+        init_state_term = -trace_two_MPOs(self.psi_init_tensors, sigma)
+
+        # print('init_state_term = ', init_state_term)
+
+        Ht_norms = np.array(Ht_norms[:-1][::-1])
+        Ht_traces = np.array(Ht_traces[:-1][::-1])
+
+        # print('Ht_norms = ', Ht_norms)
+
+        heis_bound = init_state_term - np.sum(Ht_norms)
+        dual_bound = init_state_term - np.dot(np.sqrt(self.purity_bounds), Ht_norms)
+        dual_bound_tr1 = init_state_term  - np.sqrt(np.sum((self.purity_bounds - e_inv) * (Ht_norms * Ht_norms - Ht_traces * Ht_traces * e_inv))) + Ht_traces * e_inv
+
+        return init_state_term, heis_bound, dual_bound, dual_bound_tr1
 
     def init_mpo(self, D: int):
         mpo_tensors = self.target_H()

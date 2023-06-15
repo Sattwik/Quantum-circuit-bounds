@@ -32,12 +32,14 @@ print('N = ', N)
 print('seed = ', cliargs.seed)
 print('d = ', d)
 
-local_d = 1
+local_d = 0
 k = 1
 
 #--> set up circuit 
-circ_params = gaussian.PrimalParams(N, d, local_d, key, k = k, mode = 'NN_k1')
+circ_params = gaussian.PrimalParams(N, d, local_d, key, k = k, mode = "ssh", h_mode = "ssh", init_state_desc = "GS")
 key, subkey = jax.random.split(circ_params.key_after_ham_gen)
+
+1/0
 
 #--> noiseless solution
 final_energy = gaussian.energy_after_circuit(circ_params)

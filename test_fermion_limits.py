@@ -6,7 +6,7 @@ import time
 import numpy as np
 import scipy
 import networkx as nx
-import qutip
+# import qutip  
 import tensornetwork as tn
 tn.set_default_backend("jax")
 import jax.numpy as jnp
@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 import colorama
 from matplotlib import rc
 
-from fermions import gaussian, gaussian2D, fermion_test_utils
+from fermions import gaussian
 
 #------------------------------------------------------------------------------#
 #----------------------------------- TESTS ------------------------------------#
@@ -39,7 +39,8 @@ key = jax.random.PRNGKey(seed)
 
 print(key)
 
-circ_params = gaussian.PrimalParams(N, d, local_d, key, k = k, mode = "NN_k1")
+# circ_params = gaussian.PrimalParams(N, d, local_d, key, k = k, mode = "NN_k1", h_mode = "gen", init_state_desc= "all zero")
+circ_params = gaussian.PrimalParams(N, d, local_d, key, k = k, mode = "ssh", h_mode = "ssh", init_state_desc = "GS")
 key, subkey = jax.random.split(circ_params.key_after_ham_gen)
 
 print(key)
@@ -75,14 +76,14 @@ print(colorama.Style.RESET_ALL)
 #---------------------------------- DUAL SETUP --------------------------------#
 #------------------------------------------------------------------------------#
 
-k_dual = 1
+k_dual = 6
 
 lambda_lower_bounds = (0.0) * jnp.ones(d)
 dual_params = gaussian.DualParams(circ_params, p, k_dual, lambda_lower_bounds)
 
-#------------------------------------------------------------------------------#
-#---------------------------------- NO CHANNEL DUAL ---------------------------#
-#------------------------------------------------------------------------------#
+# #------------------------------------------------------------------------------#
+# #---------------------------------- NO CHANNEL DUAL ---------------------------#
+# #------------------------------------------------------------------------------#
 
 num_steps = int(5e3)
 dual_vars_init_nc = jnp.array([0.0])
@@ -93,9 +94,9 @@ dual_obj_over_opti_nc, dual_opt_result_nc = \
                     num_iters = num_steps)
 noisy_bound_nc = -gaussian.dual_obj_no_channel(jnp.array(dual_opt_result_nc.x), dual_params)
 
-#------------------------------------------------------------------------------#
-#---------------------------------- FULL DUAL ---------------------------------#
-#------------------------------------------------------------------------------#
+# #------------------------------------------------------------------------------#
+# #---------------------------------- FULL DUAL ---------------------------------#
+# #------------------------------------------------------------------------------#
 
 
 gaussian.set_all_sigmas(dual_params)
@@ -104,21 +105,21 @@ proj_sigmas_vec = gaussian.sigmas_to_vec(dual_params.sigmas_proj, dual_params)
 # _, sigmas_unwrapped = gaussian.unvec_and_process_dual_vars(dual_vars_init, dual_params)
 # print(jnp.linalg.norm(sigmas_unwrapped - dual_params.sigmas_proj))
 
-# dual_vars_init = jnp.zeros((dual_params.total_num_dual_vars,))
-# dual_vars_init = dual_vars_init.at[d:].set(proj_sigmas_vec)
+dual_vars_init = jnp.zeros((dual_params.total_num_dual_vars,))
+dual_vars_init = dual_vars_init.at[d:].set(proj_sigmas_vec)
 
-# # lmbda_list = np.linspace(-7, 0, 100)
-# # nb_list = []
+lmbda_list = np.linspace(-7, 0, 100)
+nb_list = []
 
-# # for lmbda in lmbda_list:
-# #     dual_vars = jnp.zeros((dual_params.total_num_dual_vars,))
-# #     dual_vars = dual_vars.at[d:].set(proj_sigmas_vec)
-# #     dual_vars = dual_vars.at[:d].set(lmbda)
-# #     nb_list.append(-gaussian.dual_obj(dual_vars, dual_params))
+for lmbda in lmbda_list:
+    dual_vars = jnp.zeros((dual_params.total_num_dual_vars,))
+    dual_vars = dual_vars.at[d:].set(proj_sigmas_vec)
+    dual_vars = dual_vars.at[:d].set(lmbda)
+    nb_list.append(-gaussian.dual_obj(dual_vars, dual_params))
 
-# # plt.plot(lmbda_list, nb_list)
-# # # plt.xscale('log')
-# # plt.show()
+plt.plot(lmbda_list, nb_list)
+# plt.xscale('log')
+plt.show()
 
 
 # # key, subkey = jax.random.split(key)
@@ -248,19 +249,19 @@ proj_sigmas_vec = gaussian.sigmas_to_vec(dual_params.sigmas_proj, dual_params)
 
 
 # print(colorama.Fore.GREEN + "noisy bound = ", noisy_bound)
-print(colorama.Fore.GREEN + "noisy bound purity = ", noisy_bound_purity)
-print(colorama.Fore.GREEN + "noisy bound nc = ", noisy_bound_nc)
-print(colorama.Fore.GREEN + "noisy bound nc <= noisy bound? ")
-# if noisy_bound_nc <= noisy_bound:
+# print(colorama.Fore.GREEN + "noisy bound purity = ", noisy_bound_purity)
+# print(colorama.Fore.GREEN + "noisy bound nc = ", noisy_bound_nc)
+# print(colorama.Fore.GREEN + "noisy bound nc <= noisy bound? ")
+# # if noisy_bound_nc <= noisy_bound:
+# #     print(colorama.Fore.GREEN + "True")
+# # else:
+# #     print(colorama.Fore.RED + "False")
+# print(colorama.Fore.GREEN + "noisy bound nc <= noisy bound purity? ")
+# if noisy_bound_nc <= noisy_bound_purity:
 #     print(colorama.Fore.GREEN + "True")
 # else:
 #     print(colorama.Fore.RED + "False")
-print(colorama.Fore.GREEN + "noisy bound nc <= noisy bound purity? ")
-if noisy_bound_nc <= noisy_bound_purity:
-    print(colorama.Fore.GREEN + "True")
-else:
-    print(colorama.Fore.RED + "False")
-print(colorama.Style.RESET_ALL)
+# print(colorama.Style.RESET_ALL)
 
 # lambdas, sigmas = gaussian.unvec_and_process_dual_vars(jnp.array(dual_opt_result_phase1.x), dual_params)
 
