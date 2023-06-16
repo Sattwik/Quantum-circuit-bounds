@@ -153,6 +153,38 @@ def upper_tri_indices_to_fill(k: int, M: int, N: int):
 #-------------------- FGS tools -------------------#
 #--------------------------------------------------#
 
+def ssh(N: int, alpha1: float, alpha2: float, beta1: float, beta2: float):
+
+    hxp = jnp.zeros((N * N, N * N))
+
+    for s in range(N * N):
+        i = s//N
+        j = s%N
+        s_hor_neighbor = s + 1
+        s_ver_neighbor = s + N
+
+        if 0 <= j < N-1:
+            if j % 2 == 0: 
+                hxp = hxp.at[s, s_hor_neighbor].set(alpha1)
+                hxp = hxp.at[s_hor_neighbor, s].set(alpha1)
+            else:
+                hxp = hxp.at[s, s_hor_neighbor].set(alpha2)
+                hxp = hxp.at[s_hor_neighbor, s].set(alpha2)
+        
+        if 0 <= i < N-1:
+            if i % 2 == 0: 
+                hxp = hxp.at[s, s_ver_neighbor].set(beta1)
+                hxp = hxp.at[s_ver_neighbor, s].set(beta1)
+            else:
+                hxp = hxp.at[s, s_ver_neighbor].set(beta2)
+                hxp = hxp.at[s_ver_neighbor, s].set(beta2)
+
+    zer = jnp.zeros((N * N, N * N))
+    h = jnp.block([[zer, hxp],
+                  [-hxp.T, zer]])
+    
+    return h
+
 def random_2D_NN_ver_odd_normal_hamiltonian_majorana(N: int, key: jnp.array):
     """
     Parameters
@@ -482,6 +514,32 @@ def Omega(N: int) -> jnp.array:
                 [[jnp.eye(N), jnp.eye(N)],
                  [1j * jnp.eye(N), -1j * jnp.eye(N)]])
 
+def corr_major_gs(h: jnp.array):
+    N = h.shape[0]//2
+    Ome = Omega(N)
+
+    H = jnp.matmul(jnp.matmul(Ome.conj().T, 1j * h), Ome)
+    w, v = jnp.linalg.eigh(H)
+
+    I = jnp.identity(N, dtype = complex)
+    zer = jnp.zeros((N,N), dtype = complex)
+
+    Gamma_0 = jnp.block([[zer, zer], [zer,  I]])
+
+    Gamma = jnp.matmul(v, jnp.matmul(Gamma_0, v.conj().T))
+
+    Gamma_mjr = jnp.matmul(jnp.matmul(Ome, Gamma), Ome.conj().T)
+
+    return Gamma_mjr
+
+def gse(h: jnp.array):
+    N = h.shape[0]//2
+    w, v = jnp.linalg.eigh(1j * h)
+
+    gse = jnp.sum(w[:N])
+
+    return gse
+
 def covariance_from_corr_major(Gamma_mjr: jnp.array):
     """
     Parameters
@@ -570,7 +628,8 @@ class PrimalParams():
 
     def __init__(self, M: int, N: int, d: int, local_d: int,
                  key: jnp.array,
-                 init_state_desc: str = "all zero", k: int = 1, mode: str = 'adjacent'):
+                 init_state_desc: str = "GS", k: int = 1, mode: str = 'adjacent', 
+                 h_mode: str = "ssh"):
         """
         d: depth of circuit
         init_state_desc: description of the initial state wanted
@@ -586,23 +645,51 @@ class PrimalParams():
         assert((d - local_d)%2 == 0)
 
         self.generate_layer_hamiltonians(key, mode)
-        self.generate_parent_hamiltonian()
+        self.generate_parent_hamiltonian(h_mode)
         self.generate_init_state(init_state_desc)
 
     def generate_layer_hamiltonians(self, key: jnp.array, mode = 'adjacent'):
         self.layer_hamiltonians = []
 
-        for i in range(self.local_d):
-            random_local_h, key = \
-            random_2D_k_local_normal_hamiltonian_majorana(self.M, self.N, self.k, key)
-            self.layer_hamiltonians.append(random_local_h/self.M/self.N)
-
         if mode == 'adjacent':
+            for i in range(self.local_d):
+                random_local_h, key = \
+                random_2D_k_local_normal_hamiltonian_majorana(self.M, self.N, self.k, key)
+                self.layer_hamiltonians.append(random_local_h/self.M/self.N)
+
             for i in range((self.d - self.local_d)//2):
                 random_local_h, key = \
                 random_2D_k_local_normal_hamiltonian_majorana(self.M, self.N, self.k, key)
                 self.layer_hamiltonians.append(random_local_h/self.M/self.N)
                 self.layer_hamiltonians.append(-random_local_h/self.M/self.N)
+        
+        elif mode == "ssh":
+            print("NN circuit, ssh parent H")
+            # local_d = 0
+
+            self.layer_hamiltonians = []
+            h_list = []
+            for i in range((self.d)//2):
+                if i%4 == 0:
+                    random_even_h, key = random_2D_NN_hor_even_normal_hamiltonian_majorana(self.N, key)
+                    self.layer_hamiltonians.append(random_even_h)
+                    h_list.append(random_even_h)
+                elif i%4 == 1:
+                    random_odd_h, key = random_2D_NN_hor_odd_normal_hamiltonian_majorana(self.N, key)
+                    self.layer_hamiltonians.append(random_odd_h)
+                    h_list.append(random_odd_h)
+                elif i%4 == 2:
+                    random_even_h, key = random_2D_NN_ver_even_normal_hamiltonian_majorana(self.N, key)
+                    self.layer_hamiltonians.append(random_even_h)
+                    h_list.append(random_even_h)
+                else:
+                    random_odd_h, key = random_2D_NN_ver_odd_normal_hamiltonian_majorana(self.N, key)
+                    self.layer_hamiltonians.append(random_odd_h)
+                    h_list.append(random_odd_h)
+
+            for i in range((self.d)//2):
+                self.layer_hamiltonians.append(-h_list[::-1][i])
+        
         elif mode == "NN_k1":
             print("NN circuit, k = 1 parent H")
             self.layer_hamiltonians = []
@@ -634,6 +721,11 @@ class PrimalParams():
                 self.layer_hamiltonians.append(-h_list[::-1][i])
 
         elif mode == 'block':
+            for i in range(self.local_d):
+                random_local_h, key = \
+                random_2D_k_local_normal_hamiltonian_majorana(self.M, self.N, self.k, key)
+                self.layer_hamiltonians.append(random_local_h/self.M/self.N)
+
             h_list = []
             for i in range((self.d - self.local_d)//2):
                 random_local_h, key = \
@@ -647,24 +739,30 @@ class PrimalParams():
         self.layer_hamiltonians = jnp.array(self.layer_hamiltonians)
         self.key_after_ham_gen = key
 
-    def generate_parent_hamiltonian(self):
-        Ome = Omega(self.M * self.N)
-        epsilon = jnp.linspace(start = 1, stop = 0, num = self.M * self.N)
-        D = jnp.diag(jnp.concatenate((-epsilon, epsilon)))
-        d_parent = -1j * jnp.matmul(Ome, jnp.matmul(D, Ome.conj().T))
-        h_parent = d_parent
+    def generate_parent_hamiltonian(self, h_mode):
 
-        for i in range(self.local_d):
-            h_parent = unitary_on_fghamiltonian(h_parent, self.layer_hamiltonians.at[i,:,:].get())
-        self.h_parent = h_parent
+        if h_mode == "ssh":
+            self.h_parent = ssh(self.N, alpha1 = 1, alpha2 = 0.3, beta1 = 0.8, beta2 = 0.7)
+        else:
+            Ome = Omega(self.M * self.N)
+            epsilon = jnp.linspace(start = 1, stop = 0, num = self.M * self.N)
+            D = jnp.diag(jnp.concatenate((-epsilon, epsilon)))
+            d_parent = -1j * jnp.matmul(Ome, jnp.matmul(D, Ome.conj().T))
+            h_parent = d_parent
+
+            for i in range(self.local_d):
+                h_parent = unitary_on_fghamiltonian(h_parent, self.layer_hamiltonians.at[i,:,:].get())
+            self.h_parent = h_parent
 
     def generate_init_state(self, init_state_desc: str = "all zero"):
         if init_state_desc == "all zero":
-            I = jnp.identity(self.M * self.N, dtype = complex)
+            I = jnp.identity(self.N, dtype = complex)
 
             self.Gamma_mjr_init = 0.5 * jnp.block(
             [[I      , 1j * I],
              [-1j * I, I     ]])
+        elif init_state_desc == "GS":
+            self.Gamma_mjr_init = corr_major_gs(self.h_parent)
 
 def energy_after_circuit(params: PrimalParams):
     Gamma_mjr = params.Gamma_mjr_init

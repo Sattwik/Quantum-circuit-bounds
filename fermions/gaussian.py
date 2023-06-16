@@ -358,7 +358,7 @@ def ssh(N: int, t1: float, t2: float):
     Ome = Omega(N)
     h = -1j * jnp.matmul(jnp.matmul(Ome, H), Ome.conj().T)
 
-    return h
+    return jnp.real(h)
 
 def corr_major_gs(h: jnp.array):
     N = h.shape[0]//2
